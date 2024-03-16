@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { StyleSheet, Alert, View, Button } from 'react-native';
+import { StyleSheet, Alert, View, Button, SafeAreaView } from 'react-native';
 import { API_URL } from '@env';
+import TransactionBalanceScreen from './screens/TransactionBalanceScreen';
 
 export default function App() {
   const fetchDataFromBackend = () => {
@@ -40,21 +41,24 @@ export default function App() {
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Button
-        title="Obtener datos del servidor"
-        onPress={fetchDataFromBackend}
-      />
-      <Button title="Postear datos al servidor" onPress={postDataToBackend} />
-    </View>
+    // <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+    //   <Button
+    //     title="Obtener datos del servidor"
+    //     onPress={fetchDataFromBackend}
+    //   />
+    //   <Button title="Postear datos al servidor" onPress={postDataToBackend} />
+    // </View>
+    <SafeAreaView style={styles.container}>
+      <TransactionBalanceScreen />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#B3B2D6',
+    // alignItems: 'center',
+    // justifyContent: 'center',
   },
 });
