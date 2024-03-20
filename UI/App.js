@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { StyleSheet, Alert, View, Button, SafeAreaView } from 'react-native';
 import { API_URL } from '@env';
-import TransactionBalanceScreen from './screens/TransactionBalanceScreen';
+import TransactionBalanceScreen from './screens/TransactionBalance/TransactionBalanceScreen';
 
 export default function App() {
   const fetchDataFromBackend = () => {

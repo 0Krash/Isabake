@@ -1,24 +1,22 @@
-import { StyleSheet, View, SafeAreaView, Text, Button } from 'react-native';
-import Dashboard from '../components/TransactionBalance/Dashboard';
-import Selector from '../components/TransactionBalance/Selector';
-import TransactionDetail from '../components/TransactionBalance/TransactionDetail';
+import { StyleSheet, View, Text } from 'react-native';
+
+import Dashboard from '../../components/TransactionBalance/Dashboard';
+import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
+import TransactionDetail from '../../components/TransactionBalance/TransactionDetail';
+import AddTransactionButton from '../../components/TransactionBalance/AddTransactionButton';
 
 function TransactionBalanceScreen() {
   return (
     <View style={styles.mainContainer}>
       <View style={styles.headerContainer}>
-        <View>
-          <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#3B3F3A' }}>
-            Transacciones
-          </Text>
-        </View>
-        <View>
-          <Button title="+" />
-        </View>
+        <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#3B3F3A' }}>
+          Transacciones
+        </Text>
       </View>
       <Dashboard />
-      <Selector />
+      <SwitchSelector />
       <TransactionDetail />
+      <AddTransactionButton />
     </View>
   );
 }

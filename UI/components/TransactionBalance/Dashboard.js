@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text } from 'react-native';
 
-function Dashboard() {
+export default function Dashboard() {
   return (
     <View style={styles.mainContainer}>
       <View style={styles.titleContainer}>
@@ -23,11 +23,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
+    fontSize: 12,
     color: '#9E9AAB',
-    fontWeight: 'bold',
+    fontWeight: '500',
     position: 'absolute',
-    bottom: 10,
+    bottom: 5,
+    left: 2,
   },
   balances: {
     flex: 3,
@@ -36,5 +37,3 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 });
-
-export default Dashboard;

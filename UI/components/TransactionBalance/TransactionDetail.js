@@ -1,14 +1,24 @@
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import TransactionDetailContainer from './TransactionDetailContainer';
 
-function TransactionDetail() {
+export default function TransactionDetail() {
   return (
     <View style={styles.mainContainer}>
-      <View style={styles.transactionDetailContainer}></View>
+      <ScrollView
+        style={styles.transactionDetailContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+        <TransactionDetailContainer />
+      </ScrollView>
     </View>
   );
 }
-
-export default TransactionDetail;
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -20,10 +30,9 @@ const styles = StyleSheet.create({
   },
   transactionDetailContainer: {
     flex: 1,
-    backgroundColor: '#FEFCFF',
+    backgroundColor: '#EFECFF',
     borderRadius: 20,
     marginVertical: 10,
     alignContent: 'center',
-    justifyContent: 'center',
   },
 });
