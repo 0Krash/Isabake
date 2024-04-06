@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   mainContainer: {
     // borderColor: 'red',
     // borderWidth: 2,
-    flex: 0.5,
+    flex: 1,
     marginHorizontal: 15,
   },
   selector: {

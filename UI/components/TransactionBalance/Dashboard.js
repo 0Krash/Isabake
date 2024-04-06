@@ -15,7 +15,7 @@ const styles = StyleSheet.create({
   mainContainer: {
     // borderColor: 'blue',
     // borderWidth: 2,
-    flex: 1,
+    flex: 2,
     marginHorizontal: 15,
   },
   titleContainer: {

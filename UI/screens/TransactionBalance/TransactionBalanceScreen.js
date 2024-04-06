@@ -27,7 +27,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     flex: 1,
     backgroundColor: '#EFECFF',
-    borderRadius: 30,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     // alignItems: 'center',
   },
   headerContainer: {

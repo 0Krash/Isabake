@@ -4,7 +4,7 @@ export default function TransactionDetailContainer() {
   return (
     <View style={styles.mainContainer}>
       <View style={{ direction: 'row' }}>
-        <Text>Tipo de transaccion</Text>
+        <Text> </Text>
         <Text style>Concepto</Text>
         <Text>Fecha</Text>
         <Text>Monto</Text>
