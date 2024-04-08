@@ -1,21 +1,41 @@
+import { useState } from 'react';
 import { StyleSheet, TouchableOpacity, Text, View } from 'react-native';
 
+import AddTransactionModal from './modals/AddTransactionModal';
+
 export default function AddTransactionButton() {
+  const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
+    useState(false);
+
+  const openModal = () => {
+    setAddTransactionModalIsVisible(true);
+  };
+
+  const closeModal = () => {
+    setAddTransactionModalIsVisible(false);
+  };
+
   return (
-    <TouchableOpacity style={styles.mainContainer}>
-      <View style={{ height: 52 }}>
-        <Text
-          style={{
-            fontSize: 35,
-            fontWeight: '300',
-            color: '#FEFCFF',
-            textAlign: 'center',
-          }}
-        >
-          +
-        </Text>
-      </View>
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity style={styles.mainContainer} onPress={openModal}>
+        <View style={{ height: 48 }}>
+          <Text
+            style={{
+              fontSize: 40,
+              fontWeight: '300',
+              color: '#FEFCFF',
+              textAlign: 'center',
+            }}
+          >
+            +
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <AddTransactionModal
+        visible={AddTransactionModalIsVisible}
+        onClose={closeModal}
+      />
+    </>
   );
 }
 
