@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  ScrollView,
   StyleSheet,
   View,
   Modal,
@@ -8,9 +9,11 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Keyboard,
+  Alert,
 } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import RNPickerSelect from 'react-native-picker-select';
+import { SelectList } from 'react-native-dropdown-select-list';
 
 import SwitchSelector from '../SwitchSelector';
 import formatter from '../../../utils/DateFormatter';
@@ -93,6 +96,33 @@ export default function AddTransactionModal({ visible, onClose }) {
     { label: 'Operativo (gastos del negocio)', value: '4' },
   ];
 
+  const [selected, setSelected] = useState('');
+
+  const data = [
+    { key: '0', value: 'Agregar tienda...' },
+    { key: '1', value: 'La Concepcion (Consti)' },
+    { key: '2', value: 'La Super Cremeria (Consti)' },
+    // { key: '4', value: 'Computers', disabled: true },
+    { key: '3', value: 'La Alpina (Tepeyac)' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    { key: '5', value: 'Diary Products' },
+    // { key: '7', value: 'Drinks' },
+  ];
+
+  const onSelectHandler = () => {
+    console.log(selected);
+    if (selected === 'Agregar tienda...') new Alert('agregando');
+  };
+
   return (
     <Modal
       transparent={true}
@@ -112,7 +142,7 @@ export default function AddTransactionModal({ visible, onClose }) {
               <View testID="switchArea" style={styles.switchContainer}>
                 <SwitchSelector onTabChange={handleTabChange} />
               </View>
-              <View testID="inputContainer" style={styles.inputContainer}>
+              <ScrollView testID="inputContainer" style={styles.inputContainer}>
                 <View testID="firstRow">
                   {showCategotyInput && (
                     <View testID="category">
@@ -132,6 +162,45 @@ export default function AddTransactionModal({ visible, onClose }) {
                           style={styles.textInputLabelBase}
                         />
                       </View>
+                    </View>
+                  )}
+                  {showCategotyInput && selectedValue === '1' && (
+                    <View testID="store">
+                      <Text style={styles.textInputLabelBase}>Tienda</Text>
+                      {/* <TextInput style={styles.textInputBase}></TextInput> */}
+                      <SelectList
+                        setSelected={(item) => setSelected(item)}
+                        placeholder={'Seleccione una opción...'}
+                        data={data}
+                        save="value"
+                        notFoundText={'Tienda no existe...'}
+                        onSelect={onSelectHandler}
+                        // defaultOption={{ key: '0', value: 'Agregar tienda...' }}
+                        boxStyles={[
+                          styles.textInputBase,
+                          { borderColor: 'white' },
+                        ]}
+                        inputStyles={
+                          // [styles.textInputBase]
+                          {
+                            marginTop: 0,
+                            fontSize: 18,
+                            marginLeft: 9,
+                            fontWeight: '400',
+                          }
+                        }
+                        dropdownStyles={{
+                          backgroundColor: '#FEFCFF',
+                          borderRadius: 15,
+                          margin: 10,
+                          textAlign: 'center',
+                          borderColor: 'white',
+                        }}
+                        dropdownTextStyles={{
+                          fontWeight: '400',
+                          fontSize: 16,
+                        }}
+                      />
                     </View>
                   )}
                   <View testID="description">
@@ -198,13 +267,10 @@ export default function AddTransactionModal({ visible, onClose }) {
                     />
                   </View>
                 </View>
-              </View>
+              </ScrollView>
               <TouchableOpacity
                 testID="addTransactionButton"
-                style={[
-                  styles.buttonTransaction,
-                  showCategotyInput && { top: 100 },
-                ]}
+                style={[styles.buttonTransaction]}
               >
                 <Text
                   style={{
@@ -278,6 +344,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 15,
   },
   inputContainer: {
     height: 350,
@@ -286,6 +353,7 @@ const styles = StyleSheet.create({
   },
   switchContainer: {
     height: 90,
+    marginBottom: 10,
   },
   secondRow: {
     flexDirection: 'row',
