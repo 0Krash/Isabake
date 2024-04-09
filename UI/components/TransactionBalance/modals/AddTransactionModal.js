@@ -10,6 +10,7 @@ import {
   Keyboard,
 } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import RNPickerSelect from 'react-native-picker-select';
 
 import SwitchSelector from '../SwitchSelector';
 import formatter from '../../../utils/DateFormatter';
@@ -17,19 +18,28 @@ import formatter from '../../../utils/DateFormatter';
 export default function AddTransactionModal({ visible, onClose }) {
   const amountInput = useRef(null);
   const quantityInput = useRef(null);
+  const categoryInput = useRef(null);
   const [amount, setAmount] = useState('');
+  const [quantity, setQuantity] = useState('');
   const [selectedTab, setSelectedTab] = useState('Ventas');
+  const [showCategotyInput, setShowCategotyInput] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
 
   const handleModalOnClose = () => {
     onClose();
     setSelectedDate(formatter.ddmmm(new Date()));
+    setShowCategotyInput(false);
+    setSelectedValue('1');
+    setQuantity('');
     setAmount('');
   };
 
   const handleTabChange = (tabName) => {
     setSelectedTab(tabName);
+    tabName === 'Gastos'
+      ? setShowCategotyInput(true)
+      : setShowCategotyInput(false);
   };
 
   const showDatePicker = () => {
@@ -69,6 +79,20 @@ export default function AddTransactionModal({ visible, onClose }) {
     }
   };
 
+  const [selectedValue, setSelectedValue] = useState('1');
+
+  // const placeholder = {
+  //   label: 'Selecciona una opción...',
+  //   value: null,
+  // };
+
+  const options = [
+    { label: 'Materia prima (ingredientes básicos)', value: '1' },
+    { label: 'Insumos (materiales para elavoración)', value: '2' },
+    { label: 'Formación (desarrollo de habilidades)', value: '3' },
+    { label: 'Operativo (gastos del negocio)', value: '4' },
+  ];
+
   return (
     <Modal
       transparent={true}
@@ -83,13 +107,33 @@ export default function AddTransactionModal({ visible, onClose }) {
       >
         <View style={styles.mainContainer}>
           <View style={{ flex: 3 }}></View>
-          <View style={styles.modalView}>
+          <View style={[styles.modalView, showCategotyInput && { flex: 12 }]}>
             <View style={styles.modalContaier}>
               <View testID="switchArea" style={styles.switchContainer}>
                 <SwitchSelector onTabChange={handleTabChange} />
               </View>
               <View testID="inputContainer" style={styles.inputContainer}>
                 <View testID="firstRow">
+                  {showCategotyInput && (
+                    <View testID="category">
+                      <Text style={styles.textInputLabelBase}>Categoria</Text>
+                      <View
+                        ref={categoryInput}
+                        style={[
+                          styles.textInputBase,
+                          { justifyContent: 'center', textAlign: 'center' },
+                        ]}
+                      >
+                        <RNPickerSelect
+                          placeholder={{}}
+                          items={options}
+                          onValueChange={(value) => setSelectedValue(value)}
+                          value={selectedValue}
+                          style={styles.textInputLabelBase}
+                        />
+                      </View>
+                    </View>
+                  )}
                   <View testID="description">
                     <Text style={styles.textInputLabelBase}>Descripción</Text>
                     <TextInput
@@ -106,12 +150,15 @@ export default function AddTransactionModal({ visible, onClose }) {
                       Cantidad
                     </Text>
                     <TextInput
-                      ref={quantityInput}
-                      style={styles.textInputBase}
                       keyboardType="numeric"
+                      onChangeText={setQuantity}
+                      onFocus={() => setQuantity('')}
                       onSubmitEditing={() => {
                         amountInput.current.focus();
                       }}
+                      ref={quantityInput}
+                      style={styles.textInputBase}
+                      value={quantity}
                     />
                   </View>
                   <View testID="amount">
@@ -119,6 +166,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                       {selectedTab === 'Gastos' ? 'Costo' : 'Precio'}
                     </Text>
                     <TextInput
+                      autoCorrect={false}
                       keyboardType="numeric"
                       onBlur={amountHandleBlur}
                       onChangeText={setAmount}
@@ -136,6 +184,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                       Fecha
                     </Text>
                     <TextInput
+                      autoCorrect={false}
                       style={styles.textInputBase}
                       onPressIn={showDatePicker}
                       onFocus={handleInputFocus}
@@ -150,7 +199,13 @@ export default function AddTransactionModal({ visible, onClose }) {
                   </View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.buttonTransaction}>
+              <TouchableOpacity
+                testID="addTransactionButton"
+                style={[
+                  styles.buttonTransaction,
+                  showCategotyInput && { top: 100 },
+                ]}
+              >
                 <Text
                   style={{
                     fontSize: 20,
