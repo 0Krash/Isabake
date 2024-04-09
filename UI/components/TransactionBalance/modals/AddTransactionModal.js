@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,28 +10,28 @@ import {
   Keyboard,
 } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import DropDownPicker from 'react-native-dropdown-picker';
 
 import SwitchSelector from '../SwitchSelector';
 import formatter from '../../../utils/DateFormatter';
-import CurrencyFormater from '../../../utils/CurrencyFormatter';
 
 export default function AddTransactionModal({ visible, onClose }) {
-  const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
-  const [priceValue, setPriceValue] = useState('0');
-
-  //Calendar
+  const amountInput = useRef(null);
+  const quantityInput = useRef(null);
+  const [amount, setAmount] = useState('');
+  const [selectedTab, setSelectedTab] = useState('Ventas');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
 
-  //dropList
-  // const [open, setOpen] = useState(false);
-  // const [value, setValue] = useState(null);
-  // const [items, setItems] = useState([
-  //   { label: 'Apple', value: 'apple' },
-  //   { label: 'Banana', value: 'banana' },
-  // ]);
+  const handleModalOnClose = () => {
+    onClose();
+    setSelectedDate(formatter.ddmmm(new Date()));
+    setAmount('');
+  };
 
-  //Calendar
+  const handleTabChange = (tabName) => {
+    setSelectedTab(tabName);
+  };
+
   const showDatePicker = () => {
     setDatePickerVisibility(true);
   };
@@ -49,20 +49,24 @@ export default function AddTransactionModal({ visible, onClose }) {
     Keyboard.dismiss();
   };
 
-  //Currency
-  const hadleOnFocusInputZero = () => {
-    setPriceValue('');
-  };
+  const amountHandleBlur = () => {
+    const numericValue = amount.replace(/[^0-9.]/g, '');
 
-  //Modal
-  const handleModalOnClose = () => {
-    onClose();
-    setSelectedDate(formatter.ddmmm(new Date()));
-    setPriceValue('0');
-  };
-
-  const handleCurrencyInput = (priceValue) => {
-    return CurrencyFormater.MXNPesos.format(priceValue);
+    if (numericValue !== '' && numericValue !== 0) {
+      const formattedValue = parseFloat(numericValue)
+        .toLocaleString('es-MX', {
+          style: 'currency',
+          currency: 'MXN',
+          currencyDisplay: 'symbol',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+        .replace(/\s?MXN/g, '')
+        .trim();
+      setAmount(`${formattedValue}`);
+    } else {
+      setAmount('');
+    }
   };
 
   return (
@@ -81,36 +85,53 @@ export default function AddTransactionModal({ visible, onClose }) {
           <View style={{ flex: 3 }}></View>
           <View style={styles.modalView}>
             <View style={styles.modalContaier}>
-              <View style={styles.switchContainer}>
-                <SwitchSelector />
+              <View testID="switchArea" style={styles.switchContainer}>
+                <SwitchSelector onTabChange={handleTabChange} />
               </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.textInputLabelBase}>Descripción</Text>
-                <TextInput style={styles.textInputBase} />
-                <View style={styles.AmounthContainer}>
-                  <View>
+              <View testID="inputContainer" style={styles.inputContainer}>
+                <View testID="firstRow">
+                  <View testID="description">
+                    <Text style={styles.textInputLabelBase}>Descripción</Text>
+                    <TextInput
+                      style={styles.textInputBase}
+                      onSubmitEditing={() => {
+                        quantityInput.current.focus();
+                      }}
+                    />
+                  </View>
+                </View>
+                <View testID="secondRow" style={styles.secondRow}>
+                  <View testID="quantity">
                     <Text style={[styles.textInputLabelBase, { width: 150 }]}>
                       Cantidad
                     </Text>
                     <TextInput
+                      ref={quantityInput}
                       style={styles.textInputBase}
                       keyboardType="numeric"
+                      onSubmitEditing={() => {
+                        amountInput.current.focus();
+                      }}
                     />
                   </View>
-                  <View>
+                  <View testID="amount">
                     <Text style={[styles.textInputLabelBase, { width: 150 }]}>
-                      Precio
+                      {selectedTab === 'Gastos' ? 'Costo' : 'Precio'}
                     </Text>
                     <TextInput
-                      style={styles.textInputBase}
-                      // value={priceValue}
-                      onFocus={hadleOnFocusInputZero}
                       keyboardType="numeric"
+                      onBlur={amountHandleBlur}
+                      onChangeText={setAmount}
+                      onFocus={() => setAmount('')}
+                      placeholder="$0.00"
+                      ref={amountInput}
+                      style={styles.textInputBase}
+                      value={amount}
                     />
                   </View>
                 </View>
-                <View style={styles.dateContainer}>
-                  <View>
+                <View testID="thirdRow" style={styles.thirdRow}>
+                  <View testID="date">
                     <Text style={[styles.textInputLabelBase, { width: 150 }]}>
                       Fecha
                     </Text>
@@ -127,23 +148,6 @@ export default function AddTransactionModal({ visible, onClose }) {
                       onCancel={hideDatePicker}
                     />
                   </View>
-                  {/* <View>
-                    <Text style={[styles.textInputLabelBase, { width: 150 }]}>
-                      Time
-                    </Text>
-                    <DropDownPicker
-                      style={[
-                        styles.textInputLabelBase,
-                        { width: 150, left: -7, borderColor: 'white' },
-                      ]}
-                      open={open}
-                      value={value}
-                      items={items}
-                      setOpen={setOpen}
-                      setValue={setValue}
-                      setItems={setItems}
-                    />
-                  </View> */}
                 </View>
               </View>
               <TouchableOpacity style={styles.buttonTransaction}>
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     flex: 1,
   },
-  dateContainer: {
+  thirdRow: {
     // borderWidth: 2,
     // borderColor: 'red',
     flexDirection: 'row',
@@ -228,7 +232,7 @@ const styles = StyleSheet.create({
   switchContainer: {
     height: 90,
   },
-  AmounthContainer: {
+  secondRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',

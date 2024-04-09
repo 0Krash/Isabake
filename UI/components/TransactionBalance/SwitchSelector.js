@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
-export default function SwitchSelector() {
+export default function SwitchSelector({ onTabChange }) {
   const [selectedTab, setSelectedTab] = useState('Ventas');
+
+  const handleTabChange = (tabName) => {
+    setSelectedTab(tabName);
+    if (onTabChange) onTabChange(tabName); // Llama a la función proporcionada por la prop onTabChange
+  };
+
   return (
     <View style={styles.mainContainer}>
       <View style={styles.selector}>
@@ -14,7 +20,7 @@ export default function SwitchSelector() {
             },
           ]}
           onPress={() => {
-            setSelectedTab('Ventas');
+            handleTabChange('Ventas');
           }}
         >
           <Text
@@ -34,7 +40,7 @@ export default function SwitchSelector() {
             },
           ]}
           onPress={() => {
-            setSelectedTab('Gastos');
+            handleTabChange('Gastos');
           }}
         >
           <Text
