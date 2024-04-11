@@ -4,9 +4,7 @@ import {
   StyleSheet,
   View,
   Modal,
-  Text,
   KeyboardAvoidingView,
-  TouchableOpacity,
   Keyboard,
 } from 'react-native';
 
@@ -20,6 +18,7 @@ import DatePickerComponent from './DatePickerComponent';
 import StoreInputComponent from './StoreInputComponent';
 import UOMInputComponent from './UOMInputComponent';
 import ItemQuantityInputComponent from './ItemQuantityInputComponent';
+import InsertTransactionButton from './InsertTransactionButton';
 
 export default function AddTransactionModal({ visible, onClose }) {
   const amountInputRef = useRef(null);
@@ -27,12 +26,13 @@ export default function AddTransactionModal({ visible, onClose }) {
   const itemQuantityInputRef = useRef(null);
   const [amount, setAmount] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [selectedTab, setSelectedTab] = useState('Ventas');
+  const [description, setDescription] = useState('');
+  const [transactionType, setTransactionType] = useState('Ventas');
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
-  const [selectedValue, setSelectedValue] = useState('1');
-  const [unitValue, setUnitValue] = useState('');
+  const [category, setCategory] = useState('1');
+  const [unitValue, setUnitValue] = useState('1');
   const [itemQuantity, setItemQuantity] = useState('');
   const [selected, setSelected] = useState('');
 
@@ -40,14 +40,15 @@ export default function AddTransactionModal({ visible, onClose }) {
     onClose();
     setSelectedDate(formatter.ddmmm(new Date()));
     setShowCategoryInput(false);
-    setSelectedValue('1');
+    setCategory('1');
     setQuantity('');
     setAmount('');
+    setDescription('');
     setItemQuantity('');
   };
 
   const handleTabChange = (tabName) => {
-    setSelectedTab(tabName);
+    setTransactionType(tabName);
     setShowCategoryInput(tabName === 'Gastos');
     Keyboard.dismiss();
   };
@@ -61,7 +62,7 @@ export default function AddTransactionModal({ visible, onClose }) {
   };
 
   const handleConfirm = (date) => {
-    setSelectedDate(formatter.ddmmm(date));
+    setSelectedDate(formatter.ddmmyy(date));
     hideDatePicker();
   };
 
@@ -84,19 +85,20 @@ export default function AddTransactionModal({ visible, onClose }) {
                 <View testID="filterArea">
                   {showCategoryInput && (
                     <CategoryInputComponent
-                      selectedValue={selectedValue}
-                      onValueChange={setSelectedValue}
+                      category={category}
+                      setCategory={setCategory}
                     />
                   )}
                   {showCategoryInput &&
-                    (selectedValue === '1' || selectedValue === '2') && (
+                    (category === '1' || category === '2') && (
                       <StoreInputComponent setSelected={setSelected} />
                     )}
                 </View>
                 <View testID="secondRow" style={styles.secondRow}>
                   <DescriptionInputComponent
                     showCategoryInput={showCategoryInput}
-                    selectedValue={selectedValue}
+                    category={category}
+                    setDescription={setDescription}
                     quantityInputRef={quantityInputRef}
                     itemQuantityInputRef={itemQuantityInputRef}
                   />
@@ -107,7 +109,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                       justifyContent: 'flex-start',
                     }}
                   >
-                    {showCategoryInput && selectedValue === '1' && (
+                    {showCategoryInput && category === '1' && (
                       <ItemQuantityInputComponent
                         itemQuantity={itemQuantity}
                         setItemQuantity={setItemQuantity}
@@ -117,20 +119,20 @@ export default function AddTransactionModal({ visible, onClose }) {
                     )}
                     <QuantityInputComponent
                       showCategoryInput={showCategoryInput}
-                      selectedValue={selectedValue}
+                      category={category}
                       quantity={quantity}
                       setQuantity={setQuantity}
                       quantityInputRef={quantityInputRef}
                       amountInputRef={amountInputRef}
                     />
-                    {showCategoryInput && selectedValue === '1' && (
+                    {showCategoryInput && category === '1' && (
                       <UOMInputComponent
                         unitValue={unitValue}
                         setUnitValue={setUnitValue}
                       />
                     )}
                     <AmountInputComponent
-                      selectedTab={selectedTab}
+                      transactionType={transactionType}
                       amount={amount}
                       setAmount={setAmount}
                       amountInputRef={amountInputRef}
@@ -145,21 +147,17 @@ export default function AddTransactionModal({ visible, onClose }) {
                   </View>
                 </View>
               </ScrollView>
-              <TouchableOpacity
-                testID="addTransactionButton"
-                style={[styles.buttonTransaction]}
-              >
-                <Text
-                  style={{
-                    fontSize: 20,
-                    fontWeight: '700',
-                    color: '#FEFCFF',
-                    textAlign: 'center',
-                  }}
-                >
-                  Agregar Transaccion
-                </Text>
-              </TouchableOpacity>
+              <InsertTransactionButton
+                amount={amount}
+                selected={selected}
+                quantity={quantity}
+                category={category}
+                unitValue={unitValue}
+                description={description}
+                itemQuantity={itemQuantity}
+                selectedDate={selectedDate}
+                transactionType={transactionType}
+              />
             </View>
           </View>
         </View>
@@ -189,35 +187,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     flex: 1,
   },
-  textInputBase: {
-    backgroundColor: '#FEFCFF',
-    borderRadius: 15,
-    height: 50,
-    margin: 10,
-    padding: 15,
-    fontSize: 22,
-    textAlign: 'center',
-  },
-  textInputLabelBase: {
-    marginTop: 10,
-    fontSize: 15,
-    marginLeft: 15,
-    color: '#9E9AAB',
-    fontWeight: '500',
-  },
-  buttonTransaction: {
-    height: 60,
-    width: '100%',
-    backgroundColor: '#6D37FF',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 15,
-  },
   inputContainer: {
     height: 350,
-    // borderWidth: 2,
-    // borderColor: 'green',
   },
   switchContainer: {
     height: 90,

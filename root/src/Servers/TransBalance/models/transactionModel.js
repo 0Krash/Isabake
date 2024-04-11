@@ -26,6 +26,13 @@ const transactionSchema = new mongoose.Schema({
     type: Number,
     required: [true, 'A tour must have a price'],
   },
+  amount: {},
+  category: {},
+  quantity: {},
+  unitValue: {},
+  selectedTab: {},
+  itemQuantity: {},
+  selectedDate: {},
 });
 const Transaction = mongoose.model('Transaction', transactionSchema);
 

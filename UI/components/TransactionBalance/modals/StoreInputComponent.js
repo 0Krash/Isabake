@@ -30,7 +30,7 @@ export default function StoreInputComponent({ setSelected, onSelectHandler }) {
         setSelected={setSelected}
         placeholder={'Seleccione una opción...'}
         data={data}
-        save="value"
+        save="key"
         notFoundText={'Tienda no existe...'}
         onSelect={onSelectHandler}
         boxStyles={[stylesBase.textInputBase, { borderColor: 'white' }]}

@@ -5,7 +5,7 @@ import stylesBase from '../../../constants/TransactionBalance/Styles';
 
 export default function QuantityInputComponent({
   showCategoryInput,
-  selectedValue,
+  category,
   quantity,
   setQuantity,
   quantityInputRef,
@@ -14,14 +14,14 @@ export default function QuantityInputComponent({
   return (
     <View testID="quantity">
       <Text style={[stylesBase.textInputLabelBase]}>
-        {showCategoryInput && selectedValue === '1' ? 'Contenido' : 'Cantidad'}
+        {showCategoryInput && category === '1' ? 'Contenido' : 'Cantidad'}
       </Text>
       <TextInput
         keyboardType="numeric"
         onChangeText={setQuantity}
         onFocus={() => setQuantity('')}
         onSubmitEditing={() =>
-          showCategoryInput && selectedValue === '1'
+          showCategoryInput && category === '1'
             ? null
             : amountInputRef.current.focus()
         }

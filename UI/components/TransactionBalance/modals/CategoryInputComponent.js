@@ -11,10 +11,7 @@ const options = [
   { label: 'Operativo (gastos del negocio)', value: '4' },
 ];
 
-export default function CategoryInputComponent({
-  selectedValue,
-  onValueChange,
-}) {
+export default function CategoryInputComponent({ category, setCategory }) {
   return (
     <View testID="category">
       <Text style={stylesBase.textInputLabelBase}>Categoria</Text>
@@ -27,8 +24,8 @@ export default function CategoryInputComponent({
         <RNPickerSelect
           placeholder={{}}
           items={options}
-          onValueChange={onValueChange}
-          value={selectedValue}
+          onValueChange={setCategory}
+          value={category}
           style={stylesBase.textInputLabelBase}
         />
       </View>
