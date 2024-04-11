@@ -17,10 +17,10 @@ export default function DatePickerComponent({
 }) {
   return (
     <View testID="date">
-      <Text style={[stylesBase.textInputLabelBase, { width: 150 }]}>Fecha</Text>
+      <Text style={stylesBase.textInputLabelBase}>Fecha</Text>
       <TextInput
         autoCorrect={false}
-        style={stylesBase.textInputBase}
+        style={[stylesBase.textInputBase, { width: 150 }]}
         onPressIn={showDatePicker}
         onFocus={handleInputFocus}
         value={selectedDate}

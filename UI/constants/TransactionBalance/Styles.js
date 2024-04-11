@@ -5,7 +5,7 @@ export default stylesBase = StyleSheet.create({
   textInputBase: {
     backgroundColor: '#FEFCFF',
     borderRadius: 15,
-    fontSize: 22,
+    fontSize: 19,
     height: 50,
     margin: 10,
     padding: 15,

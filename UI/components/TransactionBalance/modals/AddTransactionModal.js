@@ -7,7 +7,6 @@ import {
   Text,
   KeyboardAvoidingView,
   TouchableOpacity,
-  FlatList,
   Keyboard,
 } from 'react-native';
 
@@ -19,10 +18,13 @@ import QuantityInputComponent from './QuantityInputComponent';
 import AmountInputComponent from './AmountInputComponent';
 import DatePickerComponent from './DatePickerComponent';
 import StoreInputComponent from './StoreInputComponent';
+import UOMInputComponent from './UOMInputComponent';
+import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 
 export default function AddTransactionModal({ visible, onClose }) {
-  const amountInput = useRef(null);
-  const quantityInput = useRef(null);
+  const amountInputRef = useRef(null);
+  const quantityInputRef = useRef(null);
+  const itemQuantityInputRef = useRef(null);
   const [amount, setAmount] = useState('');
   const [quantity, setQuantity] = useState('');
   const [selectedTab, setSelectedTab] = useState('Ventas');
@@ -30,6 +32,8 @@ export default function AddTransactionModal({ visible, onClose }) {
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
   const [selectedValue, setSelectedValue] = useState('1');
+  const [unitValue, setUnitValue] = useState('');
+  const [itemQuantity, setItemQuantity] = useState('');
   const [selected, setSelected] = useState('');
 
   const handleModalOnClose = () => {
@@ -39,6 +43,7 @@ export default function AddTransactionModal({ visible, onClose }) {
     setSelectedValue('1');
     setQuantity('');
     setAmount('');
+    setItemQuantity('');
   };
 
   const handleTabChange = (tabName) => {
@@ -58,25 +63,6 @@ export default function AddTransactionModal({ visible, onClose }) {
   const handleConfirm = (date) => {
     setSelectedDate(formatter.ddmmm(date));
     hideDatePicker();
-  };
-
-  const amountHandleBlur = () => {
-    const numericValue = amount.replace(/[^0-9.]/g, '');
-    if (numericValue !== '' && numericValue !== 0) {
-      const formattedValue = parseFloat(numericValue)
-        .toLocaleString('es-MX', {
-          style: 'currency',
-          currency: 'MXN',
-          currencyDisplay: 'symbol',
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-        .replace(/\s?MXN/g, '')
-        .trim();
-      setAmount(`${formattedValue}`);
-    } else {
-      setAmount('');
-    }
   };
 
   return (
@@ -102,12 +88,18 @@ export default function AddTransactionModal({ visible, onClose }) {
                       onValueChange={setSelectedValue}
                     />
                   )}
-                  {showCategoryInput && selectedValue === '1' && (
-                    <StoreInputComponent setSelected={setSelected} />
-                  )}
+                  {showCategoryInput &&
+                    (selectedValue === '1' || selectedValue === '2') && (
+                      <StoreInputComponent setSelected={setSelected} />
+                    )}
                 </View>
                 <View testID="secondRow" style={styles.secondRow}>
-                  <DescriptionInputComponent quantityInput={quantityInput} />
+                  <DescriptionInputComponent
+                    showCategoryInput={showCategoryInput}
+                    selectedValue={selectedValue}
+                    quantityInputRef={quantityInputRef}
+                    itemQuantityInputRef={itemQuantityInputRef}
+                  />
                   <View
                     style={{
                       flexDirection: 'row',
@@ -115,18 +107,33 @@ export default function AddTransactionModal({ visible, onClose }) {
                       justifyContent: 'flex-start',
                     }}
                   >
+                    {showCategoryInput && selectedValue === '1' && (
+                      <ItemQuantityInputComponent
+                        itemQuantity={itemQuantity}
+                        setItemQuantity={setItemQuantity}
+                        itemQuantityInputRef={itemQuantityInputRef}
+                        quantityInputRef={quantityInputRef}
+                      />
+                    )}
                     <QuantityInputComponent
+                      showCategoryInput={showCategoryInput}
+                      selectedValue={selectedValue}
                       quantity={quantity}
                       setQuantity={setQuantity}
-                      quantityInput={quantityInput}
-                      amountInput={amountInput}
+                      quantityInputRef={quantityInputRef}
+                      amountInputRef={amountInputRef}
                     />
+                    {showCategoryInput && selectedValue === '1' && (
+                      <UOMInputComponent
+                        unitValue={unitValue}
+                        setUnitValue={setUnitValue}
+                      />
+                    )}
                     <AmountInputComponent
                       selectedTab={selectedTab}
                       amount={amount}
                       setAmount={setAmount}
-                      amountInput={amountInput}
-                      amountHandleBlur={amountHandleBlur}
+                      amountInputRef={amountInputRef}
                     />
                     <DatePickerComponent
                       isDatePickerVisible={isDatePickerVisible}
@@ -205,6 +212,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 15,
   },
   inputContainer: {
     height: 350,

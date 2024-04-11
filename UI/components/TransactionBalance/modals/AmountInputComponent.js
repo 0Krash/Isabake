@@ -7,12 +7,29 @@ export default function AmountInputComponent({
   selectedTab,
   amount,
   setAmount,
-  amountInput,
-  amountHandleBlur,
+  amountInputRef,
 }) {
+  const amountHandleBlur = () => {
+    const numericValue = amount.replace(/[^0-9.]/g, '');
+    if (numericValue !== '' && numericValue !== 0) {
+      const formattedValue = parseFloat(numericValue)
+        .toLocaleString('es-MX', {
+          style: 'currency',
+          currency: 'MXN',
+          currencyDisplay: 'symbol',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+        .replace(/\s?MXN/g, '')
+        .trim();
+      setAmount(`${formattedValue}`);
+    } else {
+      setAmount('');
+    }
+  };
+
   return (
     <View testID="amount">
-      {/* <Text style={[stylesBase.textInputLabelBase, { width: 150 }]}> */}
       <Text style={[stylesBase.textInputLabelBase]}>
         {selectedTab === 'Gastos' ? 'Costo' : 'Precio'}
       </Text>
@@ -23,7 +40,7 @@ export default function AmountInputComponent({
         onChangeText={setAmount}
         onFocus={() => setAmount('')}
         placeholder="$0.00"
-        ref={amountInput}
+        ref={amountInputRef}
         style={[stylesBase.textInputBase, { width: 150 }]}
         value={amount}
       />
