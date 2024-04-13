@@ -1,10 +1,13 @@
+import { API_URL } from '@env';
 import { useState } from 'react';
 import { TouchableOpacity, StyleSheet, Text } from 'react-native';
-import { API_URL } from '@env';
 
-import InputValidation from '../../../utils/InputValidation';
+import TransactionAlertModal from './TransactionAlertModal';
 
 export default function InsertTransactionButton(props) {
+  const [transactionAlertVisible, setTransactionAlertVisibility] =
+    useState(false);
+
   const {
     amount,
     selected,
@@ -29,35 +32,51 @@ export default function InsertTransactionButton(props) {
     transactionType: transactionType,
   };
 
+  const textAlert = {
+    title: `${transactionType.slice(
+      0,
+      transactionType.length - 1
+    )} por ${amount}`,
+  };
+
   const postTransactionData = () => {
+    setTransactionAlertVisibility(true);
     console.log(JSON.stringify(data));
   };
 
   return (
-    <TouchableOpacity
-      testID="addTransactionButton"
-      style={[
-        styles.buttonTransaction,
-        {
-          backgroundColor: props.validationError
-            ? 'rgba(109, 55, 255, 1)'
-            : 'rgba(109, 55, 255, .5)',
-        },
-      ]}
-      onPress={postTransactionData}
-      disabled={!props.validationError}
-    >
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: '700',
-          color: '#FEFCFF',
-          textAlign: 'center',
-        }}
+    <>
+      <TouchableOpacity
+        testID="addTransactionButton"
+        style={[
+          styles.buttonTransaction,
+          {
+            backgroundColor: props.validationError
+              ? 'rgba(109, 55, 255, 1)'
+              : 'rgba(109, 55, 255, .5)',
+          },
+        ]}
+        onPress={postTransactionData}
+        disabled={!props.validationError}
       >
-        Agregar Transaccion
-      </Text>
-    </TouchableOpacity>
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: '700',
+            color: '#FEFCFF',
+            textAlign: 'center',
+          }}
+        >
+          Agregar Transaccion
+        </Text>
+      </TouchableOpacity>
+      <TransactionAlertModal
+        textAlert={textAlert}
+        handleModalOnClose={props.handleModalOnClose}
+        transactionAlertVisible={transactionAlertVisible}
+        setTransactionAlertVisibility={setTransactionAlertVisibility}
+      />
+    </>
   );
 }
 

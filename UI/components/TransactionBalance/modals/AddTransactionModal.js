@@ -50,6 +50,7 @@ export default function AddTransactionModal({ visible, onClose }) {
     onClose();
     resetValidatioErrors();
     setSelectedDate(formatter.ddmmyy(new Date()));
+    setTransactionType('Ventas');
     setShowCategoryInput(false);
     setCategory('1');
     setQuantity('');
@@ -67,6 +68,7 @@ export default function AddTransactionModal({ visible, onClose }) {
   };
 
   const handleTabChange = (tabName) => {
+    setValidationErrorStore(false);
     setTransactionType(tabName);
     setShowCategoryInput(tabName === 'Gastos');
     Keyboard.dismiss();
@@ -203,6 +205,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                 description={description}
                 quantity={quantity}
                 amount={amount}
+                handleModalOnClose={handleModalOnClose}
               />
             </View>
           </View>
