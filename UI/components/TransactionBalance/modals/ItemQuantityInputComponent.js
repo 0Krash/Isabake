@@ -1,14 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
 import stylesBase from '../../../constants/TransactionBalance/Styles';
+import InputValidation from '../../../utils/InputValidation';
 
 export default function ItemQuantityInputComponent({
   itemQuantity,
   setItemQuantity,
-  itemQuantityInputRef,
   quantityInputRef,
+  itemQuantityInputRef,
+  setValidationErrorItemQuantity,
 }) {
+  const [inputValue, setInputValue] = useState();
+  const [validation, setValidation] = useState({ valid: true, error: '' });
+
+  const handleOnBlur = () => {
+    const result = InputValidation({
+      value: parseFloat(inputValue),
+    });
+    setValidation(result);
+    setValidationErrorItemQuantity(result.valid);
+    isNaN(parseFloat(inputValue))
+      ? setItemQuantity('')
+      : setItemQuantity(parseFloat(inputValue).toString().trim());
+  };
   return (
     <View
       testID="quantity"
@@ -17,18 +32,38 @@ export default function ItemQuantityInputComponent({
         alignItems: 'center',
       }}
     >
-      <Text style={[stylesBase.textInputLabelBase, { left: -4 }]}>
+      <Text
+        style={
+          validation.valid
+            ? [stylesBase.textInputLabelBase, { left: -3 }]
+            : stylesBase.textInputLabelValidationError
+        }
+      >
         Cantidad de Articulos
       </Text>
       <TextInput
         keyboardType="numeric"
-        onChangeText={setItemQuantity}
-        onFocus={() => setItemQuantity('')}
+        onChangeText={(text) => {
+          setInputValue(text);
+          setItemQuantity(text);
+          setValidationErrorItemQuantity(false);
+        }}
+        onFocus={() => setItemQuantity(inputValue)}
         onSubmitEditing={() => quantityInputRef.current.focus()}
         ref={itemQuantityInputRef}
-        style={[stylesBase.textInputBase, { width: 200 }]}
+        style={
+          validation.valid
+            ? [stylesBase.textInputBase, { width: 200 }]
+            : [stylesBase.textInputBaseValidationError, { width: 200 }]
+        }
         value={itemQuantity}
+        onBlur={handleOnBlur}
       />
+      {!validation.valid && (
+        <Text style={stylesBase.textInputErrorValidationError}>
+          {validation.error}
+        </Text>
+      )}
     </View>
   );
 }

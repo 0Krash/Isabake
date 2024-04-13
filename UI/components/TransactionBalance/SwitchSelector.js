@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   baseTextTouchable: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 2,
   },

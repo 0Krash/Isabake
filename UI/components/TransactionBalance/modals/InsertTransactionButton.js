@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { API_URL } from '@env';
+
+import InputValidation from '../../../utils/InputValidation';
 
 export default function InsertTransactionButton(props) {
   const {
@@ -33,8 +36,16 @@ export default function InsertTransactionButton(props) {
   return (
     <TouchableOpacity
       testID="addTransactionButton"
-      style={[styles.buttonTransaction]}
+      style={[
+        styles.buttonTransaction,
+        {
+          backgroundColor: props.validationError
+            ? 'rgba(109, 55, 255, 1)'
+            : 'rgba(109, 55, 255, .5)',
+        },
+      ]}
       onPress={postTransactionData}
+      disabled={!props.validationError}
     >
       <Text
         style={{
@@ -54,7 +65,6 @@ const styles = StyleSheet.create({
   buttonTransaction: {
     height: 60,
     width: '100%',
-    backgroundColor: '#6D37FF',
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',

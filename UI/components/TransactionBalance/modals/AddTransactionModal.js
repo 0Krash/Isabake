@@ -30,21 +30,40 @@ export default function AddTransactionModal({ visible, onClose }) {
   const [transactionType, setTransactionType] = useState('Ventas');
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(formatter.ddmmm(new Date()));
+  const [selectedDate, setSelectedDate] = useState(
+    formatter.ddmmyy(new Date())
+  );
   const [category, setCategory] = useState('1');
   const [unitValue, setUnitValue] = useState('1');
   const [itemQuantity, setItemQuantity] = useState('');
   const [selected, setSelected] = useState('');
 
+  const [validationErrorStore, setValidationErrorStore] = useState(false);
+  const [validationErrorAmount, setValidationErrorAmount] = useState(false);
+  const [validationErrorQuantity, setValidationErrorQuantity] = useState(false);
+  const [validationErrorDescription, setValidationErrorDescription] =
+    useState(false);
+  const [validationErrorItemQuantity, setValidationErrorItemQuantity] =
+    useState(false);
+
   const handleModalOnClose = () => {
     onClose();
-    setSelectedDate(formatter.ddmmm(new Date()));
+    resetValidatioErrors();
+    setSelectedDate(formatter.ddmmyy(new Date()));
     setShowCategoryInput(false);
     setCategory('1');
     setQuantity('');
     setAmount('');
     setDescription('');
     setItemQuantity('');
+  };
+
+  const resetValidatioErrors = () => {
+    setValidationErrorDescription(false);
+    setValidationErrorAmount(false);
+    setValidationErrorQuantity(false);
+    setValidationErrorItemQuantity(false);
+    setValidationErrorStore(false);
   };
 
   const handleTabChange = (tabName) => {
@@ -91,7 +110,10 @@ export default function AddTransactionModal({ visible, onClose }) {
                   )}
                   {showCategoryInput &&
                     (category === '1' || category === '2') && (
-                      <StoreInputComponent setSelected={setSelected} />
+                      <StoreInputComponent
+                        setSelected={setSelected}
+                        setValidationErrorStore={setValidationErrorStore}
+                      />
                     )}
                 </View>
                 <View testID="secondRow" style={styles.secondRow}>
@@ -101,6 +123,9 @@ export default function AddTransactionModal({ visible, onClose }) {
                     setDescription={setDescription}
                     quantityInputRef={quantityInputRef}
                     itemQuantityInputRef={itemQuantityInputRef}
+                    setValidationErrorDescription={
+                      setValidationErrorDescription
+                    }
                   />
                   <View
                     style={{
@@ -115,6 +140,9 @@ export default function AddTransactionModal({ visible, onClose }) {
                         setItemQuantity={setItemQuantity}
                         itemQuantityInputRef={itemQuantityInputRef}
                         quantityInputRef={quantityInputRef}
+                        setValidationErrorItemQuantity={
+                          setValidationErrorItemQuantity
+                        }
                       />
                     )}
                     <QuantityInputComponent
@@ -124,6 +152,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                       setQuantity={setQuantity}
                       quantityInputRef={quantityInputRef}
                       amountInputRef={amountInputRef}
+                      setValidationErrorQuantity={setValidationErrorQuantity}
                     />
                     {showCategoryInput && category === '1' && (
                       <UOMInputComponent
@@ -136,6 +165,7 @@ export default function AddTransactionModal({ visible, onClose }) {
                       amount={amount}
                       setAmount={setAmount}
                       amountInputRef={amountInputRef}
+                      setValidationErrorAmount={setValidationErrorAmount}
                     />
                     <DatePickerComponent
                       isDatePickerVisible={isDatePickerVisible}
@@ -148,15 +178,31 @@ export default function AddTransactionModal({ visible, onClose }) {
                 </View>
               </ScrollView>
               <InsertTransactionButton
-                amount={amount}
-                selected={selected}
-                quantity={quantity}
-                category={category}
-                unitValue={unitValue}
-                description={description}
-                itemQuantity={itemQuantity}
-                selectedDate={selectedDate}
+                validationError={
+                  transactionType === 'Gastos' && category === '1'
+                    ? validationErrorDescription &&
+                      validationErrorQuantity &&
+                      validationErrorAmount &&
+                      validationErrorItemQuantity &&
+                      validationErrorStore
+                    : transactionType === 'Gastos' && category === '2'
+                    ? validationErrorDescription &&
+                      validationErrorQuantity &&
+                      validationErrorAmount &&
+                      validationErrorStore
+                    : validationErrorDescription &&
+                      validationErrorQuantity &&
+                      validationErrorAmount
+                }
+                itemQuantity={transactionType === 'Gastos' ? itemQuantity : ''}
+                unitValue={transactionType === 'Gastos' ? unitValue : ''}
+                category={transactionType === 'Gastos' ? category : ''}
+                selected={transactionType === 'Gastos' ? selected : ''} //store
                 transactionType={transactionType}
+                selectedDate={selectedDate}
+                description={description}
+                quantity={quantity}
+                amount={amount}
               />
             </View>
           </View>
