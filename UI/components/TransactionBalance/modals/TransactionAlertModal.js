@@ -34,7 +34,7 @@ export default TransactionAlertModal = (props) => {
           }}
         >
           <Image
-            source={require('../../../images/check.png')}
+            source={require('../../../assets/images/check.png')}
             style={{ width: 70, height: 70, marginBottom: 30 }}
           />
           <Text

@@ -1,6 +1,7 @@
 import { API_URL } from '@env';
+import axios from 'axios';
 import { useState } from 'react';
-import { TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { TouchableOpacity, StyleSheet, Text, Alert } from 'react-native';
 
 import TransactionAlertModal from './TransactionAlertModal';
 
@@ -32,16 +33,28 @@ export default function InsertTransactionButton(props) {
     transactionType: transactionType,
   };
 
+  const postTransactionData = () => {
+    console.log(data);
+    axios
+      .post(`${API_URL}`, data)
+      .then((response) => {
+        console.log(response.data);
+      })
+      .catch((error) => {
+        console.error(
+          'Error al hacer la petición desde InsertTransactionButton:',
+          error
+        );
+      });
+
+    setTransactionAlertVisibility(true);
+  };
+
   const textAlert = {
     title: `${transactionType.slice(
       0,
       transactionType.length - 1
     )} por ${amount}`,
-  };
-
-  const postTransactionData = () => {
-    setTransactionAlertVisibility(true);
-    console.log(JSON.stringify(data));
   };
 
   return (
