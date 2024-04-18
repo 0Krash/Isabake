@@ -5,6 +5,7 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 const transactionRouter = require('./routes/transactionRoutes');
+const categoryRouter = require('./routes/categoryRoutes');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use((req, res, next) => {
 
 //Routes
 app.use('/api/v1/transactions', transactionRouter);
+app.use('/api/v1/categories', categoryRouter);
 
 //Server
 module.exports = app;
