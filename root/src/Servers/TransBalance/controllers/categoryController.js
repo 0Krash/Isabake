@@ -9,7 +9,6 @@ exports.getAllCategories = async (req, res) => {
       data: categories,
     });
   } catch (err) {
-    console.log(err);
     res.status(400).json({
       status: 'failed',
       message: err,
@@ -33,7 +32,6 @@ exports.getCategoryById = async (req, res) => {
       data: category,
     });
   } catch (err) {
-    console.log(err);
     res.status(400).json({
       status: 'failed',
       message: err,

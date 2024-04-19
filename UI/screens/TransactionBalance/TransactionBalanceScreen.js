@@ -1,11 +1,42 @@
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 
 import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
 import TransactionDetail from '../../components/TransactionBalance/TransactionDetail';
 import AddTransactionButton from '../../components/TransactionBalance/AddTransactionButton';
+import AddTransactionModal from '../../components/TransactionBalance/modals/AddTransactionModal';
+import transactionService from '../../services/TransactionBalance/API/transactionService';
 
-function TransactionBalanceScreen() {
+export default TransactionBalanceScreen = () => {
+  const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
+    useState(false);
+  const [transactionType, setTransactionType] = useState('Ventas');
+  const [dataTransactionsResponse, setDataTransactionsResponse] = useState();
+
+  useEffect(() => {
+    if (!AddTransactionModalIsVisible) {
+      fetchDataTransactions();
+    }
+  }, [AddTransactionModalIsVisible]);
+
+  const fetchDataTransactions = async () => {
+    try {
+      setDataTransactionsResponse(
+        await transactionService.getAllTransactions()
+      );
+    } catch (error) {
+      console.error(
+        'Error al obtener transacciones desde TransactionBalanceScreen: ',
+        error
+      );
+    }
+  };
+
+  const handleTabChange = (tabName) => {
+    setTransactionType(tabName);
+  };
+
   return (
     <View style={styles.mainContainer}>
       <View style={styles.headerContainer}>
@@ -14,12 +45,23 @@ function TransactionBalanceScreen() {
         </Text>
       </View>
       <Dashboard />
-      <SwitchSelector />
-      <TransactionDetail />
-      <AddTransactionButton />
+      <SwitchSelector onTabChange={handleTabChange} />
+      <TransactionDetail
+        dataTransactionsResponse={
+          dataTransactionsResponse !== undefined ? dataTransactionsResponse : []
+        }
+        transactionType={transactionType}
+      />
+      <AddTransactionButton
+        setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
+      />
+      <AddTransactionModal
+        AddTransactionModalIsVisible={AddTransactionModalIsVisible}
+        setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
+      />
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -29,16 +71,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFECFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    // alignItems: 'center',
   },
   headerContainer: {
-    // borderColor: 'yellow',
-    // borderWidth: 2,
     marginTop: 15,
     marginHorizontal: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
 });
-
-export default TransactionBalanceScreen;

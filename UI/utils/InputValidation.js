@@ -1,5 +1,4 @@
 export default function InputValidation({ value, maxLength }) {
-  // console.log(value);
   if (value === undefined || value === null || value === '') {
     return { valid: false, error: 'El campo no puede estar vacío' };
   }

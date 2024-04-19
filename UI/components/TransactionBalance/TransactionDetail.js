@@ -1,20 +1,23 @@
+import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import TransactionDetailContainer from './TransactionDetailContainer';
 
-export default function TransactionDetail() {
+export default function TransactionDetail({
+  dataTransactionsResponse,
+  transactionType,
+}) {
   return (
     <View style={styles.mainContainer}>
       <ScrollView
         style={styles.transactionDetailContainer}
         showsVerticalScrollIndicator={false}
       >
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
-        <TransactionDetailContainer />
+        {dataTransactionsResponse
+          .filter((item) => item.transactionType === transactionType)
+          .sort((a, b) => b.transactionId - a.transactionId)
+          .map((item, index) => (
+            <TransactionDetailContainer key={index} data={item} />
+          ))}
       </ScrollView>
     </View>
   );
@@ -22,8 +25,6 @@ export default function TransactionDetail() {
 
 const styles = StyleSheet.create({
   mainContainer: {
-    // borderColor: 'green',
-    // borderWidth: 2,
     flex: 5,
     marginHorizontal: 15,
     marginBottom: 20,

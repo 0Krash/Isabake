@@ -20,7 +20,10 @@ import UOMInputComponent from './UOMInputComponent';
 import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 import InsertTransactionButton from './InsertTransactionButton';
 
-export default function AddTransactionModal({ visible, onClose }) {
+export default function AddTransactionModal({
+  AddTransactionModalIsVisible,
+  setAddTransactionModalIsVisible,
+}) {
   const amountInputRef = useRef(null);
   const quantityInputRef = useRef(null);
   const itemQuantityInputRef = useRef(null);
@@ -47,7 +50,7 @@ export default function AddTransactionModal({ visible, onClose }) {
     useState(false);
 
   const handleModalOnClose = () => {
-    onClose();
+    setAddTransactionModalIsVisible(false);
     resetValidatioErrors();
     setSelectedDate(formatter.ddmmyy(new Date()));
     setTransactionType('Ventas');
@@ -91,7 +94,7 @@ export default function AddTransactionModal({ visible, onClose }) {
     <Modal
       transparent={true}
       animationType="slide"
-      visible={visible}
+      visible={AddTransactionModalIsVisible}
       onRequestClose={handleModalOnClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">

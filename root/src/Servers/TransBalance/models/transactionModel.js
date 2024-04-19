@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+const Category = require('./categoryModel');
+
 function getTransactionId() {
   const currentDate = new Date();
   const year = currentDate.getFullYear();
@@ -8,7 +10,8 @@ function getTransactionId() {
   const hours = String(currentDate.getHours()).padStart(2, '0');
   const minutes = String(currentDate.getMinutes()).padStart(2, '0');
   const seconds = String(currentDate.getSeconds()).padStart(2, '0');
-  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+  const milliseconds = String(currentDate.getMilliseconds()).padStart(2, '0');
+  return `${year}${month}${day}${hours}${minutes}${seconds}${milliseconds}`;
 }
 
 const transactionSchema = new mongoose.Schema({
@@ -18,22 +21,72 @@ const transactionSchema = new mongoose.Schema({
     unique: true,
     default: getTransactionId,
   },
-  rating: {
-    type: Number,
-    default: 4.5,
+  selectedDate: {
+    type: String,
   },
-  price: {
-    type: Number,
-    required: [true, 'A tour must have a price'],
+  transactionType: {
+    type: String,
   },
-  amount: {},
-  category: {},
-  quantity: {},
-  unitValue: {},
-  selectedTab: {},
-  itemQuantity: {},
-  selectedDate: {},
+  category: {
+    categoryId: {
+      type: String,
+      default: '',
+    },
+    description: {
+      type: String,
+      default: '',
+    },
+    shortDescription: {
+      type: String,
+      default: '',
+    },
+  },
+  description: {
+    type: String,
+    required: [true, 'La transaccion debe tener una descripcion'],
+  },
+  amount: {
+    type: String,
+    required: [true, 'La transaccion debe tener monto'],
+  },
+  storeId: {
+    type: String,
+  },
+  quantity: {
+    type: String,
+    required: [true, 'La transaccion debe tener una cantidad'],
+  },
+  uomId: {
+    type: String,
+  },
+  itemQuantity: {
+    type: String,
+  },
 });
+
+transactionSchema.pre('save', async function (next) {
+  try {
+    if (!this.category || !this.category.categoryId) {
+      return next();
+    }
+    const category = await mongoose.model('Category').findOne({
+      categoryId: this.category.categoryId,
+    });
+
+    if (!category) {
+      throw new Error('Categoría no encontrada');
+    }
+    this.category = {
+      categoryId: category.categoryId,
+      description: category.description,
+      shortDescription: category.shortDescription,
+    };
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
 module.exports = Transaction;
