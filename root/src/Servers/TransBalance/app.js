@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const transactionRouter = require('./routes/transactionRoutes');
 const categoryRouter = require('./routes/categoryRoutes');
+const storeRouter = require('./routes/storeRoutes');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use((req, res, next) => {
 //Routes
 app.use('/api/v1/transactions', transactionRouter);
 app.use('/api/v1/categories', categoryRouter);
+app.use('/api/v1/stores', storeRouter);
 
 //Server
 module.exports = app;
