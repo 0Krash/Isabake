@@ -3,7 +3,9 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import TransactionDetailContainer from './TransactionDetailContainer';
 
 export default function TransactionDetail({
+  setTransactionDetailModalIsVisible,
   dataTransactionsResponse,
+  setTransactionDetail,
   transactionType,
 }) {
   return (
@@ -16,7 +18,14 @@ export default function TransactionDetail({
           .filter((item) => item.transactionType === transactionType)
           .sort((a, b) => b.transactionId - a.transactionId)
           .map((item, index) => (
-            <TransactionDetailContainer key={index} data={item} />
+            <TransactionDetailContainer
+              key={index}
+              data={item}
+              setTransactionDetail={setTransactionDetail}
+              setTransactionDetailModalIsVisible={
+                setTransactionDetailModalIsVisible
+              }
+            />
           ))}
       </ScrollView>
     </View>

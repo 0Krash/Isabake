@@ -8,8 +8,8 @@ import {
   Keyboard,
 } from 'react-native';
 
-import SwitchSelector from '../SwitchSelector';
-import formatter from '../../../utils/DateFormatter';
+import SwitchSelector from '../../SwitchSelector';
+import formatter from '../../../../utils/DateFormatter';
 import CategoryInputComponent from './CategoryInputComponent';
 import DescriptionInputComponent from './DescriptionInputComponent';
 import QuantityInputComponent from './QuantityInputComponent';

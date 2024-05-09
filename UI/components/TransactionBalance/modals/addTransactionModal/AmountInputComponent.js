@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
-import stylesBase from '../../../constants/TransactionBalance/Styles';
-import InputValidation from '../../../utils/InputValidation';
+import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import InputValidation from '../../../../utils/InputValidation';
 
 export default function AmountInputComponent({
   transactionType,

@@ -3,6 +3,7 @@ import { API_URL } from '@env';
 
 const getAllTransactions = () => {
   return new Promise((resolve, reject) => {
+    console.log(API_URL);
     axios
       .get(API_URL)
       .then((response) => {

@@ -5,12 +5,16 @@ import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
 import TransactionDetail from '../../components/TransactionBalance/TransactionDetail';
 import AddTransactionButton from '../../components/TransactionBalance/AddTransactionButton';
-import AddTransactionModal from '../../components/TransactionBalance/modals/AddTransactionModal';
+import AddTransactionModal from '../../components/TransactionBalance/modals/addTransactionModal/AddTransactionModal';
+import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import transactionService from '../../services/TransactionBalance/API/transactionService';
 
 export default TransactionBalanceScreen = () => {
   const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
+  const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
+    useState(false);
+  const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
   const [dataTransactionsResponse, setDataTransactionsResponse] = useState();
 
@@ -47,10 +51,12 @@ export default TransactionBalanceScreen = () => {
       <Dashboard />
       <SwitchSelector onTabChange={handleTabChange} />
       <TransactionDetail
+        transactionType={transactionType}
+        setTransactionDetail={setTransactionDetail}
+        setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
         dataTransactionsResponse={
           dataTransactionsResponse !== undefined ? dataTransactionsResponse : []
         }
-        transactionType={transactionType}
       />
       <AddTransactionButton
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
@@ -59,6 +65,11 @@ export default TransactionBalanceScreen = () => {
         AddTransactionModalIsVisible={AddTransactionModalIsVisible}
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
       />
+      <TransactionDetailModal
+        transactionDetail={transactionDetail}
+        transactionDetailModalIsVisible={transactionDetailModalIsVisible}
+        setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
+      />
     </View>
   );
 };
@@ -66,7 +77,7 @@ export default TransactionBalanceScreen = () => {
 const styles = StyleSheet.create({
   mainContainer: {
     marginTop: 50,
-    marginHorizontal: 15,
+    marginHorizontal: 8,
     flex: 1,
     backgroundColor: '#EFECFF',
     borderTopLeftRadius: 30,

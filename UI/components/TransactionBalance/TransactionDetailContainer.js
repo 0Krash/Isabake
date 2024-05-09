@@ -9,7 +9,12 @@ export default function TransactionDetailContainer(props) {
       ]}
     >
       <View style={styles.cardContainer}>
-        <TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            props.setTransactionDetailModalIsVisible(true);
+            props.setTransactionDetail(props.data);
+          }}
+        >
           <View
             style={{
               flexDirection: 'row',
@@ -26,7 +31,7 @@ export default function TransactionDetailContainer(props) {
               }}
             >
               {props.data.description.length > 20
-                ? props.data.description.slice(0, 20) + '...'
+                ? props.data.description.slice(0, 25) + '...'
                 : props.data.description}
             </Text>
             <Text style={{ fontWeight: '400', fontSize: 22, color: '#3B3F3A' }}>
@@ -68,7 +73,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 6,
     position: 'absolute',
     height: '101%',
-    width: '98.7%',
+    width: '99%',
   },
   category: {
     borderRadius: 20,
@@ -86,19 +91,19 @@ const styles = StyleSheet.create({
 const getColor = (categoryId) => {
   switch (categoryId) {
     case '1':
-      return '#EA4641';
+      return '#EA464198';
     // return '#FA8072';
     case '2':
-      return '#F59C14';
+      return '#F59C1498';
     // return '#E4007C';
     case '3':
-      return '#2AC968';
+      return '#2AC96898';
     // return '#FFC0CB';
     case '4':
-      return '#3F7AE3';
+      return '#3F7AE398';
     // return '#98348F';
     default:
-      // return '#C71585';
-      return '#E4007C';
+      // return '#C7158598';
+      return '#9777DC98';
   }
 };

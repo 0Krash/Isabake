@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 
-import TransactionAlertModal from './TransactionAlertModal';
-import transactionService from '../../../services/TransactionBalance/API/transactionService';
+import TransactionAlertModal from '../TransactionAlertModal';
+import transactionService from '../../../../services/TransactionBalance/API/transactionService';
 
 export default function InsertTransactionButton(props) {
   const [transactionAlertVisible, setTransactionAlertVisibility] =

@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, TextInput, View, Keyboard } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 
-import stylesBase from '../../../constants/TransactionBalance/Styles';
+import stylesBase from '../../../../constants/TransactionBalance/Styles';
 
 const handleInputFocus = () => {
   Keyboard.dismiss();

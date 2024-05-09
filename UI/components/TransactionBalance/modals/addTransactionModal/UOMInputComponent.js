@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 
-import stylesBase from '../../../constants/TransactionBalance/Styles';
+import stylesBase from '../../../../constants/TransactionBalance/Styles';
 
 const options = [
   { label: 'Pzs', value: '0' },

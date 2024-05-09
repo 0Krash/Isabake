@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
-import stylesBase from '../../../constants/TransactionBalance/Styles';
+import stylesBase from '../../../../constants/TransactionBalance/Styles';
 
 const data = [
   { key: '0', value: 'Agregar tienda...' },
