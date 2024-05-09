@@ -1,20 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
 import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import storeService from '../../../../services/TransactionBalance/API/storeService';
 
-const data = [
-  { key: '0', value: 'Agregar tienda...' },
-  { key: '1', value: 'La Concepcion (Consti)' },
-  { key: '2', value: 'La Super Cremeria (Consti)' },
-  { key: '3', value: 'La Alpina (Tepeyac)' },
-];
+const convertArray = (array) => {
+  return array.reduce(
+    (result, obj, index) => {
+      if (obj.Name && obj.Alias) {
+        result.push({ key: `${index + 1}`, value: `${obj.Alias}` });
+      }
+      return result;
+    },
+    [{ key: '0', value: 'Agregar tienda...' }]
+  );
+};
 
 export default function StoreInputComponent({
   setSelected,
   setValidationErrorStore,
+  transactionType,
 }) {
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    async function fetchDataStores() {
+      try {
+        setData(convertArray(await storeService.getAllStores()));
+      } catch (error) {
+        console.error(
+          'Error al obtener transacciones desde StoreInputComponent: ',
+          error
+        );
+      }
+    }
+
+    if (transactionType === 'Gastos' && data.length === 0) {
+      fetchDataStores();
+    }
+  }, [transactionType, data]);
+
   const onSelectHandler = () => {
     setValidationErrorStore(true);
   };

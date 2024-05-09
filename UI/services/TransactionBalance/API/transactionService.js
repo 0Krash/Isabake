@@ -1,11 +1,11 @@
 import axios from 'axios';
-import { API_URL } from '@env';
+import { URL_Transactions } from '@env';
 
 const getAllTransactions = () => {
   return new Promise((resolve, reject) => {
-    console.log(API_URL);
+    console.log(URL_Transactions);
     axios
-      .get(API_URL)
+      .get(URL_Transactions)
       .then((response) => {
         resolve(response.data.data);
       })
@@ -22,7 +22,7 @@ const getAllTransactions = () => {
 const postTransaction = (data) => {
   return new Promise((resolve, reject) => {
     axios
-      .post(API_URL, data)
+      .post(URL_Transactions, data)
       .then((response) => {
         resolve(response.data);
       })

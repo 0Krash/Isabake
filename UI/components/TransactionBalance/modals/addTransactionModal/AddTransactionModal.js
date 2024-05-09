@@ -118,6 +118,7 @@ export default function AddTransactionModal({
                       <StoreInputComponent
                         setSelected={setSelected}
                         setValidationErrorStore={setValidationErrorStore}
+                        transactionType={transactionType}
                       />
                     )}
                 </View>
