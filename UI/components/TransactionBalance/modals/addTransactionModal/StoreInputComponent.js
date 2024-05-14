@@ -8,8 +8,8 @@ import storeService from '../../../../services/TransactionBalance/API/storeServi
 const convertArray = (array) => {
   return array.reduce(
     (result, obj, index) => {
-      if (obj.Name && obj.Alias) {
-        result.push({ key: `${index + 1}`, value: `${obj.Alias}` });
+      if (obj.name && obj.alias) {
+        result.push({ key: `${index + 1}`, value: `${obj.alias}` });
       }
       return result;
     },

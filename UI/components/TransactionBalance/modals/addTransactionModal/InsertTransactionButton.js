@@ -22,7 +22,7 @@ export default function InsertTransactionButton(props) {
 
   const data = {
     amount: amount,
-    storeId: selected,
+    store: { storeId: selected },
     category: { categoryId: category },
     quantity: quantity,
     uomId: unitValue,

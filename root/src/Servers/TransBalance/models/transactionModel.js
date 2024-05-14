@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const Category = require('./categoryModel');
+const Store = require('./storeModel');
 
 function getTransactionId() {
   const currentDate = new Date();
@@ -49,8 +50,23 @@ const transactionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'La transaccion debe tener monto'],
   },
-  storeId: {
-    type: String,
+  store: {
+    storeId: {
+      type: Number,
+      default: '',
+    },
+    name: {
+      type: String,
+      default: '',
+    },
+    alias: {
+      type: String,
+      default: '',
+    },
+    address: {
+      type: String,
+      default: '',
+    },
   },
   quantity: {
     type: String,
@@ -76,11 +92,25 @@ transactionSchema.pre('save', async function (next) {
     if (!category) {
       throw new Error('Categoría no encontrada');
     }
-    this.category = {
-      categoryId: category.categoryId,
-      description: category.description,
-      shortDescription: category.shortDescription,
-    };
+    this.category = category;
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+transactionSchema.pre('save', async function (next) {
+  try {
+    if (!this.store || !this.store.storeId) {
+      return next();
+    }
+    const store = await mongoose.model('Store').findOne({
+      storeId: this.store.storeId,
+    });
+    if (!store) {
+      throw new Error('Tienda no encontrada');
+    }
+    this.store = store;
     next();
   } catch (error) {
     next(error);
