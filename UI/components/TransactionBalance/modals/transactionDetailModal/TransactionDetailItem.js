@@ -8,7 +8,7 @@ export default TransactionDetailItem = ({ transactionDetail }) => {
     itemQuantity = '',
     quantity = '',
     selectedDate = '',
-    storeId = '',
+    store = '',
     transactionId = '',
     uomId = '',
   } = transactionDetail;
@@ -22,7 +22,7 @@ export default TransactionDetailItem = ({ transactionDetail }) => {
       <AmountItem amount={amount} />
       {(category.categoryId === '1' || category.categoryId === '2') && (
         <>
-          <StoreItem storeId={storeId} />
+          <StoreItem store={store} />
           <QuantityItem
             itemQuantity={itemQuantity}
             quantity={quantity}
@@ -59,7 +59,7 @@ const AmountItem = ({ amount }) => {
   );
 };
 
-const StoreItem = ({ storeId }) => {
+const StoreItem = ({ store }) => {
   return (
     <View
       style={[
@@ -75,7 +75,7 @@ const StoreItem = ({ storeId }) => {
           { fontSize: 20, fontWeight: '400' },
         ]}
       >
-        {storeId}
+        {store.alias}
       </Text>
     </View>
   );
