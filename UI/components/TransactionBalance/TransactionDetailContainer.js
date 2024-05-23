@@ -1,5 +1,7 @@
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
+import CurrencyFormatter from '../../utils/CurrencyFormatter';
+
 export default function TransactionDetailContainer(props) {
   return (
     <View
@@ -47,7 +49,7 @@ export default function TransactionDetailContainer(props) {
           </View>
           <View style={{ flexDirection: 'row', left: 10, top: 5 }}>
             <Text style={{ fontWeight: '200', fontSize: 25, marginBottom: 5 }}>
-              {props.data.amount}
+              {CurrencyFormatter.convertCentsToCurrency(props.data.amount)}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>

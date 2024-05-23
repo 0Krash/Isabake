@@ -47,7 +47,7 @@ const transactionSchema = new mongoose.Schema({
     required: [true, 'La transaccion debe tener una descripcion'],
   },
   amount: {
-    type: String,
+    type: Number,
     required: [true, 'La transaccion debe tener monto'],
   },
   store: {

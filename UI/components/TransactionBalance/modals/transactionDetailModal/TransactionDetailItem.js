@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 
+import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
+
 export default TransactionDetailItem = ({ transactionDetail }) => {
   const {
     amount = '',
@@ -53,7 +55,7 @@ const AmountItem = ({ amount }) => {
           { fontSize: 70, fontWeight: '100' },
         ]}
       >
-        {amount}
+        {CurrencyFormatter.convertCentsToCurrency(amount)}
       </Text>
     </View>
   );

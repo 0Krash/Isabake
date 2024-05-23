@@ -3,6 +3,7 @@ import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 
 import TransactionAlertModal from '../TransactionAlertModal';
 import transactionService from '../../../../services/TransactionBalance/API/transactionService';
+import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
 
 export default function InsertTransactionButton(props) {
   const [transactionAlertVisible, setTransactionAlertVisibility] =
@@ -20,19 +21,19 @@ export default function InsertTransactionButton(props) {
     transactionType,
   } = props;
 
-  const data = {
-    amount: amount,
-    store: { storeId: selected },
-    category: { categoryId: category },
-    quantity: quantity,
-    uomId: unitValue,
-    description: description,
-    itemQuantity: itemQuantity,
-    selectedDate: selectedDate,
-    transactionType: transactionType,
-  };
-
   const postTransaction = async () => {
+    const data = {
+      amount: CurrencyFormatter.convertCurrencyToCents(amount),
+      store: { storeId: selected },
+      category: { categoryId: category },
+      quantity: quantity,
+      uomId: unitValue,
+      description: description,
+      itemQuantity: itemQuantity,
+      selectedDate: selectedDate,
+      transactionType: transactionType,
+    };
+
     try {
       await transactionService.postTransaction(data);
     } catch (error) {
