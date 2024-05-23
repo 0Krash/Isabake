@@ -7,10 +7,13 @@ import TransactionDetail from '../../components/TransactionBalance/TransactionDe
 import AddTransactionButton from '../../components/TransactionBalance/AddTransactionButton';
 import AddTransactionModal from '../../components/TransactionBalance/modals/addTransactionModal/AddTransactionModal';
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
+import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
 import transactionService from '../../services/TransactionBalance/API/transactionService';
 
 export default TransactionBalanceScreen = () => {
   const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
+    useState(false);
+  const [DeleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
     useState(false);
   const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
     useState(false);
@@ -19,10 +22,10 @@ export default TransactionBalanceScreen = () => {
   const [dataTransactionsResponse, setDataTransactionsResponse] = useState();
 
   useEffect(() => {
-    if (!AddTransactionModalIsVisible) {
+    if (!AddTransactionModalIsVisible && !DeleteTransactionModalIsVisible) {
       fetchDataTransactions();
     }
-  }, [AddTransactionModalIsVisible]);
+  }, [AddTransactionModalIsVisible, DeleteTransactionModalIsVisible]);
 
   const fetchDataTransactions = async () => {
     try {
@@ -54,6 +57,7 @@ export default TransactionBalanceScreen = () => {
         transactionType={transactionType}
         setTransactionDetail={setTransactionDetail}
         setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
+        setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
         dataTransactionsResponse={
           dataTransactionsResponse !== undefined ? dataTransactionsResponse : []
         }
@@ -69,6 +73,11 @@ export default TransactionBalanceScreen = () => {
         transactionDetail={transactionDetail}
         transactionDetailModalIsVisible={transactionDetailModalIsVisible}
         setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
+      />
+      <DeleteTransactionModal
+        transactionDetail={transactionDetail}
+        DeleteTransactionModalIsVisible={DeleteTransactionModalIsVisible}
+        setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
       />
     </View>
   );

@@ -36,4 +36,21 @@ const postTransaction = (data) => {
   });
 };
 
-export default { getAllTransactions, postTransaction };
+const deleteTransactionById = (transactionId) => {
+  return new Promise((resolve, reject) => {
+    axios
+      .delete(`${URL_Transactions}/${transactionId}`)
+      .then((response) => {
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.error(
+          'Error al hacer la petición desde deleteTransaction:',
+          error
+        );
+        reject(error);
+      });
+  });
+};
+
+export default { getAllTransactions, postTransaction, deleteTransactionById };

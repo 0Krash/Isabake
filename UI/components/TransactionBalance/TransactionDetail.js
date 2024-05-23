@@ -4,6 +4,7 @@ import TransactionDetailContainer from './TransactionDetailContainer';
 
 export default function TransactionDetail({
   setTransactionDetailModalIsVisible,
+  setDeleteTransactionModalIsVisible,
   dataTransactionsResponse,
   setTransactionDetail,
   transactionType,
@@ -24,6 +25,9 @@ export default function TransactionDetail({
               setTransactionDetail={setTransactionDetail}
               setTransactionDetailModalIsVisible={
                 setTransactionDetailModalIsVisible
+              }
+              setDeleteTransactionModalIsVisible={
+                setDeleteTransactionModalIsVisible
               }
             />
           ))}

@@ -10,6 +10,11 @@ export default function TransactionDetailContainer(props) {
     >
       <View style={styles.cardContainer}>
         <TouchableOpacity
+          onLongPress={() => {
+            props.setDeleteTransactionModalIsVisible(true);
+            props.setTransactionDetail(props.data);
+          }}
+          delayLongPress={180}
           onPress={() => {
             props.setTransactionDetailModalIsVisible(true);
             props.setTransactionDetail(props.data);

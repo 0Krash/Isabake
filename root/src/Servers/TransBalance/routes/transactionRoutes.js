@@ -8,4 +8,8 @@ router
   .get(transactionController.getAllTransactions)
   .post(transactionController.createTransaction);
 
+router
+  .route('/:transactionId')
+  .delete(transactionController.deleteTransactionById);
+
 module.exports = router;
