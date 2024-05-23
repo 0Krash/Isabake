@@ -1,61 +1,63 @@
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
 import CurrencyFormatter from '../../utils/CurrencyFormatter';
+import DateFormatter from '../../utils/DateFormatter';
 
 export default function TransactionDetailContainer(props) {
+  const {
+    amount = '',
+    category = '',
+    description = '',
+    itemQuantity = '',
+    quantity = '',
+    selectedDate = '',
+  } = props.data;
+
+  const getColor = (categoryId) => {
+    switch (categoryId) {
+      case '1':
+        return '#EA464198';
+      case '2':
+        return '#F59C1498';
+      case '3':
+        return '#2AC96898';
+      case '4':
+        return '#3F7AE398';
+      default:
+        return '#9777DC98';
+    }
+  };
+
   return (
     <View
       style={[
         styles.mainContainer,
-        { backgroundColor: getColor(props.data.category.categoryId) },
+        { backgroundColor: getColor(category.categoryId) },
       ]}
     >
       <View style={styles.cardContainer}>
         <TouchableOpacity
-          onLongPress={() => {
-            props.setDeleteTransactionModalIsVisible(true);
-            props.setTransactionDetail(props.data);
-          }}
           delayLongPress={180}
           onPress={() => {
             props.setTransactionDetailModalIsVisible(true);
             props.setTransactionDetail(props.data);
           }}
+          onLongPress={() => {
+            props.setDeleteTransactionModalIsVisible(true);
+            props.setTransactionDetail(props.data);
+          }}
         >
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'flex-start',
-              left: 10,
-              top: 5,
-            }}
-          >
-            <Text
-              style={{
-                fontWeight: '400',
-                fontSize: 20,
-                color: '#3B3F3A',
-              }}
-            >
-              {props.data.description.length > 20
-                ? props.data.description.slice(0, 25) + '...'
-                : props.data.description}
-            </Text>
-            <Text style={{ fontWeight: '400', fontSize: 22, color: '#3B3F3A' }}>
-              {props.data.category.categoryId === '1'
-                ? `\tx\ ` + props.data.itemQuantity
-                : `\tx\ ` + props.data.quantity}
-            </Text>
+          <View style={styles.headerStyle}>
+            <DescriptionText description={description} />
+            <CategoryText
+              category={category}
+              itemQuantity={itemQuantity}
+              quantity={quantity}
+            />
           </View>
-          <View style={{ flexDirection: 'row', left: 10, top: 5 }}>
-            <Text style={{ fontWeight: '200', fontSize: 25, marginBottom: 5 }}>
-              {CurrencyFormatter.convertCentsToCurrency(props.data.amount)}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-            <Text style={{ fontWeight: '400', fontSize: 10 }}>
-              {props.data.selectedDate}
-            </Text>
+          <View style={styles.bottomStyle}>
+            <AmountText amount={amount} />
+            <DateText selectedDate={selectedDate} />
           </View>
         </TouchableOpacity>
       </View>
@@ -63,11 +65,55 @@ export default function TransactionDetailContainer(props) {
   );
 }
 
+const DescriptionText = ({ description }) => {
+  return (
+    <Text
+      style={{
+        fontWeight: '400',
+        fontSize: 20,
+        color: '#3B3F3A',
+      }}
+    >
+      {description.length > 20 ? description.slice(0, 25) + '...' : description}
+    </Text>
+  );
+};
+
+const CategoryText = ({ category, itemQuantity, quantity }) => {
+  return (
+    <Text style={styles.categoryText}>
+      {category.categoryId === '1'
+        ? `\tx\ ` + itemQuantity
+        : `\tx\ ` + quantity}
+    </Text>
+  );
+};
+
+const AmountText = ({ amount }) => {
+  return (
+    <View style={{ flexDirection: 'row', left: 10, top: 5 }}>
+      <Text style={{ fontWeight: '200', fontSize: 22, marginBottom: 5 }}>
+        {CurrencyFormatter.convertCentsToCurrency(amount)}
+      </Text>
+    </View>
+  );
+};
+
+const DateText = ({ selectedDate }) => {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <Text style={{ fontWeight: '400', fontSize: 10 }}>
+        {DateFormatter.convertISOtoSelected(selectedDate)}
+      </Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 2.5,
-    marginTop: 12,
-    height: 90,
+    marginTop: 10,
+    height: 70,
     borderRadius: 12,
     alignItems: 'flex-end',
   },
@@ -82,35 +128,21 @@ const styles = StyleSheet.create({
     height: '101%',
     width: '99%',
   },
-  category: {
-    borderRadius: 20,
-    alignItems: 'center',
-    marginTop: 2,
-    transform: [{ rotate: '-90deg' }],
+  headerStyle: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    left: 10,
+    top: 0,
+  },
+  bottomStyle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    top: -6,
   },
   categoryText: {
-    fontWeight: '600',
-    fontSize: 8,
-    color: 'white',
+    fontWeight: '400',
+    fontSize: 20,
+    color: '#3B3F3A',
   },
 });
-
-const getColor = (categoryId) => {
-  switch (categoryId) {
-    case '1':
-      return '#EA464198';
-    // return '#FA8072';
-    case '2':
-      return '#F59C1498';
-    // return '#E4007C';
-    case '3':
-      return '#2AC96898';
-    // return '#FFC0CB';
-    case '4':
-      return '#3F7AE398';
-    // return '#98348F';
-    default:
-      // return '#C7158598';
-      return '#9777DC98';
-  }
-};
