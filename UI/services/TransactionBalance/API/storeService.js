@@ -3,7 +3,6 @@ import { URL_Stores } from '@env';
 
 const getAllStores = () => {
   return new Promise((resolve, reject) => {
-    console.log(URL_Stores);
     axios
       .get(URL_Stores)
       .then((response) => {

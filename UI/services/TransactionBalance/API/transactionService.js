@@ -3,7 +3,6 @@ import { URL_Transactions } from '@env';
 
 const getAllTransactions = () => {
   return new Promise((resolve, reject) => {
-    console.log(URL_Transactions);
     axios
       .get(URL_Transactions)
       .then((response) => {

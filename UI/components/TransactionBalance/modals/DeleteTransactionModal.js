@@ -18,7 +18,6 @@ export default function DeleteTransactionModal({
     transactionService
       .deleteTransactionById(transactionId)
       .then((data) => {
-        console.log('Transacción eliminada:', data);
         setDeleteTransactionModalIsVisible(false);
       })
       .catch((error) => {

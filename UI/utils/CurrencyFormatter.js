@@ -1,5 +1,4 @@
 const convertCurrencyToCents = (currencyValue) => {
-  console.log(currencyValue);
   return parseFloat(currencyValue.replace(/[$,]/g, '')) * 100;
 };
 
