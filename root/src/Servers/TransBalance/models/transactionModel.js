@@ -23,7 +23,7 @@ const transactionSchema = new mongoose.Schema({
     default: getTransactionId,
   },
   selectedDate: {
-    type: String,
+    type: Date,
   },
   transactionType: {
     type: String,

@@ -4,6 +4,7 @@ import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 import TransactionAlertModal from '../TransactionAlertModal';
 import transactionService from '../../../../services/TransactionBalance/API/transactionService';
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
+import DateFormatter from '../../../../utils/DateFormatter';
 
 export default function InsertTransactionButton(props) {
   const [transactionAlertVisible, setTransactionAlertVisibility] =
@@ -30,7 +31,7 @@ export default function InsertTransactionButton(props) {
       uomId: unitValue,
       description: description,
       itemQuantity: itemQuantity,
-      selectedDate: selectedDate,
+      selectedDate: DateFormatter.convertSelectedToISO(selectedDate),
       transactionType: transactionType,
     };
 

@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
+import DateFormatter from '../../../../utils/DateFormatter';
 
 export default TransactionDetailItem = ({ transactionDetail }) => {
   const {
@@ -86,7 +87,9 @@ const StoreItem = ({ store }) => {
 const SelectedDateItem = ({ selectedDate }) => {
   return (
     <View style={styles.descriptionItemBase}>
-      <Text style={styles.descriptionItemTextBase}>{selectedDate}</Text>
+      <Text style={styles.descriptionItemTextBase}>
+        {DateFormatter.convertISOtoSelected(selectedDate)}
+      </Text>
     </View>
   );
 };
