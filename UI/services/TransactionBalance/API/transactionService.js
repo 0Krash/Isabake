@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { URL_Transactions } from '@env';
 
-const getAllTransactions = () => {
+exports.getAllTransactions = () => {
   return new Promise((resolve, reject) => {
     axios
       .get(URL_Transactions)
@@ -18,7 +18,7 @@ const getAllTransactions = () => {
   });
 };
 
-const postTransaction = (data) => {
+exports.postTransaction = (data) => {
   return new Promise((resolve, reject) => {
     axios
       .post(URL_Transactions, data)
@@ -35,7 +35,7 @@ const postTransaction = (data) => {
   });
 };
 
-const deleteTransactionById = (transactionId) => {
+exports.deleteTransactionById = (transactionId) => {
   return new Promise((resolve, reject) => {
     axios
       .delete(`${URL_Transactions}/${transactionId}`)
@@ -52,4 +52,36 @@ const deleteTransactionById = (transactionId) => {
   });
 };
 
-export default { getAllTransactions, postTransaction, deleteTransactionById };
+exports.getTotalAmountByCategory = () => {
+  return new Promise((resolve, reject) => {
+    axios
+      .get(`${URL_Transactions}/totalAmountByCategory`)
+      .then((response) => {
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.error(
+          'Error al hacer la petición desde getTotalAmountByCategory:',
+          error
+        );
+        reject(error);
+      });
+  });
+};
+
+exports.getTotalAmountByDateCategory = () => {
+  return new Promise((resolve, reject) => {
+    axios
+      .get(`${URL_Transactions}/totalAmountByDateCategory`)
+      .then((response) => {
+        resolve(response.data);
+      })
+      .catch((error) => {
+        console.error(
+          'Error al hacer la petición desde getTotalAmountByDateCategory:',
+          error
+        );
+        reject(error);
+      });
+  });
+};

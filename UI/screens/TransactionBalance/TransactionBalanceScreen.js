@@ -20,21 +20,33 @@ export default TransactionBalanceScreen = () => {
   const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
   const [dataTransactionsResponse, setDataTransactionsResponse] = useState();
+  const [totalAmountByCategoryResponse, setTotalAmountByCategoryResponse] =
+    useState();
+  const [
+    totalAmountByDateCategoryResponse,
+    setTotalAmountByDateCategoryResponse,
+  ] = useState();
 
   useEffect(() => {
     if (!AddTransactionModalIsVisible && !DeleteTransactionModalIsVisible) {
-      fetchDataTransactions();
+      getTransactionsData();
     }
   }, [AddTransactionModalIsVisible, DeleteTransactionModalIsVisible]);
 
-  const fetchDataTransactions = async () => {
+  const getTransactionsData = async () => {
     try {
       setDataTransactionsResponse(
         await transactionService.getAllTransactions()
       );
+      setTotalAmountByCategoryResponse(
+        await transactionService.getTotalAmountByCategory()
+      );
+      setTotalAmountByDateCategoryResponse(
+        await transactionService.getTotalAmountByDateCategory()
+      );
     } catch (error) {
       console.error(
-        'Error al obtener transacciones desde TransactionBalanceScreen: ',
+        'Error al obtener transacciones desde getTransactionsData: ',
         error
       );
     }
@@ -51,7 +63,19 @@ export default TransactionBalanceScreen = () => {
           Transacciones
         </Text>
       </View>
-      <Dashboard />
+      <Dashboard
+        transactionType={transactionType}
+        totalAmountByCategoryResponse={
+          totalAmountByCategoryResponse !== undefined
+            ? totalAmountByCategoryResponse
+            : []
+        }
+        totalAmountByDateCategoryResponse={
+          totalAmountByDateCategoryResponse !== undefined
+            ? totalAmountByDateCategoryResponse
+            : []
+        }
+      />
       <SwitchSelector onTabChange={handleTabChange} />
       <TransactionDetail
         transactionType={transactionType}

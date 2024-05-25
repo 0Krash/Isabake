@@ -1,4 +1,5 @@
 const Transaction = require('../models/transactionModel');
+const Querys = require('../data/query/summaryQuery');
 
 exports.getAllTransactions = async (req, res) => {
   try {
@@ -56,5 +57,27 @@ exports.deleteTransactionById = async (req, res) => {
       status: 'failed',
       message: err,
     });
+  }
+};
+
+exports.getTotalAmountByCategory = async (req, res) => {
+  try {
+    const summary = await Transaction.aggregate(Querys.totalAmountByCategory());
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+exports.getTotalAmountByDateCategory = async (req, res) => {
+  try {
+    const summary = await Transaction.aggregate(
+      Querys.totalAmountByDateCategory()
+    );
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

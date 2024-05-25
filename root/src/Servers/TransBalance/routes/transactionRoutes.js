@@ -12,4 +12,12 @@ router
   .route('/:transactionId')
   .delete(transactionController.deleteTransactionById);
 
+router
+  .route('/totalAmountByCategory')
+  .get(transactionController.getTotalAmountByCategory);
+
+router
+  .route('/totalAmountByDateCategory')
+  .get(transactionController.getTotalAmountByDateCategory);
+
 module.exports = router;
