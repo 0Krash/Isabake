@@ -28,6 +28,7 @@ exports.totalAmountByCategory = () => [
           totalDocuments: '$totalDocuments',
         },
       },
+      total: { $sum: '$totalAmount' }, // Calcula el total como la suma de todas las categorías
     },
   },
   {
@@ -35,6 +36,7 @@ exports.totalAmountByCategory = () => [
       _id: 0,
       transactionType: '$_id',
       categories: 1,
+      total: 1, // Incluye el campo total en la salida
     },
   },
 ];
@@ -77,6 +79,8 @@ exports.totalAmountByDateCategory = () => [
           totalDocuments: '$totalDocuments',
         },
       },
+      monthTotalAmount: { $sum: '$totalAmount' },
+      monthTotalDocuments: { $sum: '$totalDocuments' },
     },
   },
   {
@@ -86,6 +90,8 @@ exports.totalAmountByDateCategory = () => [
       year: '$_id.year',
       month: '$_id.month',
       categories: 1,
+      monthTotalAmount: 1,
+      monthTotalDocuments: 1,
     },
   },
   {
@@ -96,8 +102,12 @@ exports.totalAmountByDateCategory = () => [
           year: '$year',
           month: '$month',
           categories: '$categories',
+          monthTotalAmount: '$monthTotalAmount',
+          monthTotalDocuments: '$monthTotalDocuments',
         },
       },
+      transactionTotalAmount: { $sum: '$monthTotalAmount' },
+      transactionTotalDocuments: { $sum: '$monthTotalDocuments' },
     },
   },
   {
@@ -105,6 +115,8 @@ exports.totalAmountByDateCategory = () => [
       _id: 0,
       transactionType: '$_id',
       months: 1,
+      transactionTotalAmount: 1,
+      transactionTotalDocuments: 1,
     },
   },
 ];
