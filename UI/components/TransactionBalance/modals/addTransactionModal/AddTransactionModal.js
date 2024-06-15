@@ -23,6 +23,7 @@ import InsertTransactionButton from './InsertTransactionButton';
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
   setAddTransactionModalIsVisible,
+  setAddStoreModalIsVisible,
 }) {
   const amountInputRef = useRef(null);
   const quantityInputRef = useRef(null);
@@ -116,7 +117,9 @@ export default function AddTransactionModal({
                   {showCategoryInput &&
                     (category === '1' || category === '2') && (
                       <StoreInputComponent
+                        selected={selected}
                         setSelected={setSelected}
+                        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
                         setValidationErrorStore={setValidationErrorStore}
                         transactionType={transactionType}
                       />

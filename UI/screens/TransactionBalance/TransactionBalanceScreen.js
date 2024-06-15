@@ -8,9 +8,11 @@ import AddTransactionButton from '../../components/TransactionBalance/AddTransac
 import AddTransactionModal from '../../components/TransactionBalance/modals/addTransactionModal/AddTransactionModal';
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
+import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import transactionService from '../../services/TransactionBalance/API/transactionService';
 
 export default TransactionBalanceScreen = () => {
+  const [AddStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
   const [DeleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
@@ -92,6 +94,7 @@ export default TransactionBalanceScreen = () => {
       <AddTransactionModal
         AddTransactionModalIsVisible={AddTransactionModalIsVisible}
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
+        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
       />
       <TransactionDetailModal
         transactionDetail={transactionDetail}
@@ -102,6 +105,10 @@ export default TransactionBalanceScreen = () => {
         transactionDetail={transactionDetail}
         DeleteTransactionModalIsVisible={DeleteTransactionModalIsVisible}
         setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
+      />
+      <AddStoreModal
+        AddStoreModalIsVisible={AddStoreModalIsVisible}
+        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
       />
     </View>
   );

@@ -18,11 +18,14 @@ const convertArray = (array) => {
 };
 
 export default function StoreInputComponent({
+  selected,
   setSelected,
+  setAddStoreModalIsVisible,
   setValidationErrorStore,
   transactionType,
 }) {
   const [data, setData] = useState([]);
+  const [store, setStore] = useState('');
 
   useEffect(() => {
     async function fetchDataStores() {
@@ -42,6 +45,7 @@ export default function StoreInputComponent({
   }, [transactionType, data]);
 
   const onSelectHandler = () => {
+    if (selected === '0') setAddStoreModalIsVisible(true);
     setValidationErrorStore(true);
   };
 
