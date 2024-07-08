@@ -112,7 +112,7 @@ const DateText = ({ selectedDate }) => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 2.5,
-    marginTop: 10,
+    marginTop: 4,
     height: 70,
     borderRadius: 12,
     alignItems: 'flex-end',

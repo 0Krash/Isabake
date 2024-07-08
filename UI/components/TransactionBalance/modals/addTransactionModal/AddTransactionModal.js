@@ -228,8 +228,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   modalView: {
     backgroundColor: '#EFECFF',
