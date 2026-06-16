@@ -3,6 +3,7 @@ import { Text, TextInput, View, Keyboard } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 
 import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import DateFormatter from '../../../../utils/DateFormatter';
 
 const handleInputFocus = () => {
   Keyboard.dismiss();
@@ -26,6 +27,7 @@ export default function DatePickerComponent({
         value={selectedDate}
       />
       <DateTimePickerModal
+        date={DateFormatter.selectedToDate(selectedDate)}
         isVisible={isDatePickerVisible}
         mode="date"
         onConfirm={handleConfirm}

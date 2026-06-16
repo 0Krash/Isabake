@@ -11,6 +11,7 @@ const storeRouter = require('./routes/storeRoutes');
 const app = express();
 
 //middlewares
+app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use((req, res, next) => {

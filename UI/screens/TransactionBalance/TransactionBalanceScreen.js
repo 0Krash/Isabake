@@ -11,7 +11,7 @@ import DeleteTransactionModal from '../../components/TransactionBalance/modals/D
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import transactionService from '../../services/TransactionBalance/API/transactionService';
 
-export default TransactionBalanceScreen = () => {
+const TransactionBalanceScreen = () => {
   const [AddStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
@@ -113,6 +113,8 @@ export default TransactionBalanceScreen = () => {
     </View>
   );
 };
+
+export default TransactionBalanceScreen;
 
 const styles = StyleSheet.create({
   mainContainer: {

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-export default stylesBase = StyleSheet.create({
+const stylesBase = StyleSheet.create({
   inputBox: { flex: 0 },
   textInputBase: {
     backgroundColor: '#FEFCFF',
@@ -44,3 +44,5 @@ export default stylesBase = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default stylesBase;

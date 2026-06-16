@@ -9,7 +9,7 @@ const options = [
   { label: 'Paq', value: '1' },
   { label: 'g', value: '2' },
   { label: 'Kg', value: '3' },
-  { label: 'l', value: '4' },
+  { label: 'L', value: '4' },
   { label: 'ml', value: '5' },
 ];
 

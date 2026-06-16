@@ -13,7 +13,7 @@ const convertArray = (array) => {
       }
       return result;
     },
-    [{ key: '0', value: 'Agregar tienda...' }]
+    [{ key: '0', value: 'Agregar tienda...' }],
   );
 };
 
@@ -34,7 +34,7 @@ export default function StoreInputComponent({
       } catch (error) {
         console.error(
           'Error al obtener transacciones desde StoreInputComponent: ',
-          error
+          error,
         );
       }
     }
@@ -45,8 +45,18 @@ export default function StoreInputComponent({
   }, [transactionType, data]);
 
   const onSelectHandler = () => {
-    if (selected === '0') setAddStoreModalIsVisible(true);
-    setValidationErrorStore(true);
+    if (selected === '0') {
+      setAddStoreModalIsVisible(true);
+    } else {
+      setValidationErrorStore(true);
+    }
+  };
+
+  // Function to add the new store to the list and select it
+  const addNewStore = (newStoreAlias) => {
+    const newStore = { key: `${data.length}`, value: newStoreAlias };
+    setData([...data, newStore]);
+    setSelected(newStore.key);
   };
 
   return (

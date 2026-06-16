@@ -7,7 +7,8 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
-export default TransactionAlertModal = (props) => {
+
+const TransactionAlertModal = (props) => {
   return (
     <Modal
       animationType="fade"
@@ -78,6 +79,8 @@ export default TransactionAlertModal = (props) => {
     </Modal>
   );
 };
+
+export default TransactionAlertModal;
 
 const styles = StyleSheet.create({
   centeredView: {

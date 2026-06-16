@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
 import DateFormatter from '../../../../utils/DateFormatter';
 
-export default TransactionDetailItem = ({ transactionDetail }) => {
+const TransactionDetailItem = ({ transactionDetail }) => {
   const {
     amount = '',
     category = '',
@@ -38,6 +38,8 @@ export default TransactionDetailItem = ({ transactionDetail }) => {
     </View>
   );
 };
+
+export default TransactionDetailItem;
 
 const DescriptionItem = ({ description }) => {
   return (
