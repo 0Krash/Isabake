@@ -7,6 +7,8 @@ import {
 } from 'react-native';
 
 import TransactionDetailItem from './TransactionDetailItem';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 export default function TransactionDetailModal({
   setTransactionDetailModalIsVisible,
@@ -14,6 +16,7 @@ export default function TransactionDetailModal({
   transactionDetail,
 }) {
   const { category = '' } = transactionDetail;
+  const { colors } = useTransactionBalanceTheme();
 
   return (
     <Modal
@@ -25,9 +28,14 @@ export default function TransactionDetailModal({
       }}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-        <View style={styles.mainContainer}>
-          <View style={[styles.modalContainerBase, { height: '65%' }]}>
-            <CategoryLabel category={category} />
+        <View style={[styles.mainContainer, { backgroundColor: colors.backdrop }]}>
+          <View
+            style={[
+              styles.modalContainerBase,
+              { backgroundColor: colors.screenBackground, height: '65%' },
+            ]}
+          >
+            <CategoryLabel category={category} colors={colors} />
             <TransactionDetailItem transactionDetail={transactionDetail} />
           </View>
         </View>
@@ -36,7 +44,7 @@ export default function TransactionDetailModal({
   );
 }
 
-const CategoryLabel = ({ category }) => {
+const CategoryLabel = ({ category, colors }) => {
   return (
     <View
       testID="categoryLabel"
@@ -56,7 +64,11 @@ const CategoryLabel = ({ category }) => {
       />
       <Text style={styles.categoryLabelText}>{category.shortDescription}</Text>
       <View
-        style={[styles.modalContainerBase, styles.categoryLabel, { top: 20 }]}
+        style={[
+          styles.modalContainerBase,
+          styles.categoryLabel,
+          { backgroundColor: colors.screenBackground, top: 20 },
+        ]}
       />
     </View>
   );
@@ -65,11 +77,9 @@ const CategoryLabel = ({ category }) => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'flex-end',
   },
   modalContainerBase: {
-    backgroundColor: '#EFECFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     width: '100%',
@@ -81,9 +91,10 @@ const styles = StyleSheet.create({
   },
   categoryLabelText: {
     color: '#FFFF',
-    fontWeight: '700',
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
     paddingTop: 2,
-    letterSpacing: 3,
+    letterSpacing: 0,
   },
 });
 

@@ -11,11 +11,14 @@ import NameInputComponent from './NameInputComponent';
 import AliasInputComponent from './AliasInputComponent';
 import AddressInputComponent from './AddressInputComponent';
 import InsertStoreButton from './InsertStoreButton';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 export default function AddStoreModal({
   AddStoreModalIsVisible,
   setAddStoreModalIsVisible,
 }) {
+  const { colors } = useTransactionBalanceTheme();
   const [storeName, setStoreName] = useState('');
   const [storeAlias, setStoreAlias] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
@@ -43,11 +46,16 @@ export default function AddStoreModal({
       }}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <View style={styles.mainContainer}>
-          <View style={[styles.modalContainerBase, { height: '75%' }]}>
-            <View style={{ alignItems: 'center', margin: 20 }}>
-              <Text style={{ fontSize: 25, fontWeight: '500' }}>
-                🏬 Agregar nueva tienda
+        <View style={[styles.mainContainer, { backgroundColor: colors.backdrop }]}>
+          <View
+            style={[
+              styles.modalContainerBase,
+              { backgroundColor: colors.screenBackground, height: '75%' },
+            ]}
+          >
+            <View style={styles.titleContainer}>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Agregar nueva tienda
               </Text>
             </View>
             <ScrollView
@@ -99,14 +107,21 @@ export default function AddStoreModal({
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'flex-end',
   },
   modalContainerBase: {
-    backgroundColor: '#EFECFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 10,
     width: '100%',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    margin: 20,
+  },
+  title: {
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
 });

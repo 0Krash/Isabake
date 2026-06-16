@@ -2,8 +2,11 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
 import DateFormatter from '../../../../utils/DateFormatter';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 const TransactionDetailItem = ({ transactionDetail }) => {
+  const { colors } = useTransactionBalanceTheme();
   const {
     amount = '',
     category = '',
@@ -21,97 +24,71 @@ const TransactionDetailItem = ({ transactionDetail }) => {
       testID="descriptionItemContainer"
       style={styles.descriptionItemContainer}
     >
-      <DescriptionItem description={description} />
-      <AmountItem amount={amount} />
+      <DescriptionItem colors={colors} description={description} />
+      <AmountItem amount={amount} colors={colors} />
       {(category.categoryId === '1' || category.categoryId === '2') && (
         <>
-          <StoreItem store={store} />
+          <StoreItem colors={colors} store={store} />
           <QuantityItem
+            colors={colors}
             itemQuantity={itemQuantity}
             quantity={quantity}
             category={category}
           />
         </>
       )}
-      <SelectedDateItem selectedDate={selectedDate} />
-      <TransactionIdItem transactionId={transactionId} />
+      <SelectedDateItem colors={colors} selectedDate={selectedDate} />
+      <TransactionIdItem colors={colors} transactionId={transactionId} />
     </View>
   );
 };
 
 export default TransactionDetailItem;
 
-const DescriptionItem = ({ description }) => {
+const DescriptionItem = ({ colors, description }) => {
   return (
     <View style={styles.descriptionItemBase}>
-      <Text style={styles.descriptionItemTextBase}>{description}</Text>
+      <Text style={[styles.descriptionItemTextBase, { color: colors.textPrimary }]}>
+        {description}
+      </Text>
     </View>
   );
 };
 
-const AmountItem = ({ amount }) => {
+const AmountItem = ({ amount, colors }) => {
   return (
     <View style={styles.descriptionItemBase}>
-      <Text
-        style={[
-          styles.descriptionItemTextBase,
-          { fontSize: 70, fontWeight: '100' },
-        ]}
-      >
+      <Text style={[styles.amountText, { color: colors.textPrimary }]}>
         {CurrencyFormatter.convertCentsToCurrency(amount)}
       </Text>
     </View>
   );
 };
 
-const StoreItem = ({ store }) => {
+const StoreItem = ({ colors, store }) => {
   return (
-    <View
-      style={[
-        styles.descriptionItemBase,
-        {
-          flex: 2,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.descriptionItemTextBase,
-          { fontSize: 20, fontWeight: '400' },
-        ]}
-      >
+    <View style={[styles.descriptionItemBase, styles.compactItem]}>
+      <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
         {store.alias}
       </Text>
     </View>
   );
 };
 
-const SelectedDateItem = ({ selectedDate }) => {
+const SelectedDateItem = ({ colors, selectedDate }) => {
   return (
     <View style={styles.descriptionItemBase}>
-      <Text style={styles.descriptionItemTextBase}>
+      <Text style={[styles.descriptionItemTextBase, { color: colors.textPrimary }]}>
         {DateFormatter.convertISOtoSelected(selectedDate)}
       </Text>
     </View>
   );
 };
 
-const QuantityItem = ({ itemQuantity, quantity, category }) => {
+const QuantityItem = ({ colors, itemQuantity, quantity, category }) => {
   return (
-    <View
-      style={[
-        styles.descriptionItemBase,
-        {
-          flex: 2,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.descriptionItemTextBase,
-          { fontSize: 20, fontWeight: '400' },
-        ]}
-      >
+    <View style={[styles.descriptionItemBase, styles.compactItem]}>
+      <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
         Cantidad de productos:{' '}
         {category.categoryId === '1' ? itemQuantity : quantity}
       </Text>
@@ -119,7 +96,7 @@ const QuantityItem = ({ itemQuantity, quantity, category }) => {
   );
 };
 
-const TransactionIdItem = ({ transactionId }) => {
+const TransactionIdItem = ({ colors, transactionId }) => {
   return (
     <View
       style={[
@@ -133,10 +110,7 @@ const TransactionIdItem = ({ transactionId }) => {
     >
       <Text
         selectable={true}
-        style={[
-          styles.descriptionItemTextBase,
-          { fontSize: 15, fontWeight: '400', color: '#fff' },
-        ]}
+        style={[styles.transactionIdText, { color: colors.textSecondary }]}
       >
         {transactionId}
       </Text>
@@ -163,8 +137,26 @@ const styles = StyleSheet.create({
     // borderWidth: 2,
   },
   descriptionItemTextBase: {
-    fontSize: 35,
-    fontWeight: '400',
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.medium,
     textAlign: 'center',
+  },
+  amountText: {
+    fontSize: typography.sizes.displayAmount,
+    fontWeight: typography.weights.medium,
+    textAlign: 'center',
+  },
+  compactItem: {
+    flex: 2,
+  },
+  secondaryText: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.regular,
+    textAlign: 'center',
+  },
+  transactionIdText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.regular,
+    textAlign: 'right',
   },
 });

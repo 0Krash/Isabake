@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import { createStylesBase } from '../../../../constants/TransactionBalance/Styles';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 import storeService from '../../../../services/TransactionBalance/API/storeService';
 
 const convertArray = (array) => {
@@ -24,6 +26,8 @@ export default function StoreInputComponent({
   setValidationErrorStore,
   transactionType,
 }) {
+  const { colors } = useTransactionBalanceTheme();
+  const stylesBase = createStylesBase(colors);
   const [data, setData] = useState([]);
   const [store, setStore] = useState('');
 
@@ -69,21 +73,26 @@ export default function StoreInputComponent({
         save="key"
         notFoundText={'Tienda no existe...'}
         onSelect={onSelectHandler}
-        boxStyles={[stylesBase.textInputBase, { borderColor: 'white' }]}
+        boxStyles={[stylesBase.textInputBase, { borderColor: colors.border }]}
         inputStyles={{
+          color: colors.textPrimary,
           marginTop: 0,
-          fontSize: 18,
+          fontSize: typography.sizes.body,
           marginLeft: 9,
-          fontWeight: '400',
+          fontWeight: typography.weights.regular,
         }}
         dropdownStyles={{
-          backgroundColor: '#FEFCFF',
+          backgroundColor: colors.surface,
           borderRadius: 15,
           margin: 10,
           textAlign: 'center',
-          borderColor: 'white',
+          borderColor: colors.border,
         }}
-        dropdownTextStyles={{ fontWeight: '400', fontSize: 16 }}
+        dropdownTextStyles={{
+          color: colors.textPrimary,
+          fontSize: typography.sizes.body,
+          fontWeight: typography.weights.regular,
+        }}
       />
     </View>
   );

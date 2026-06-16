@@ -1,25 +1,21 @@
 import { StyleSheet, TouchableOpacity, Text, View } from 'react-native';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 export default function AddTransactionButton({
   setAddTransactionModalIsVisible,
 }) {
+  const { colors } = useTransactionBalanceTheme();
+
   return (
     <TouchableOpacity
-      style={styles.mainContainer}
+      style={[styles.mainContainer, { backgroundColor: colors.primary }]}
       onPress={() => {
         setAddTransactionModalIsVisible(true);
       }}
     >
-      <View style={{ height: 48, justifyContent: 'center' }}>
-        <Text
-          style={{
-            fontSize: 40,
-            fontWeight: '300',
-            color: '#FEFCFF',
-          }}
-        >
-          +
-        </Text>
+      <View style={styles.iconContainer}>
+        <Text style={[styles.iconText, { color: colors.textInverse }]}>+</Text>
       </View>
     </TouchableOpacity>
   );
@@ -30,11 +26,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '3%',
     left: '80%',
-    backgroundColor: '#6D37FF',
     height: 50,
     width: 50,
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconContainer: {
+    height: 48,
+    justifyContent: 'center',
+  },
+  iconText: {
+    fontSize: typography.sizes.displayAmount,
+    fontWeight: '300',
+    lineHeight: 46,
   },
 });

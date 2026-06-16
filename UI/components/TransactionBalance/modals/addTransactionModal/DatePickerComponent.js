@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, TextInput, View, Keyboard } from 'react-native';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 import DateFormatter from '../../../../utils/DateFormatter';
 
 const handleInputFocus = () => {
@@ -16,6 +16,8 @@ export default function DatePickerComponent({
   handleConfirm,
   selectedDate,
 }) {
+  const { stylesBase } = useTransactionBalanceStyles();
+
   return (
     <View testID="date">
       <Text style={stylesBase.textInputLabelBase}>Fecha</Text>

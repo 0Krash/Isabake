@@ -2,8 +2,11 @@ import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
 import CurrencyFormatter from '../../utils/CurrencyFormatter';
 import DateFormatter from '../../utils/DateFormatter';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 export default function TransactionDetailContainer(props) {
+  const { colors } = useTransactionBalanceTheme();
   const {
     amount = '',
     category = '',
@@ -35,7 +38,7 @@ export default function TransactionDetailContainer(props) {
         { backgroundColor: getColor(category.categoryId) },
       ]}
     >
-      <View style={styles.cardContainer}>
+      <View style={[styles.cardContainer, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
           delayLongPress={180}
           onPress={() => {
@@ -48,16 +51,17 @@ export default function TransactionDetailContainer(props) {
           }}
         >
           <View style={styles.headerStyle}>
-            <DescriptionText description={description} />
+            <DescriptionText description={description} colors={colors} />
             <CategoryText
               category={category}
+              colors={colors}
               itemQuantity={itemQuantity}
               quantity={quantity}
             />
           </View>
           <View style={styles.bottomStyle}>
-            <AmountText amount={amount} />
-            <DateText selectedDate={selectedDate} />
+            <AmountText amount={amount} colors={colors} />
+            <DateText selectedDate={selectedDate} colors={colors} />
           </View>
         </TouchableOpacity>
       </View>
@@ -65,23 +69,17 @@ export default function TransactionDetailContainer(props) {
   );
 }
 
-const DescriptionText = ({ description }) => {
+const DescriptionText = ({ description, colors }) => {
   return (
-    <Text
-      style={{
-        fontWeight: '400',
-        fontSize: 20,
-        color: '#3B3F3A',
-      }}
-    >
+    <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
       {description.length > 20 ? description.slice(0, 25) + '...' : description}
     </Text>
   );
 };
 
-const CategoryText = ({ category, itemQuantity, quantity }) => {
+const CategoryText = ({ category, colors, itemQuantity, quantity }) => {
   return (
-    <Text style={styles.categoryText}>
+    <Text style={[styles.categoryText, { color: colors.textPrimary }]}>
       {category.categoryId === '1'
         ? `\tx\ ` + itemQuantity
         : `\tx\ ` + quantity}
@@ -89,20 +87,20 @@ const CategoryText = ({ category, itemQuantity, quantity }) => {
   );
 };
 
-const AmountText = ({ amount }) => {
+const AmountText = ({ amount, colors }) => {
   return (
-    <View style={{ flexDirection: 'row', left: 10, top: 5 }}>
-      <Text style={{ fontWeight: '200', fontSize: 22, marginBottom: 5 }}>
+    <View style={styles.amountContainer}>
+      <Text style={[styles.amountText, { color: colors.textPrimary }]}>
         {CurrencyFormatter.convertCentsToCurrency(amount)}
       </Text>
     </View>
   );
 };
 
-const DateText = ({ selectedDate }) => {
+const DateText = ({ selectedDate, colors }) => {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-      <Text style={{ fontWeight: '400', fontSize: 10 }}>
+    <View style={styles.dateContainer}>
+      <Text style={[styles.dateText, { color: colors.textSecondary }]}>
         {DateFormatter.convertISOtoSelected(selectedDate)}
       </Text>
     </View>
@@ -119,7 +117,6 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     padding: 12,
-    backgroundColor: '#FEFCFF',
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
     borderTopLeftRadius: 6,
@@ -140,9 +137,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     top: -6,
   },
+  descriptionText: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.regular,
+  },
   categoryText: {
-    fontWeight: '400',
-    fontSize: 20,
-    color: '#3B3F3A',
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.regular,
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    left: 10,
+    top: 5,
+  },
+  amountText: {
+    fontSize: typography.sizes.amount,
+    fontWeight: typography.weights.medium,
+    marginBottom: 5,
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  dateText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.regular,
   },
 });

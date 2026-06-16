@@ -7,8 +7,12 @@ import {
   Image,
   TouchableOpacity,
 } from 'react-native';
+import typography from '../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../context/TransactionBalanceThemeContext';
 
 const TransactionAlertModal = (props) => {
+  const { colors } = useTransactionBalanceTheme();
+
   return (
     <Modal
       animationType="fade"
@@ -20,57 +24,26 @@ const TransactionAlertModal = (props) => {
       }}
     >
       <View
-        style={styles.backdrop}
+        style={[styles.backdrop, { backgroundColor: colors.softBackdrop }]}
         onPress={() => props.setModalVisible(false)}
       >
-        <View
-          style={{
-            height: '35%',
-            width: '80%',
-            backgroundColor: 'white',
-            borderRadius: 10,
-            padding: 20,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <View style={[styles.modalView, { backgroundColor: colors.surface }]}>
           <Image
             source={require('../../../assets/images/check.png')}
-            style={{ width: 70, height: 70, marginBottom: 30 }}
+            style={styles.image}
           />
-          <Text
-            style={{
-              fontSize: 30,
-              fontWeight: '600',
-              marginBottom: 20,
-            }}
-          >
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
             {props.textAlert.title}
           </Text>
           <TouchableOpacity
             testID="addTransactionButton"
-            style={{
-              height: 45,
-              width: '90%',
-              borderRadius: 10,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginTop: 15,
-              backgroundColor: '#699f4c',
-            }}
+            style={[styles.button, { backgroundColor: colors.success }]}
             onPress={() => {
               props.setTransactionAlertVisibility(false);
               props.handleModalOnClose();
             }}
           >
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: '600',
-                color: '#FEFCFF',
-                textAlign: 'center',
-              }}
-            >
+            <Text style={[styles.buttonText, { color: colors.textInverse }]}>
               OK
             </Text>
           </TouchableOpacity>
@@ -102,6 +75,37 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalView: {
+    height: '35%',
+    width: '80%',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  image: {
+    width: 64,
+    height: 64,
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.semibold,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  button: {
+    height: 45,
+    width: '90%',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  buttonText: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
 });

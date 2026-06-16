@@ -19,12 +19,14 @@ import StoreInputComponent from './StoreInputComponent';
 import UOMInputComponent from './UOMInputComponent';
 import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 import InsertTransactionButton from './InsertTransactionButton';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
   setAddTransactionModalIsVisible,
   setAddStoreModalIsVisible,
 }) {
+  const { colors } = useTransactionBalanceTheme();
   const amountInputRef = useRef(null);
   const quantityInputRef = useRef(null);
   const itemQuantityInputRef = useRef(null);
@@ -99,9 +101,15 @@ export default function AddTransactionModal({
       onRequestClose={handleModalOnClose}
     >
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-        <View style={styles.mainContainer}>
+        <View style={[styles.mainContainer, { backgroundColor: colors.backdrop }]}>
           <View style={{ flex: 3 }}></View>
-          <View style={[styles.modalView, showCategoryInput && { flex: 12 }]}>
+          <View
+            style={[
+              styles.modalView,
+              { backgroundColor: colors.screenBackground },
+              showCategoryInput && { flex: 12 },
+            ]}
+          >
             <View style={styles.modalContaier}>
               <View testID="switchArea" style={styles.switchContainer}>
                 <SwitchSelector onTabChange={handleTabChange} />
@@ -225,14 +233,12 @@ export default function AddTransactionModal({
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
   },
   modalView: {
-    backgroundColor: '#EFECFF',
     flex: 6,
     width: '100%',
     borderTopLeftRadius: 30,

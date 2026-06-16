@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 export default function SwitchSelector({ onTabChange }) {
   const [selectedTab, setSelectedTab] = useState('Ventas');
+  const { colors } = useTransactionBalanceTheme();
 
   const handleTabChange = (tabName) => {
     setSelectedTab(tabName);
@@ -11,12 +14,13 @@ export default function SwitchSelector({ onTabChange }) {
 
   return (
     <View style={styles.mainContainer}>
-      <View style={styles.selector}>
+      <View style={[styles.selector, { backgroundColor: colors.surface }]}>
         <TouchableOpacity
           style={[
             styles.baseTouchable,
             {
-              backgroundColor: selectedTab == 'Ventas' ? '#E5D6FF' : '#FEFCFF',
+              backgroundColor:
+                selectedTab == 'Ventas' ? colors.primaryMuted : colors.surface,
             },
           ]}
           onPress={() => {
@@ -26,7 +30,12 @@ export default function SwitchSelector({ onTabChange }) {
           <Text
             style={[
               styles.baseTextTouchable,
-              { color: selectedTab == 'Ventas' ? '#9777DC' : '#B7B4B7' },
+              {
+                color:
+                  selectedTab == 'Ventas'
+                    ? colors.primaryText
+                    : colors.inactiveText,
+              },
             ]}
           >
             Ventas
@@ -36,7 +45,8 @@ export default function SwitchSelector({ onTabChange }) {
           style={[
             styles.baseTouchable,
             {
-              backgroundColor: selectedTab == 'Gastos' ? '#E5D6FF' : '#FEFCFF',
+              backgroundColor:
+                selectedTab == 'Gastos' ? colors.primaryMuted : colors.surface,
             },
           ]}
           onPress={() => {
@@ -46,7 +56,12 @@ export default function SwitchSelector({ onTabChange }) {
           <Text
             style={[
               styles.baseTextTouchable,
-              { color: selectedTab == 'Gastos' ? '#9777DC' : '#B7B4B7' },
+              {
+                color:
+                  selectedTab == 'Gastos'
+                    ? colors.primaryText
+                    : colors.inactiveText,
+              },
             ]}
           >
             Gastos
@@ -66,7 +81,6 @@ const styles = StyleSheet.create({
   },
   selector: {
     flex: 1,
-    backgroundColor: '#FEFCFF',
     borderRadius: 20,
     marginVertical: 10,
     alignItems: 'center',
@@ -81,8 +95,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   baseTextTouchable: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
+    letterSpacing: 0,
   },
 });

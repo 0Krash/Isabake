@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 import InputValidation from '../../../../utils/InputValidation';
 
 export default function QuantityInputComponent({
@@ -13,6 +13,7 @@ export default function QuantityInputComponent({
   showCategoryInput,
   setValidationErrorQuantity,
 }) {
+  const { stylesBase } = useTransactionBalanceStyles();
   const [inputValue, setInputValue] = useState();
   const [validation, setValidation] = useState({ valid: true, error: '' });
 

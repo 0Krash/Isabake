@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 import InputValidation from '../../../../utils/InputValidation';
 
 export default function AmountInputComponent({
@@ -11,6 +11,7 @@ export default function AmountInputComponent({
   amountInputRef,
   setValidationErrorAmount,
 }) {
+  const { colors, stylesBase } = useTransactionBalanceStyles();
   const [inputValue, setInputValue] = useState();
   const [validation, setValidation] = useState({ valid: true, error: '' });
 
@@ -60,6 +61,7 @@ export default function AmountInputComponent({
         }}
         onFocus={() => setAmount(inputValue)}
         placeholder="$0.00"
+        placeholderTextColor={colors.textMuted}
         ref={amountInputRef}
         style={
           validation.valid

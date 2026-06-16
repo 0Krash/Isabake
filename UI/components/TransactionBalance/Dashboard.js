@@ -1,11 +1,14 @@
 import { StyleSheet, View, Text } from 'react-native';
 import CurrencyFormatter from '../../utils/CurrencyFormatter';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 export default function Dashboard({
   transactionType,
   totalAmountByCategoryResponse,
   totalAmountByDateCategoryResponse,
 }) {
+  const { colors } = useTransactionBalanceTheme();
   const filteredTransactions = totalAmountByCategoryResponse.filter(
     (transaction) => transaction.transactionType === transactionType
   );
@@ -13,9 +16,11 @@ export default function Dashboard({
   return (
     <View style={styles.mainContainer}>
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>Balance Total</Text>
+        <Text style={[styles.title, { color: colors.textMuted }]}>
+          Balance Total
+        </Text>
       </View>
-      <View style={styles.balances}>
+      <View style={[styles.balances, { backgroundColor: colors.surface }]}>
         {/* <View testID="dateFilters" style={styles.dateFilters}>
           <TouchableOpacity style={styles.baseFilter}>
             <Text style={styles.baseTextFilter}>Todos los días</Text>
@@ -34,10 +39,12 @@ export default function Dashboard({
               {transaction.categories.map((category, idx) => (
                 <View key={idx} style={styles.summaryRow}>
                   <View testID="categoryLabel">
-                    <Text>{category.category || 'Ventas'}: </Text>
+                    <Text style={[styles.summaryText, { color: colors.textPrimary }]}>
+                      {category.category || 'Ventas'}:{' '}
+                    </Text>
                   </View>
                   <View testID="categoryValues" style={styles.summaryValue}>
-                    <Text>
+                    <Text style={[styles.summaryText, { color: colors.textPrimary }]}>
                       {CurrencyFormatter.convertCentsToCurrency(
                         category.totalAmount
                       )}
@@ -47,10 +54,12 @@ export default function Dashboard({
               ))}
               <View style={styles.summaryRow}>
                 <View>
-                  <Text style={{ fontWeight: '600' }}>Total: </Text>
+                  <Text style={[styles.totalText, { color: colors.textPrimary }]}>
+                    Total:{' '}
+                  </Text>
                 </View>
                 <View style={styles.summaryValue}>
-                  <Text style={{ fontWeight: '600' }}>
+                  <Text style={[styles.totalText, { color: colors.textPrimary }]}>
                     {CurrencyFormatter.convertCentsToCurrency(
                       transaction.total
                     )}
@@ -77,9 +86,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 12,
-    color: '#9E9AAB',
-    fontWeight: '500',
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.medium,
     position: 'absolute',
     bottom: 5,
     left: 2,
@@ -112,6 +120,10 @@ const styles = StyleSheet.create({
     paddingRight: 90,
     alignItems: 'flex-end',
   },
+  summaryText: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.regular,
+  },
   totalValues: {},
   dateFilters: {
     height: 35,
@@ -130,9 +142,9 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   baseTextFilter: {
-    fontSize: 15,
+    fontSize: typography.sizes.label,
     color: '#9777DC',
-    fontWeight: '500',
+    fontWeight: typography.weights.medium,
   },
   totalContainer: {
     borderTopWidth: 1,
@@ -142,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   totalText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
   },
 });

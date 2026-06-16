@@ -8,12 +8,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import transactionService from '../../../services/TransactionBalance/API/transactionService';
+import typography from '../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../context/TransactionBalanceThemeContext';
 
 export default function DeleteTransactionModal({
   transactionDetail,
   DeleteTransactionModalIsVisible,
   setDeleteTransactionModalIsVisible,
 }) {
+  const { colors } = useTransactionBalanceTheme();
   const handleDeleteTransaction = (transactionId) => {
     transactionService
       .deleteTransactionById(transactionId)
@@ -32,13 +35,13 @@ export default function DeleteTransactionModal({
       visible={DeleteTransactionModalIsVisible}
       onRequestClose={() => setDeleteTransactionModalIsVisible(false)}
     >
-      <View style={styles.backdrop}>
-        <View style={styles.modalView}>
+      <View style={[styles.backdrop, { backgroundColor: colors.softBackdrop }]}>
+        <View style={[styles.modalView, { backgroundColor: colors.surface }]}>
           <Image
             source={require('../../../assets/images/delete.png')}
             style={styles.image}
           />
-          <Text style={styles.text}>
+          <Text style={[styles.text, { color: colors.textPrimary }]}>
             Desea eliminar {transactionDetail.transactionType} de{' '}
             {transactionDetail.description}?
           </Text>
@@ -47,9 +50,16 @@ export default function DeleteTransactionModal({
             onPress={() =>
               handleDeleteTransaction(transactionDetail.transactionId)
             }
-            style={styles.deleteButton}
+            style={[
+              styles.deleteButton,
+              { backgroundColor: colors.destructive },
+            ]}
           >
-            <Text style={styles.deleteButtonText}>Eliminar</Text>
+            <Text
+              style={[styles.deleteButtonText, { color: colors.textInverse }]}
+            >
+              Eliminar
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -66,12 +76,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   modalView: {
     height: '35%',
     width: '80%',
-    backgroundColor: 'white',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -83,8 +91,9 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   text: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
+    lineHeight: 25,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -95,12 +104,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
-    backgroundColor: '#e88282',
   },
   deleteButtonText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FEFCFF',
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
     textAlign: 'center',
   },
 });

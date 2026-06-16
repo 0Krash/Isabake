@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 
 const options = [
   { label: 'Pzs', value: '0' },
@@ -14,6 +14,8 @@ const options = [
 ];
 
 export default function UOMInputComponent({ unitValue, setUnitValue }) {
+  const { colors, stylesBase } = useTransactionBalanceStyles();
+
   return (
     <View testID="UOM" style={{ width: 165 }}>
       <Text style={stylesBase.textInputLabelBase}>Unidad</Text>
@@ -28,7 +30,10 @@ export default function UOMInputComponent({ unitValue, setUnitValue }) {
           items={options}
           onValueChange={setUnitValue}
           value={unitValue}
-          style={stylesBase.textInputBase}
+          style={{
+            inputIOS: { color: colors.textPrimary },
+            inputAndroid: { color: colors.textPrimary },
+          }}
         />
       </View>
     </View>

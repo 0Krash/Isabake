@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 
-import stylesBase from '../../../../constants/TransactionBalance/Styles';
+import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 
 const options = [
   { label: 'Materia prima (ingredientes básicos)', value: '1' },
@@ -12,6 +12,8 @@ const options = [
 ];
 
 export default function CategoryInputComponent({ category, setCategory }) {
+  const { colors, stylesBase } = useTransactionBalanceStyles();
+
   return (
     <View testID="category">
       <Text style={stylesBase.textInputLabelBase}>Categoria</Text>
@@ -26,7 +28,10 @@ export default function CategoryInputComponent({ category, setCategory }) {
           items={options}
           onValueChange={setCategory}
           value={category}
-          style={stylesBase.textInputLabelBase}
+          style={{
+            inputIOS: { color: colors.textPrimary },
+            inputAndroid: { color: colors.textPrimary },
+          }}
         />
       </View>
     </View>

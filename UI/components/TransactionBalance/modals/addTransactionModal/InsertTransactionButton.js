@@ -5,8 +5,11 @@ import TransactionAlertModal from '../TransactionAlertModal';
 import transactionService from '../../../../services/TransactionBalance/API/transactionService';
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
 import DateFormatter from '../../../../utils/DateFormatter';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 export default function InsertTransactionButton(props) {
+  const { colors } = useTransactionBalanceTheme();
   const [transactionAlertVisible, setTransactionAlertVisibility] =
     useState(false);
 
@@ -60,8 +63,8 @@ export default function InsertTransactionButton(props) {
           styles.buttonTransaction,
           {
             backgroundColor: props.validationError
-              ? 'rgba(109, 55, 255, 1)'
-              : 'rgba(109, 55, 255, .5)',
+              ? colors.primary
+              : `${colors.primary}80`,
           },
         ]}
         onPress={() => {
@@ -69,14 +72,7 @@ export default function InsertTransactionButton(props) {
         }}
         disabled={!props.validationError}
       >
-        <Text
-          style={{
-            fontSize: 20,
-            fontWeight: '700',
-            color: '#FEFCFF',
-            textAlign: 'center',
-          }}
-        >
+        <Text style={[styles.buttonText, { color: colors.textInverse }]}>
           Agregar Transaccion
         </Text>
       </TouchableOpacity>
@@ -98,5 +94,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
+  },
+  buttonText: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
 });

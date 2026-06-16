@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import TransactionDetailContainer from './TransactionDetailContainer';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 const groupByMonth = (transactions) => {
   const sortedTransactions = [...transactions].sort((a, b) => {
@@ -43,6 +45,7 @@ const TransactionDetail = ({
   setTransactionDetail,
   transactionType,
 }) => {
+  const { colors } = useTransactionBalanceTheme();
   const groupedTransactions = useMemo(() => {
     const filteredTransactions = dataTransactionsResponse.filter(
       (item) => item.transactionType === transactionType
@@ -54,12 +57,17 @@ const TransactionDetail = ({
   return (
     <View style={styles.mainContainer}>
       <ScrollView
-        style={styles.transactionDetailContainer}
+        style={[
+          styles.transactionDetailContainer,
+          { backgroundColor: colors.screenBackground },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {Object.keys(groupedTransactions).map((month) => (
           <View key={month}>
-            <Text style={styles.monthHeader}>{month}</Text>
+            <Text style={[styles.monthHeader, { color: colors.textMuted }]}>
+              {month}
+            </Text>
             {groupedTransactions[month].map((item, index) => (
               <TransactionDetailContainer
                 key={index}
@@ -88,15 +96,13 @@ const styles = StyleSheet.create({
   },
   transactionDetailContainer: {
     flex: 1,
-    backgroundColor: '#EFECFF',
     borderRadius: 20,
     marginVertical: 10,
     alignContent: 'center',
   },
   monthHeader: {
-    fontSize: 12,
-    color: '#9E9AAB',
-    fontWeight: 'bold',
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.bold,
     marginVertical: 10,
     marginLeft: 10,
   },

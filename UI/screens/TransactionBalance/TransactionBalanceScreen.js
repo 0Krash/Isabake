@@ -10,6 +10,8 @@ import TransactionDetailModal from '../../components/TransactionBalance/modals/t
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import useTransactionBalanceData from '../../hooks/TransactionBalance/useTransactionBalanceData';
+import typography from '../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 const TransactionBalanceScreen = () => {
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
@@ -21,6 +23,7 @@ const TransactionBalanceScreen = () => {
     useState(false);
   const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
+  const { colors } = useTransactionBalanceTheme();
   const { totalAmountByCategory, totalAmountByDateCategory, transactions } =
     useTransactionBalanceData({
       addTransactionModalIsVisible,
@@ -32,9 +35,11 @@ const TransactionBalanceScreen = () => {
   };
 
   return (
-    <View style={styles.mainContainer}>
+    <View
+      style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}
+    >
       <View style={styles.headerContainer}>
-        <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#3B3F3A' }}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
           Transacciones
         </Text>
       </View>
@@ -84,7 +89,6 @@ const styles = StyleSheet.create({
     marginTop: 50,
     marginHorizontal: 8,
     flex: 1,
-    backgroundColor: '#EFECFF',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
@@ -93,5 +97,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.bold,
   },
 });

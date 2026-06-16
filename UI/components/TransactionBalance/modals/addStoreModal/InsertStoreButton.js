@@ -2,8 +2,11 @@ import { useState } from 'react';
 import { TouchableOpacity, StyleSheet, Text, View } from 'react-native';
 
 import transactionService from '../../../../services/TransactionBalance/API/transactionService';
+import typography from '../../../../constants/TransactionBalance/Typography';
+import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 
 export default function InsertStoreButton(props) {
+  const { colors } = useTransactionBalanceTheme();
   const { storeName, storeAlias, storeAddress } = props;
 
   const postTransaction = async () => {
@@ -31,8 +34,8 @@ export default function InsertStoreButton(props) {
           styles.baseButton,
           {
             backgroundColor: props.validationError
-              ? 'rgba(109, 55, 255, 1)'
-              : 'rgba(109, 55, 255, .5)',
+              ? colors.primary
+              : `${colors.primary}80`,
           },
         ]}
         onPress={() => {
@@ -41,14 +44,7 @@ export default function InsertStoreButton(props) {
         }}
         disabled={!props.validationError}
       >
-        <Text
-          style={{
-            fontSize: 20,
-            fontWeight: '700',
-            color: '#FEFCFF',
-            textAlign: 'center',
-          }}
-        >
+        <Text style={[styles.buttonText, { color: colors.textInverse }]}>
           Agregar Tienda
         </Text>
       </TouchableOpacity>
@@ -69,5 +65,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 15,
+  },
+  buttonText: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
 });
