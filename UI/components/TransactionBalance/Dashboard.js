@@ -1,5 +1,4 @@
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
-import { useState } from 'react';
+import { StyleSheet, View, Text } from 'react-native';
 import CurrencyFormatter from '../../utils/CurrencyFormatter';
 
 export default function Dashboard({
@@ -10,8 +9,6 @@ export default function Dashboard({
   const filteredTransactions = totalAmountByCategoryResponse.filter(
     (transaction) => transaction.transactionType === transactionType
   );
-
-  const [balanceTypeView, setBalanceTypeView] = useState();
 
   return (
     <View style={styles.mainContainer}>
@@ -33,35 +30,13 @@ export default function Dashboard({
         <View testID="totalValues" style={styles.totalValues}></View>
         <View testID="categoryValues" style={styles.categoryValues}>
           {filteredTransactions.map((transaction, index) => (
-            <View
-              key={index}
-              style={{
-                paddingLeft: 60,
-              }}
-            >
+            <View key={index} style={styles.summaryGroup}>
               {transaction.categories.map((category, idx) => (
-                <View
-                  key={idx}
-                  style={{
-                    width: '100%',
-                    paddingLeft: 30,
-                    display: 'flex',
-                    flexDirection: 'row',
-                  }}
-                >
+                <View key={idx} style={styles.summaryRow}>
                   <View testID="categoryLabel">
                     <Text>{category.category || 'Ventas'}: </Text>
                   </View>
-                  <View
-                    testID="categoryValues"
-                    style={[
-                      {
-                        flex: 1,
-                        paddingRight: 90,
-                        alignItems: 'flex-end',
-                      },
-                    ]}
-                  >
+                  <View testID="categoryValues" style={styles.summaryValue}>
                     <Text>
                       {CurrencyFormatter.convertCentsToCurrency(
                         category.totalAmount
@@ -70,21 +45,11 @@ export default function Dashboard({
                   </View>
                 </View>
               ))}
-              <View
-                style={{
-                  paddingLeft: 30,
-                  display: 'flex',
-                  flexDirection: 'row',
-                }}
-              >
+              <View style={styles.summaryRow}>
                 <View>
                   <Text style={{ fontWeight: '600' }}>Total: </Text>
                 </View>
-                <View
-                  style={[
-                    { flex: 1, paddingRight: 90, alignItems: 'flex-end' },
-                  ]}
-                >
+                <View style={styles.summaryValue}>
                   <Text style={{ fontWeight: '600' }}>
                     {CurrencyFormatter.convertCentsToCurrency(
                       transaction.total
@@ -132,6 +97,20 @@ const styles = StyleSheet.create({
     marginTop: 15,
     // borderColor: 'blue',
     // borderWidth: 2,
+  },
+  summaryGroup: {
+    paddingLeft: 60,
+  },
+  summaryRow: {
+    width: '100%',
+    paddingLeft: 30,
+    display: 'flex',
+    flexDirection: 'row',
+  },
+  summaryValue: {
+    flex: 1,
+    paddingRight: 90,
+    alignItems: 'flex-end',
   },
   totalValues: {},
   dateFilters: {

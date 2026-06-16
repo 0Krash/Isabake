@@ -1,17 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import TransactionDetailContainer from './TransactionDetailContainer';
 
 const groupByMonth = (transactions) => {
-  // Ordenar transacciones por fecha descendente
-  const sortedTransactions = transactions.sort((a, b) => {
+  const sortedTransactions = [...transactions].sort((a, b) => {
     const dateA = new Date(a.selectedDate?.$date || a.selectedDate);
     const dateB = new Date(b.selectedDate?.$date || b.selectedDate);
     return dateB - dateA;
   });
 
-  // Agrupar transacciones por mes
-  const grouped = sortedTransactions.reduce((groups, transaction) => {
+  return sortedTransactions.reduce((groups, transaction) => {
     const dateString =
       transaction.selectedDate?.$date || transaction.selectedDate;
     if (!dateString) {
@@ -36,8 +34,6 @@ const groupByMonth = (transactions) => {
 
     return groups;
   }, {});
-
-  return grouped;
 };
 
 const TransactionDetail = ({
@@ -47,13 +43,13 @@ const TransactionDetail = ({
   setTransactionDetail,
   transactionType,
 }) => {
-  // Filtrar transacciones por tipo
-  const filteredTransactions = dataTransactionsResponse.filter(
-    (item) => item.transactionType === transactionType
-  );
+  const groupedTransactions = useMemo(() => {
+    const filteredTransactions = dataTransactionsResponse.filter(
+      (item) => item.transactionType === transactionType
+    );
 
-  // Agrupar por mes
-  const groupedTransactions = groupByMonth(filteredTransactions);
+    return groupByMonth(filteredTransactions);
+  }, [dataTransactionsResponse, transactionType]);
 
   return (
     <View style={styles.mainContainer}>

@@ -1,17 +1,11 @@
 const Store = require('../models/storeModel');
+const asyncHandler = require('../utils/asyncHandler');
+const { sendSuccess } = require('../utils/httpResponses');
 
-exports.getAllStores = async (req, res) => {
-  try {
-    const stores = await Store.find();
-    res.status(200).json({
-      status: 'success',
-      result: stores.length,
-      data: stores,
-    });
-  } catch (err) {
-    res.status(400).json({
-      status: 'failed',
-      message: err,
-    });
-  }
-};
+exports.getAllStores = asyncHandler(async (req, res) => {
+  const stores = await Store.find();
+  sendSuccess(res, {
+    data: stores,
+    result: stores.length,
+  });
+});

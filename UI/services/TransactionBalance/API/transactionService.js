@@ -1,87 +1,71 @@
 import axios from 'axios';
 import { URL_Transactions } from '@env';
 
-exports.getAllTransactions = () => {
-  return new Promise((resolve, reject) => {
-    axios
-      .get(URL_Transactions)
-      .then((response) => {
-        resolve(response.data.data);
-      })
-      .catch((error) => {
-        console.error(
-          'Error al hacer la petición desde getAllTransactions:',
-          error
-        );
-        reject(error);
-      });
-  });
+const getAllTransactions = async () => {
+  try {
+    const response = await axios.get(URL_Transactions);
+    return response.data.data;
+  } catch (error) {
+    console.error(
+      'Error al hacer la petición desde getAllTransactions:',
+      error
+    );
+    throw error;
+  }
 };
 
-exports.postTransaction = (data) => {
-  return new Promise((resolve, reject) => {
-    axios
-      .post(URL_Transactions, data)
-      .then((response) => {
-        resolve(response.data);
-      })
-      .catch((error) => {
-        console.error(
-          'Error al hacer la petición desde postTransaction:',
-          error
-        );
-        reject(error);
-      });
-  });
+const postTransaction = async (data) => {
+  try {
+    const response = await axios.post(URL_Transactions, data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al hacer la petición desde postTransaction:', error);
+    throw error;
+  }
 };
 
-exports.deleteTransactionById = (transactionId) => {
-  return new Promise((resolve, reject) => {
-    axios
-      .delete(`${URL_Transactions}/${transactionId}`)
-      .then((response) => {
-        resolve(response.data);
-      })
-      .catch((error) => {
-        console.error(
-          'Error al hacer la petición desde deleteTransaction:',
-          error
-        );
-        reject(error);
-      });
-  });
+const deleteTransactionById = async (transactionId) => {
+  try {
+    const response = await axios.delete(`${URL_Transactions}/${transactionId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al hacer la petición desde deleteTransaction:', error);
+    throw error;
+  }
 };
 
-exports.getTotalAmountByCategory = () => {
-  return new Promise((resolve, reject) => {
-    axios
-      .get(`${URL_Transactions}/totalAmountByCategory`)
-      .then((response) => {
-        resolve(response.data);
-      })
-      .catch((error) => {
-        console.error(
-          'Error al hacer la petición desde getTotalAmountByCategory:',
-          error
-        );
-        reject(error);
-      });
-  });
+const getTotalAmountByCategory = async () => {
+  try {
+    const response = await axios.get(`${URL_Transactions}/totalAmountByCategory`);
+    return response.data;
+  } catch (error) {
+    console.error(
+      'Error al hacer la petición desde getTotalAmountByCategory:',
+      error
+    );
+    throw error;
+  }
 };
 
-exports.getTotalAmountByDateCategory = () => {
-  return new Promise((resolve, reject) => {
-    axios
-      .get(`${URL_Transactions}/totalAmountByDateCategory`)
-      .then((response) => {
-        resolve(response.data);
-      })
-      .catch((error) => {
-        console.error(
-          'Error al hacer la petición desde getTotalAmountByDateCategory:',
-          error
-        );
-        reject(error);
-      });
-  });
+const getTotalAmountByDateCategory = async () => {
+  try {
+    const response = await axios.get(
+      `${URL_Transactions}/totalAmountByDateCategory`
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      'Error al hacer la petición desde getTotalAmountByDateCategory:',
+      error
+    );
+    throw error;
+  }
+};
+
+export default {
+  deleteTransactionById,
+  getAllTransactions,
+  getTotalAmountByCategory,
+  getTotalAmountByDateCategory,
+  postTransaction,
 };

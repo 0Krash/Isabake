@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 
 import Dashboard from '../../components/TransactionBalance/Dashboard';
@@ -9,50 +9,23 @@ import AddTransactionModal from '../../components/TransactionBalance/modals/addT
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
-import transactionService from '../../services/TransactionBalance/API/transactionService';
+import useTransactionBalanceData from '../../hooks/TransactionBalance/useTransactionBalanceData';
 
 const TransactionBalanceScreen = () => {
-  const [AddStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
-  const [AddTransactionModalIsVisible, setAddTransactionModalIsVisible] =
+  const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
+  const [addTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
-  const [DeleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
+  const [deleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
     useState(false);
   const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
     useState(false);
   const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
-  const [dataTransactionsResponse, setDataTransactionsResponse] = useState();
-  const [totalAmountByCategoryResponse, setTotalAmountByCategoryResponse] =
-    useState();
-  const [
-    totalAmountByDateCategoryResponse,
-    setTotalAmountByDateCategoryResponse,
-  ] = useState();
-
-  useEffect(() => {
-    if (!AddTransactionModalIsVisible && !DeleteTransactionModalIsVisible) {
-      getTransactionsData();
-    }
-  }, [AddTransactionModalIsVisible, DeleteTransactionModalIsVisible]);
-
-  const getTransactionsData = async () => {
-    try {
-      setDataTransactionsResponse(
-        await transactionService.getAllTransactions()
-      );
-      setTotalAmountByCategoryResponse(
-        await transactionService.getTotalAmountByCategory()
-      );
-      setTotalAmountByDateCategoryResponse(
-        await transactionService.getTotalAmountByDateCategory()
-      );
-    } catch (error) {
-      console.error(
-        'Error al obtener transacciones desde getTransactionsData: ',
-        error
-      );
-    }
-  };
+  const { totalAmountByCategory, totalAmountByDateCategory, transactions } =
+    useTransactionBalanceData({
+      addTransactionModalIsVisible,
+      deleteTransactionModalIsVisible,
+    });
 
   const handleTabChange = (tabName) => {
     setTransactionType(tabName);
@@ -67,16 +40,8 @@ const TransactionBalanceScreen = () => {
       </View>
       <Dashboard
         transactionType={transactionType}
-        totalAmountByCategoryResponse={
-          totalAmountByCategoryResponse !== undefined
-            ? totalAmountByCategoryResponse
-            : []
-        }
-        totalAmountByDateCategoryResponse={
-          totalAmountByDateCategoryResponse !== undefined
-            ? totalAmountByDateCategoryResponse
-            : []
-        }
+        totalAmountByCategoryResponse={totalAmountByCategory}
+        totalAmountByDateCategoryResponse={totalAmountByDateCategory}
       />
       <SwitchSelector onTabChange={handleTabChange} />
       <TransactionDetail
@@ -84,15 +49,13 @@ const TransactionBalanceScreen = () => {
         setTransactionDetail={setTransactionDetail}
         setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
         setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
-        dataTransactionsResponse={
-          dataTransactionsResponse !== undefined ? dataTransactionsResponse : []
-        }
+        dataTransactionsResponse={transactions}
       />
       <AddTransactionButton
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
       />
       <AddTransactionModal
-        AddTransactionModalIsVisible={AddTransactionModalIsVisible}
+        AddTransactionModalIsVisible={addTransactionModalIsVisible}
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
         setAddStoreModalIsVisible={setAddStoreModalIsVisible}
       />
@@ -103,11 +66,11 @@ const TransactionBalanceScreen = () => {
       />
       <DeleteTransactionModal
         transactionDetail={transactionDetail}
-        DeleteTransactionModalIsVisible={DeleteTransactionModalIsVisible}
+        DeleteTransactionModalIsVisible={deleteTransactionModalIsVisible}
         setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
       />
       <AddStoreModal
-        AddStoreModalIsVisible={AddStoreModalIsVisible}
+        AddStoreModalIsVisible={addStoreModalIsVisible}
         setAddStoreModalIsVisible={setAddStoreModalIsVisible}
       />
     </View>

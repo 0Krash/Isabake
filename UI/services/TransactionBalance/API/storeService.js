@@ -1,18 +1,14 @@
 import axios from 'axios';
 import { URL_Stores } from '@env';
 
-const getAllStores = () => {
-  return new Promise((resolve, reject) => {
-    axios
-      .get(URL_Stores)
-      .then((response) => {
-        resolve(response.data.data);
-      })
-      .catch((error) => {
-        console.error('Error al hacer la petición desde getAllStores:', error);
-        reject(error);
-      });
-  });
+const getAllStores = async () => {
+  try {
+    const response = await axios.get(URL_Stores);
+    return response.data.data;
+  } catch (error) {
+    console.error('Error al hacer la petición desde getAllStores:', error);
+    throw error;
+  }
 };
 
 export default { getAllStores };
