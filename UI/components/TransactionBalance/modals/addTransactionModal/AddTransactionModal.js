@@ -1,11 +1,15 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ScrollView,
   StyleSheet,
   View,
   Modal,
   KeyboardAvoidingView,
   Keyboard,
+  PanResponder,
+  Pressable,
+  useWindowDimensions,
 } from 'react-native';
 
 import SwitchSelector from '../../SwitchSelector';
@@ -27,9 +31,13 @@ export default function AddTransactionModal({
   setAddStoreModalIsVisible,
 }) {
   const { colors } = useTransactionBalanceTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const amountInputRef = useRef(null);
   const quantityInputRef = useRef(null);
   const itemQuantityInputRef = useRef(null);
+  const sheetTranslateY = useRef(new Animated.Value(windowHeight)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const scrollOffsetY = useRef(0);
   const [amount, setAmount] = useState('');
   const [quantity, setQuantity] = useState('');
   const [description, setDescription] = useState('');
@@ -51,6 +59,9 @@ export default function AddTransactionModal({
     useState(false);
   const [validationErrorItemQuantity, setValidationErrorItemQuantity] =
     useState(false);
+  const sheetHeight = showCategoryInput
+    ? windowHeight * 0.88
+    : windowHeight * 0.68;
 
   const handleModalOnClose = () => {
     setAddTransactionModalIsVisible(false);
@@ -64,6 +75,104 @@ export default function AddTransactionModal({
     setDescription('');
     setItemQuantity('');
   };
+
+  const resetSwipePosition = useCallback(() => {
+    Animated.spring(sheetTranslateY, {
+      toValue: 0,
+      damping: 18,
+      stiffness: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [sheetTranslateY]);
+
+  const closeBottomSheet = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, {
+        toValue: windowHeight,
+        duration: 190,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 190,
+        useNativeDriver: true,
+      }),
+    ]).start(handleModalOnClose);
+  }, [backdropOpacity, sheetTranslateY, windowHeight]);
+
+  useEffect(() => {
+    if (AddTransactionModalIsVisible) {
+      sheetTranslateY.setValue(windowHeight);
+      backdropOpacity.setValue(0);
+
+      Animated.parallel([
+        Animated.timing(sheetTranslateY, {
+          toValue: 0,
+          duration: 240,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [AddTransactionModalIsVisible, backdropOpacity, sheetTranslateY, windowHeight]);
+
+  const shouldCaptureSheetSwipe = (_, gestureState) =>
+    scrollOffsetY.current <= 0 &&
+    gestureState.dy > 8 &&
+    Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+
+  const sheetPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: shouldCaptureSheetSwipe,
+        onMoveShouldSetPanResponderCapture: shouldCaptureSheetSwipe,
+        onPanResponderMove: (_, gestureState) => {
+          sheetTranslateY.setValue(Math.max(0, gestureState.dy));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 120 || gestureState.vy > 1.1) {
+            closeBottomSheet();
+            return;
+          }
+
+          resetSwipePosition();
+        },
+        onPanResponderTerminate: resetSwipePosition,
+      }),
+    [closeBottomSheet, resetSwipePosition, sheetTranslateY]
+  );
+
+  const handlePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          gestureState.dy > 6 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          gestureState.dy > 6 &&
+          Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderMove: (_, gestureState) => {
+          sheetTranslateY.setValue(Math.max(0, gestureState.dy));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 90 || gestureState.vy > 0.9) {
+            closeBottomSheet();
+            return;
+          }
+
+          resetSwipePosition();
+        },
+        onPanResponderTerminate: resetSwipePosition,
+      }),
+    [closeBottomSheet, resetSwipePosition, sheetTranslateY]
+  );
 
   const resetValidatioErrors = () => {
     setValidationErrorDescription(false);
@@ -96,25 +205,57 @@ export default function AddTransactionModal({
   return (
     <Modal
       transparent={true}
-      animationType="slide"
+      animationType="none"
       visible={AddTransactionModalIsVisible}
-      onRequestClose={handleModalOnClose}
+      onRequestClose={closeBottomSheet}
     >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-        <View style={[styles.mainContainer, { backgroundColor: colors.backdrop }]}>
-          <View style={{ flex: 3 }}></View>
-          <View
+      <KeyboardAvoidingView style={styles.keyboardView} behavior="height">
+        <View style={styles.mainContainer}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.backdrop,
+              {
+                backgroundColor: colors.backdrop,
+                opacity: backdropOpacity,
+              },
+            ]}
+          />
+          <Pressable style={styles.backdropPressable} onPress={closeBottomSheet} />
+          <Animated.View
+            {...sheetPanResponder.panHandlers}
             style={[
               styles.modalView,
-              { backgroundColor: colors.screenBackground },
-              showCategoryInput && { flex: 12 },
+              {
+                backgroundColor: colors.screenBackground,
+                height: sheetHeight,
+              },
+              { transform: [{ translateY: sheetTranslateY }] },
             ]}
           >
+            <View
+              style={styles.dragHandleArea}
+              {...handlePanResponder.panHandlers}
+            >
+              <View
+                style={[styles.dragHandle, { backgroundColor: colors.border }]}
+              />
+            </View>
             <View style={styles.modalContaier}>
               <View testID="switchArea" style={styles.switchContainer}>
                 <SwitchSelector onTabChange={handleTabChange} />
               </View>
-              <ScrollView testID="inputContainer" style={styles.inputContainer}>
+              <ScrollView
+                testID="inputContainer"
+                style={styles.inputContainer}
+                contentContainerStyle={styles.inputContentContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                onScroll={(event) => {
+                  scrollOffsetY.current = event.nativeEvent.contentOffset.y;
+                }}
+              >
                 <View testID="filterArea">
                   {showCategoryInput && (
                     <CategoryInputComponent
@@ -220,10 +361,10 @@ export default function AddTransactionModal({
                 description={description}
                 quantity={quantity}
                 amount={amount}
-                handleModalOnClose={handleModalOnClose}
+                handleModalOnClose={closeBottomSheet}
               />
             </View>
-          </View>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -231,26 +372,58 @@ export default function AddTransactionModal({
 }
 
 const styles = StyleSheet.create({
+  keyboardView: {
+    flex: 1,
+  },
   mainContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    alignItems: 'stretch',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
   },
   modalView: {
-    flex: 6,
     width: '100%',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 15,
+  },
+  backdrop: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  backdropPressable: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  dragHandleArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingBottom: 10,
+    paddingTop: 8,
+  },
+  dragHandle: {
+    alignSelf: 'center',
+    borderRadius: 3,
+    height: 5,
+    width: 44,
   },
   modalContaier: {
     paddingHorizontal: 5,
     flex: 1,
   },
   inputContainer: {
-    height: 350,
+    flex: 1,
+  },
+  inputContentContainer: {
+    paddingBottom: 12,
   },
   switchContainer: {
     height: 90,
