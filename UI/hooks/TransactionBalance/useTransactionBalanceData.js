@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import transactionService from '../../services/TransactionBalance/API/transactionService';
 
-const TRANSACTIONS_PAGE_SIZE = 20;
+export const TRANSACTIONS_PAGE_SIZE = 20;
 
 const getTransactionIdentity = (transaction) =>
   transaction.transactionId ||

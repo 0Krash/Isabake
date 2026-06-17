@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
 import { createStylesBase } from '../../../../constants/TransactionBalance/Styles';
@@ -8,28 +8,26 @@ import { useTransactionBalanceTheme } from '../../../../context/TransactionBalan
 import storeService from '../../../../services/TransactionBalance/API/storeService';
 
 const convertArray = (array) => {
-  return array.reduce(
-    (result, obj, index) => {
-      if (obj.name && obj.alias) {
-        result.push({ key: `${index + 1}`, value: `${obj.alias}` });
-      }
-      return result;
-    },
-    [{ key: '0', value: 'Agregar tienda...' }],
-  );
+  return array.reduce((result, obj) => {
+    const alias = obj.Alias || obj.alias;
+    const storeId = obj.storeId;
+
+    if (storeId && alias) {
+      result.push({ key: `${storeId}`, value: `${alias}` });
+    }
+    return result;
+  }, []);
 };
 
 export default function StoreInputComponent({
-  selected,
   setSelected,
-  setAddStoreModalIsVisible,
   setValidationErrorStore,
   transactionType,
 }) {
   const { colors } = useTransactionBalanceTheme();
   const stylesBase = createStylesBase(colors);
   const [data, setData] = useState([]);
-  const [store, setStore] = useState('');
+  const [hasLoadedStores, setHasLoadedStores] = useState(false);
 
   useEffect(() => {
     async function fetchDataStores() {
@@ -38,29 +36,20 @@ export default function StoreInputComponent({
       } catch (error) {
         console.error(
           'Error al obtener transacciones desde StoreInputComponent: ',
-          error,
+          error
         );
+      } finally {
+        setHasLoadedStores(true);
       }
     }
 
-    if (transactionType === 'Gastos' && data.length === 0) {
+    if (transactionType === 'Gastos' && !hasLoadedStores) {
       fetchDataStores();
     }
-  }, [transactionType, data]);
+  }, [transactionType, hasLoadedStores]);
 
   const onSelectHandler = () => {
-    if (selected === '0') {
-      setAddStoreModalIsVisible(true);
-    } else {
-      setValidationErrorStore(true);
-    }
-  };
-
-  // Function to add the new store to the list and select it
-  const addNewStore = (newStoreAlias) => {
-    const newStore = { key: `${data.length}`, value: newStoreAlias };
-    setData([...data, newStore]);
-    setSelected(newStore.key);
+    setValidationErrorStore(true);
   };
 
   return (
@@ -71,7 +60,8 @@ export default function StoreInputComponent({
         placeholder={'Seleccione una opción...'}
         data={data}
         save="key"
-        notFoundText={'Tienda no existe...'}
+        search={false}
+        notFoundText={'No hay tiendas registradas'}
         onSelect={onSelectHandler}
         boxStyles={[stylesBase.textInputBase, { borderColor: colors.border }]}
         inputStyles={{
@@ -94,6 +84,21 @@ export default function StoreInputComponent({
           fontWeight: typography.weights.regular,
         }}
       />
+      {hasLoadedStores && data.length === 0 && (
+        <Text style={[styles.helperText, { color: colors.textMuted }]}>
+          Administra tus tiendas desde Configuracion &gt; Tiendas.
+        </Text>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  helperText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.regular,
+    lineHeight: 17,
+    marginHorizontal: 15,
+    marginTop: -4,
+  },
+});

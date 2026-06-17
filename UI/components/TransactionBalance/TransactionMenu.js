@@ -11,9 +11,9 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { TRANSACTIONS_PAGE_SIZE } from '../../hooks/TransactionBalance/useTransactionBalanceData';
 
 const MENU_WIDTH = 280;
-const MENU_ITEMS = ['campo 1', 'campo 3', 'campo 3'];
 const ANIMATION_DURATION = 240;
 
 const MenuIcon = ({ color, isOpen }) => (
@@ -71,11 +71,38 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
   );
 };
 
-export default function TransactionMenu({ isVisible, onClose }) {
-  const { colors } = useTransactionBalanceTheme();
+export default function TransactionMenu({
+  isVisible,
+  onClose,
+  onOpenStoreManager,
+}) {
+  const { colorScheme, colors } = useTransactionBalanceTheme();
   const [shouldRender, setShouldRender] = useState(isVisible);
   const translateX = useRef(new Animated.Value(MENU_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const menuItems = [
+    {
+      description: 'Respeta el modo claro u oscuro del telefono.',
+      label: 'Tema del telefono',
+      value: colorScheme === 'dark' ? 'Oscuro' : 'Claro',
+    },
+    {
+      description: 'Formato usado para importes y reportes.',
+      label: 'Moneda',
+      value: 'MXN',
+    },
+    {
+      description: 'Movimientos que se cargan al bajar la lista.',
+      label: 'Registros por carga',
+      value: `${TRANSACTIONS_PAGE_SIZE}`,
+    },
+    {
+      description: 'Agrega o administra los puntos de venta disponibles.',
+      label: 'Tiendas',
+      onPress: onOpenStoreManager,
+      value: 'Administrar',
+    },
+  ];
 
   useEffect(() => {
     if (isVisible) {
@@ -163,10 +190,12 @@ export default function TransactionMenu({ isVisible, onClose }) {
           </View>
 
           <View style={styles.itemsContainer}>
-            {MENU_ITEMS.map((item, index) => (
+            {menuItems.map((item) => (
               <TouchableOpacity
-                activeOpacity={0.75}
-                key={`${item}-${index}`}
+                activeOpacity={item.onPress ? 0.75 : 1}
+                disabled={!item.onPress}
+                key={item.label}
+                onPress={item.onPress}
                 style={[
                   styles.menuItem,
                   {
@@ -175,8 +204,20 @@ export default function TransactionMenu({ isVisible, onClose }) {
                   },
                 ]}
               >
-                <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
-                  {item}
+                <View style={styles.menuItemHeader}>
+                  <Text
+                    style={[styles.menuItemText, { color: colors.textPrimary }]}
+                  >
+                    {item.label}
+                  </Text>
+                  <Text style={[styles.menuItemValue, { color: colors.primary }]}>
+                    {item.value}
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.menuItemDescription, { color: colors.textMuted }]}
+                >
+                  {item.description}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -246,11 +287,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
+  },
+  menuItemDescription: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.regular,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  menuItemHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
   },
   menuItemText: {
-    fontSize: typography.sizes.body,
+    flex: 1,
+    fontSize: typography.sizes.label,
     fontWeight: typography.weights.medium,
+  },
+  menuItemValue: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.bold,
   },
   modalContainer: {
     flex: 1,

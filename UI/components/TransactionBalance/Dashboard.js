@@ -99,28 +99,27 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   categoryValues: {
-    height: '70%',
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 18,
     marginTop: 15,
-    // borderColor: 'blue',
-    // borderWidth: 2,
   },
   summaryGroup: {
-    paddingLeft: 60,
+    width: '100%',
   },
   summaryRow: {
-    width: '100%',
-    paddingLeft: 30,
-    display: 'flex',
+    alignItems: 'center',
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   summaryValue: {
-    flex: 1,
-    paddingRight: 90,
     alignItems: 'flex-end',
+    flex: 1,
+    minWidth: 0,
   },
   summaryText: {
+    flexShrink: 1,
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.regular,
   },
@@ -156,5 +155,6 @@ const styles = StyleSheet.create({
   totalText: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+    flexShrink: 1,
   },
 });

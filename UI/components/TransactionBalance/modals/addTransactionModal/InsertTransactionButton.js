@@ -91,15 +91,15 @@ export default function InsertTransactionButton(props) {
 
 const styles = StyleSheet.create({
   buttonTransaction: {
-    height: 60,
+    height: 52,
     width: '100%',
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 15,
+    marginTop: 10,
   },
   buttonText: {
-    fontSize: typography.sizes.bodyLarge,
+    fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
     textAlign: 'center',
   },

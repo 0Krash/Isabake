@@ -9,6 +9,7 @@ import {
   Keyboard,
   PanResponder,
   Pressable,
+  Text,
   useWindowDimensions,
 } from 'react-native';
 
@@ -24,12 +25,12 @@ import UOMInputComponent from './UOMInputComponent';
 import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 import InsertTransactionButton from './InsertTransactionButton';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
+import typography from '../../../../constants/TransactionBalance/Typography';
 
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
   onTransactionCreated,
   setAddTransactionModalIsVisible,
-  setAddStoreModalIsVisible,
 }) {
   const { colors } = useTransactionBalanceTheme();
   const { height: windowHeight } = useWindowDimensions();
@@ -62,7 +63,7 @@ export default function AddTransactionModal({
     useState(false);
   const sheetHeight = showCategoryInput
     ? windowHeight * 0.88
-    : windowHeight * 0.68;
+    : windowHeight * 0.74;
 
   const handleModalOnClose = () => {
     setAddTransactionModalIsVisible(false);
@@ -243,6 +244,14 @@ export default function AddTransactionModal({
               />
             </View>
             <View style={styles.modalContaier}>
+              <View style={styles.titleContainer}>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>
+                  Agregar transaccion
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                  Registra ventas o gastos con fecha, monto y descripcion.
+                </Text>
+              </View>
               <View testID="switchArea" style={styles.switchContainer}>
                 <SwitchSelector onTabChange={handleTabChange} />
               </View>
@@ -267,9 +276,7 @@ export default function AddTransactionModal({
                   {showCategoryInput &&
                     (category === '1' || category === '2') && (
                       <StoreInputComponent
-                        selected={selected}
                         setSelected={setSelected}
-                        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
                         setValidationErrorStore={setValidationErrorStore}
                         transactionType={transactionType}
                       />
@@ -287,11 +294,7 @@ export default function AddTransactionModal({
                     }
                   />
                   <View
-                    style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      justifyContent: 'flex-start',
-                    }}
+                    style={styles.inlineInputGroup}
                   >
                     {showCategoryInput && category === '1' && (
                       <ItemQuantityInputComponent
@@ -388,7 +391,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 15,
+    padding: 14,
   },
   backdrop: {
     bottom: 0,
@@ -418,17 +421,33 @@ const styles = StyleSheet.create({
     width: 44,
   },
   modalContaier: {
-    paddingHorizontal: 5,
     flex: 1,
   },
   inputContainer: {
     flex: 1,
   },
   inputContentContainer: {
-    paddingBottom: 12,
+    paddingBottom: 18,
+  },
+  inlineInputGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
   switchContainer: {
-    height: 90,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  title: {
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.semibold,
+  },
+  titleContainer: {
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  subtitle: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginTop: 4,
   },
 });

@@ -43,6 +43,13 @@ const TransactionBalanceScreen = () => {
     setTransactionType(tabName);
   };
 
+  const handleOpenStoreManager = () => {
+    setTransactionMenuIsVisible(false);
+    setTimeout(() => {
+      setAddStoreModalIsVisible(true);
+    }, 90);
+  };
+
   return (
     <View
       style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}
@@ -78,13 +85,13 @@ const TransactionBalanceScreen = () => {
       <TransactionMenu
         isVisible={transactionMenuIsVisible}
         onClose={() => setTransactionMenuIsVisible(false)}
+        onOpenStoreManager={handleOpenStoreManager}
       />
       {addTransactionModalIsVisible && (
         <AddTransactionModal
           AddTransactionModalIsVisible={addTransactionModalIsVisible}
           onTransactionCreated={refreshTransactions}
           setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
-          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
         />
       )}
       {transactionDetailModalIsVisible && (

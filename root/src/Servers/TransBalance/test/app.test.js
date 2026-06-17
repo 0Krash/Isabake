@@ -15,7 +15,11 @@ jest.mock('../models/categoryModel', () => ({
 }));
 
 jest.mock('../models/storeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
   find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
 }));
 
 const app = require('../app');
@@ -233,7 +237,8 @@ describe('TransBalance API', () => {
           Address: 'Calle 1',
         },
       ];
-      Store.find.mockResolvedValue(stores);
+      const sort = jest.fn().mockResolvedValue(stores);
+      Store.find.mockReturnValue({ sort });
 
       const response = await request(app).get('/api/v1/stores');
 
@@ -242,6 +247,103 @@ describe('TransBalance API', () => {
         status: 'success',
         result: 1,
         data: stores,
+      });
+      expect(sort).toHaveBeenCalledWith({ storeId: 1 });
+    });
+
+    test('creates a store with next storeId', async () => {
+      const payload = {
+        Name: 'Norte',
+        Alias: 'NTE',
+        Address: 'Calle 2',
+      };
+      const createdStore = {
+        storeId: 2,
+        ...payload,
+      };
+      const sort = jest.fn().mockResolvedValue({ storeId: 1 });
+      Store.findOne.mockReturnValue({ sort });
+      Store.create.mockResolvedValue(createdStore);
+
+      const response = await request(app).post('/api/v1/stores').send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          store: createdStore,
+        },
+      });
+      expect(Store.create).toHaveBeenCalledWith({
+        ...payload,
+        storeId: 2,
+      });
+    });
+
+    test('updates a store by storeId', async () => {
+      const payload = {
+        Name: 'Sur',
+        Alias: 'SUR',
+        Address: 'Calle 3',
+      };
+      const updatedStore = {
+        storeId: 3,
+        ...payload,
+      };
+      Store.findOneAndUpdate.mockResolvedValue(updatedStore);
+
+      const response = await request(app).patch('/api/v1/stores/3').send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          store: updatedStore,
+        },
+      });
+      expect(Store.findOneAndUpdate).toHaveBeenCalledWith(
+        { storeId: 3 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    });
+
+    test('returns 404 when updating a missing store', async () => {
+      Store.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/stores/404').send({
+        Name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tienda no encontrada',
+      });
+    });
+
+    test('deletes a store by storeId', async () => {
+      Store.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/stores/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Store.deleteOne).toHaveBeenCalledWith({ storeId: 3 });
+    });
+
+    test('returns 404 when deleting a missing store', async () => {
+      Store.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/stores/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tienda no encontrada',
       });
     });
   });
