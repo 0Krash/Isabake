@@ -19,16 +19,36 @@ describe('transactionService', () => {
         amount: 15000,
       },
     ];
-    axios.get.mockResolvedValue({
-      data: {
-        data: transactions,
+    const apiResponse = {
+      data: transactions,
+      pagination: {
+        hasMore: true,
+        limit: 20,
+        page: 1,
+        total: 30,
+        totalPages: 2,
       },
+      result: 1,
+      status: 'success',
+    };
+    axios.get.mockResolvedValue({
+      data: apiResponse,
     });
 
-    await expect(transactionService.getAllTransactions()).resolves.toBe(
-      transactions
-    );
-    expect(axios.get).toHaveBeenCalledWith(URL_Transactions);
+    await expect(
+      transactionService.getAllTransactions({
+        limit: 20,
+        page: 1,
+        transactionType: 'Ventas',
+      })
+    ).resolves.toBe(apiResponse);
+    expect(axios.get).toHaveBeenCalledWith(URL_Transactions, {
+      params: {
+        limit: 20,
+        page: 1,
+        transactionType: 'Ventas',
+      },
+    });
   });
 
   test('postTransaction sends payload and returns API response', async () => {

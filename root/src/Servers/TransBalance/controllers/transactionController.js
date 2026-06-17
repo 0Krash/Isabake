@@ -4,9 +4,30 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendFail, sendSuccess } = require('../utils/httpResponses');
 
 exports.getAllTransactions = asyncHandler(async (req, res) => {
-  const transactions = await Transaction.find();
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+  const skip = (page - 1) * limit;
+  const filter = req.query.transactionType
+    ? { transactionType: req.query.transactionType }
+    : {};
+
+  const [transactions, total] = await Promise.all([
+    Transaction.find(filter)
+      .sort({ selectedDate: -1, transactionId: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit),
+    Transaction.countDocuments(filter),
+  ]);
+
   sendSuccess(res, {
     data: transactions,
+    pagination: {
+      hasMore: skip + transactions.length < total,
+      limit,
+      page,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
     result: transactions.length,
   });
 });

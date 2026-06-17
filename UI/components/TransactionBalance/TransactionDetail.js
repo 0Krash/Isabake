@@ -1,8 +1,16 @@
 import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, View, Text } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  View,
+  Text,
+} from 'react-native';
 import TransactionDetailContainer from './TransactionDetailContainer';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+
+const PAGE_SIZE = 20;
 
 const groupByMonth = (transactions) => {
   const sortedTransactions = [...transactions].sort((a, b) => {
@@ -42,6 +50,9 @@ const TransactionDetail = ({
   setTransactionDetailModalIsVisible,
   setDeleteTransactionModalIsVisible,
   dataTransactionsResponse,
+  hasMoreTransactions,
+  isLoadingMoreTransactions,
+  loadMoreTransactions,
   setTransactionDetail,
   transactionType,
 }) => {
@@ -54,36 +65,91 @@ const TransactionDetail = ({
     return groupByMonth(filteredTransactions);
   }, [dataTransactionsResponse, transactionType]);
 
+  const transactionRows = useMemo(
+    () =>
+      Object.entries(groupedTransactions).flatMap(([month, transactions]) => [
+        {
+          id: `header-${month}`,
+          month,
+          type: 'header',
+        },
+        ...transactions.map((transaction, index) => ({
+          id: [
+            'transaction',
+            month,
+            transaction.transactionId || transaction._id || index,
+            transaction.selectedDate?.$date || transaction.selectedDate,
+            index,
+          ].join('-'),
+          transaction,
+          type: 'transaction',
+        })),
+      ]),
+    [groupedTransactions]
+  );
+
+  const renderTransactionRow = ({ item }) => {
+    if (item.type === 'header') {
+      return (
+        <Text style={[styles.monthHeader, { color: colors.textMuted }]}>
+          {item.month}
+        </Text>
+      );
+    }
+
+    return (
+      <TransactionDetailContainer
+        data={item.transaction}
+        setTransactionDetail={setTransactionDetail}
+        setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
+        setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
+      />
+    );
+  };
+
+  const renderFooter = () => {
+    if (isLoadingMoreTransactions) {
+      return (
+        <View style={styles.footer}>
+          <ActivityIndicator color={colors.primary} size="small" />
+          <Text style={[styles.footerText, { color: colors.textMuted }]}>
+            Cargando más movimientos...
+          </Text>
+        </View>
+      );
+    }
+
+    if (!hasMoreTransactions && transactionRows.length > 0) {
+      return (
+        <Text style={[styles.footerText, { color: colors.textMuted }]}>
+          No hay más movimientos
+        </Text>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <View style={styles.mainContainer}>
-      <ScrollView
+      <FlatList
+        data={transactionRows}
+        renderItem={renderTransactionRow}
+        keyExtractor={(item) => item.id}
         style={[
           styles.transactionDetailContainer,
           { backgroundColor: colors.screenBackground },
         ]}
+        contentContainerStyle={styles.transactionDetailContent}
+        initialNumToRender={PAGE_SIZE}
+        ListFooterComponent={renderFooter}
+        maxToRenderPerBatch={PAGE_SIZE}
+        onEndReached={loadMoreTransactions}
+        onEndReachedThreshold={0.35}
         showsVerticalScrollIndicator={false}
-      >
-        {Object.keys(groupedTransactions).map((month) => (
-          <View key={month}>
-            <Text style={[styles.monthHeader, { color: colors.textMuted }]}>
-              {month}
-            </Text>
-            {groupedTransactions[month].map((item, index) => (
-              <TransactionDetailContainer
-                key={index}
-                data={item}
-                setTransactionDetail={setTransactionDetail}
-                setTransactionDetailModalIsVisible={
-                  setTransactionDetailModalIsVisible
-                }
-                setDeleteTransactionModalIsVisible={
-                  setDeleteTransactionModalIsVisible
-                }
-              />
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+        updateCellsBatchingPeriod={40}
+        windowSize={9}
+      />
     </View>
   );
 };
@@ -98,13 +164,28 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     marginVertical: 10,
-    alignContent: 'center',
+  },
+  transactionDetailContent: {
+    paddingBottom: 8,
   },
   monthHeader: {
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.bold,
     marginVertical: 10,
     marginLeft: 10,
+  },
+  footer: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  footerText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.medium,
+    paddingVertical: 14,
+    textAlign: 'center',
   },
 });
 

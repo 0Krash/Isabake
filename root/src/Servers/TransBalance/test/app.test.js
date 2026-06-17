@@ -2,6 +2,7 @@ const request = require('supertest');
 
 jest.mock('../models/transactionModel', () => ({
   aggregate: jest.fn(),
+  countDocuments: jest.fn(),
   create: jest.fn(),
   deleteOne: jest.fn(),
   find: jest.fn(),
@@ -28,7 +29,7 @@ describe('TransBalance API', () => {
   });
 
   describe('GET /api/v1/transactions', () => {
-    test('responds with all transactions', async () => {
+    test('responds with paginated transactions', async () => {
       const transactions = [
         {
           transactionId: 'tx-1',
@@ -37,17 +38,42 @@ describe('TransBalance API', () => {
           amount: 15000,
         },
       ];
-      Transaction.find.mockResolvedValue(transactions);
+      const limit = jest.fn().mockResolvedValue(transactions);
+      const skip = jest.fn().mockReturnValue({ limit });
+      const sort = jest.fn().mockReturnValue({ skip });
+      Transaction.find.mockReturnValue({ sort });
+      Transaction.countDocuments.mockResolvedValue(21);
 
-      const response = await request(app).get('/api/v1/transactions');
+      const response = await request(app).get(
+        '/api/v1/transactions?page=2&limit=20&transactionType=Ventas'
+      );
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         status: 'success',
         result: 1,
+        pagination: {
+          hasMore: false,
+          limit: 20,
+          page: 2,
+          total: 21,
+          totalPages: 2,
+        },
         data: transactions,
       });
-      expect(Transaction.find).toHaveBeenCalledTimes(1);
+      expect(Transaction.find).toHaveBeenCalledWith({
+        transactionType: 'Ventas',
+      });
+      expect(sort).toHaveBeenCalledWith({
+        _id: -1,
+        selectedDate: -1,
+        transactionId: -1,
+      });
+      expect(skip).toHaveBeenCalledWith(20);
+      expect(limit).toHaveBeenCalledWith(20);
+      expect(Transaction.countDocuments).toHaveBeenCalledWith({
+        transactionType: 'Ventas',
+      });
     });
   });
 

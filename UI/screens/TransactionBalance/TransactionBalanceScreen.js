@@ -24,11 +24,15 @@ const TransactionBalanceScreen = () => {
   const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
   const { colors } = useTransactionBalanceTheme();
-  const { totalAmountByCategory, totalAmountByDateCategory, transactions } =
-    useTransactionBalanceData({
-      addTransactionModalIsVisible,
-      deleteTransactionModalIsVisible,
-    });
+  const {
+    hasMoreTransactions,
+    isLoadingMoreTransactions,
+    loadMoreTransactions,
+    refreshTransactions,
+    totalAmountByCategory,
+    totalAmountByDateCategory,
+    transactions,
+  } = useTransactionBalanceData(transactionType);
 
   const handleTabChange = (tabName) => {
     setTransactionType(tabName);
@@ -50,6 +54,9 @@ const TransactionBalanceScreen = () => {
       />
       <SwitchSelector onTabChange={handleTabChange} />
       <TransactionDetail
+        hasMoreTransactions={hasMoreTransactions}
+        isLoadingMoreTransactions={isLoadingMoreTransactions}
+        loadMoreTransactions={loadMoreTransactions}
         transactionType={transactionType}
         setTransactionDetail={setTransactionDetail}
         setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
@@ -59,25 +66,35 @@ const TransactionBalanceScreen = () => {
       <AddTransactionButton
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
       />
-      <AddTransactionModal
-        AddTransactionModalIsVisible={addTransactionModalIsVisible}
-        setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
-        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
-      />
-      <TransactionDetailModal
-        transactionDetail={transactionDetail}
-        transactionDetailModalIsVisible={transactionDetailModalIsVisible}
-        setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
-      />
-      <DeleteTransactionModal
-        transactionDetail={transactionDetail}
-        DeleteTransactionModalIsVisible={deleteTransactionModalIsVisible}
-        setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
-      />
-      <AddStoreModal
-        AddStoreModalIsVisible={addStoreModalIsVisible}
-        setAddStoreModalIsVisible={setAddStoreModalIsVisible}
-      />
+      {addTransactionModalIsVisible && (
+        <AddTransactionModal
+          AddTransactionModalIsVisible={addTransactionModalIsVisible}
+          onTransactionCreated={refreshTransactions}
+          setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
+          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
+        />
+      )}
+      {transactionDetailModalIsVisible && (
+        <TransactionDetailModal
+          transactionDetail={transactionDetail}
+          transactionDetailModalIsVisible={transactionDetailModalIsVisible}
+          setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
+        />
+      )}
+      {deleteTransactionModalIsVisible && (
+        <DeleteTransactionModal
+          transactionDetail={transactionDetail}
+          DeleteTransactionModalIsVisible={deleteTransactionModalIsVisible}
+          onTransactionDeleted={refreshTransactions}
+          setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
+        />
+      )}
+      {addStoreModalIsVisible && (
+        <AddStoreModal
+          AddStoreModalIsVisible={addStoreModalIsVisible}
+          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
+        />
+      )}
     </View>
   );
 };

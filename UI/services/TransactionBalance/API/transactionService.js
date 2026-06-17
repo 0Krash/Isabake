@@ -1,10 +1,16 @@
 import axios from 'axios';
 import { URL_Transactions } from '@env';
 
-const getAllTransactions = async () => {
+const getAllTransactions = async ({ limit, page, transactionType } = {}) => {
   try {
-    const response = await axios.get(URL_Transactions);
-    return response.data.data;
+    const response = await axios.get(URL_Transactions, {
+      params: {
+        limit,
+        page,
+        transactionType,
+      },
+    });
+    return response.data;
   } catch (error) {
     console.error(
       'Error al hacer la petición desde getAllTransactions:',

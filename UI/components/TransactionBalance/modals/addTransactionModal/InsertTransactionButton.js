@@ -23,6 +23,7 @@ export default function InsertTransactionButton(props) {
     itemQuantity,
     selectedDate,
     transactionType,
+    onTransactionCreated,
   } = props;
 
   const postTransaction = async () => {
@@ -40,6 +41,8 @@ export default function InsertTransactionButton(props) {
 
     try {
       await transactionService.postTransaction(data);
+      onTransactionCreated?.();
+      setTransactionAlertVisibility(true);
     } catch (error) {
       console.error(
         'Error al obtener transacciones desde TransactionBalanceScreen: ',
@@ -68,7 +71,7 @@ export default function InsertTransactionButton(props) {
           },
         ]}
         onPress={() => {
-          postTransaction(), setTransactionAlertVisibility(true);
+          postTransaction();
         }}
         disabled={!props.validationError}
       >

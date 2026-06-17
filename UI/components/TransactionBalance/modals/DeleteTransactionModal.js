@@ -14,6 +14,7 @@ import { useTransactionBalanceTheme } from '../../../context/TransactionBalanceT
 export default function DeleteTransactionModal({
   transactionDetail,
   DeleteTransactionModalIsVisible,
+  onTransactionDeleted,
   setDeleteTransactionModalIsVisible,
 }) {
   const { colors } = useTransactionBalanceTheme();
@@ -22,6 +23,7 @@ export default function DeleteTransactionModal({
       .deleteTransactionById(transactionId)
       .then((data) => {
         setDeleteTransactionModalIsVisible(false);
+        onTransactionDeleted?.();
       })
       .catch((error) => {
         console.error('Error al eliminar la transacción:', error);

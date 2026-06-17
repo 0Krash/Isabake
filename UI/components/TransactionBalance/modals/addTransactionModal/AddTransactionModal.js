@@ -27,6 +27,7 @@ import { useTransactionBalanceTheme } from '../../../../context/TransactionBalan
 
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
+  onTransactionCreated,
   setAddTransactionModalIsVisible,
   setAddStoreModalIsVisible,
 }) {
@@ -362,6 +363,7 @@ export default function AddTransactionModal({
                 quantity={quantity}
                 amount={amount}
                 handleModalOnClose={closeBottomSheet}
+                onTransactionCreated={onTransactionCreated}
               />
             </View>
           </Animated.View>
