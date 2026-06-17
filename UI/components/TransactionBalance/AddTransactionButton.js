@@ -24,8 +24,8 @@ export default function AddTransactionButton({
 const styles = StyleSheet.create({
   mainContainer: {
     position: 'absolute',
-    top: '3%',
-    left: '80%',
+    bottom: 58,
+    right: 24,
     height: 50,
     width: 50,
     borderRadius: 30,

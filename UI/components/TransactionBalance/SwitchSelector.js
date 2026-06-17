@@ -74,25 +74,22 @@ export default function SwitchSelector({ onTabChange }) {
 
 const styles = StyleSheet.create({
   mainContainer: {
-    // borderColor: 'red',
-    // borderWidth: 2,
-    flex: 1,
     marginHorizontal: 15,
+    marginVertical: 6,
   },
   selector: {
-    flex: 1,
-    borderRadius: 20,
-    marginVertical: 10,
     alignItems: 'center',
+    borderRadius: 16,
     flexDirection: 'row',
-    paddingHorizontal: 5,
+    height: 44,
+    paddingHorizontal: 4,
   },
   baseTouchable: {
-    width: '50%',
-    height: '80%',
-    borderRadius: 15,
     alignItems: 'center',
+    borderRadius: 12,
+    height: 34,
     justifyContent: 'center',
+    width: '50%',
   },
   baseTextTouchable: {
     fontSize: typography.sizes.body,

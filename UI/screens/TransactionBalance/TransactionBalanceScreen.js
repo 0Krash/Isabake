@@ -5,6 +5,9 @@ import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
 import TransactionDetail from '../../components/TransactionBalance/TransactionDetail';
 import AddTransactionButton from '../../components/TransactionBalance/AddTransactionButton';
+import TransactionMenu, {
+  TransactionMenuButton,
+} from '../../components/TransactionBalance/TransactionMenu';
 import AddTransactionModal from '../../components/TransactionBalance/modals/addTransactionModal/AddTransactionModal';
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
@@ -20,6 +23,8 @@ const TransactionBalanceScreen = () => {
   const [deleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
     useState(false);
   const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
+    useState(false);
+  const [transactionMenuIsVisible, setTransactionMenuIsVisible] =
     useState(false);
   const [transactionDetail, setTransactionDetail] = useState({});
   const [transactionType, setTransactionType] = useState('Ventas');
@@ -46,6 +51,10 @@ const TransactionBalanceScreen = () => {
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           Transacciones
         </Text>
+        <TransactionMenuButton
+          isOpen={transactionMenuIsVisible}
+          onPress={() => setTransactionMenuIsVisible(true)}
+        />
       </View>
       <Dashboard
         transactionType={transactionType}
@@ -65,6 +74,10 @@ const TransactionBalanceScreen = () => {
       />
       <AddTransactionButton
         setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
+      />
+      <TransactionMenu
+        isVisible={transactionMenuIsVisible}
+        onClose={() => setTransactionMenuIsVisible(false)}
       />
       {addTransactionModalIsVisible && (
         <AddTransactionModal
