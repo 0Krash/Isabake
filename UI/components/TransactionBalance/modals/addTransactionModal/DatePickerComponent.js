@@ -67,7 +67,11 @@ export default function DatePickerComponent({
   showDatePicker,
   hideDatePicker,
   handleConfirm,
+  inputStyle,
+  label = 'Fecha',
+  labelStyle,
   selectedDate,
+  useCustomFieldStyle = false,
 }) {
   const { colors, stylesBase } = useTransactionBalanceStyles();
   const { width: windowWidth } = useWindowDimensions();
@@ -182,11 +186,23 @@ export default function DatePickerComponent({
   };
 
   return (
-    <View testID="date">
-      <Text style={stylesBase.textInputLabelBase}>Fecha</Text>
+    <View style={inputStyle && styles.dateFieldContainer} testID="date">
+      <Text
+        style={
+          useCustomFieldStyle
+            ? labelStyle
+            : [stylesBase.textInputLabelBase, labelStyle]
+        }
+      >
+        {label}
+      </Text>
       <TextInput
         autoCorrect={false}
-        style={[stylesBase.textInputBase, { width: 150 }]}
+        style={[
+          !useCustomFieldStyle && stylesBase.textInputBase,
+          { width: inputStyle ? '100%' : 150 },
+          inputStyle,
+        ]}
         placeholderTextColor={colors.textMuted}
         onPressIn={showDatePicker}
         onFocus={handleInputFocus}
@@ -545,6 +561,11 @@ export default function DatePickerComponent({
 }
 
 const styles = StyleSheet.create({
+  dateFieldContainer: {
+    flex: 1,
+    marginBottom: 12,
+    minWidth: 0,
+  },
   backdrop: {
     alignItems: 'center',
     bottom: 0,

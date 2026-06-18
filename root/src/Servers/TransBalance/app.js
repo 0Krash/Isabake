@@ -8,6 +8,7 @@ const transactionRouter = require('./routes/transactionRoutes');
 const categoryRouter = require('./routes/categoryRoutes');
 const storeRouter = require('./routes/storeRoutes');
 const recipeRouter = require('./routes/recipeRoutes');
+const inventoryRouter = require('./routes/inventoryRoutes');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/v1/transactions', transactionRouter);
 app.use('/api/v1/categories', categoryRouter);
 app.use('/api/v1/stores', storeRouter);
 app.use('/api/v1/recipes', recipeRouter);
+app.use('/api/v1/inventory', inventoryRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

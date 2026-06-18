@@ -30,8 +30,17 @@ jest.mock('../models/recipeModel', () => ({
   findOneAndUpdate: jest.fn(),
 }));
 
+jest.mock('../models/inventoryModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
+
 const app = require('../app');
 const Category = require('../models/categoryModel');
+const Inventory = require('../models/inventoryModel');
 const Recipe = require('../models/recipeModel');
 const Store = require('../models/storeModel');
 const Transaction = require('../models/transactionModel');
@@ -493,6 +502,160 @@ describe('TransBalance API', () => {
       expect(response.body).toEqual({
         status: 'failed',
         message: 'Receta no encontrada',
+      });
+    });
+  });
+
+  describe('inventory', () => {
+    test('returns all inventory items', async () => {
+      const inventoryItems = [
+        {
+          category: 'Lacteos',
+          inventoryId: 1,
+          lots: [],
+          name: 'Queso crema',
+          storage: 'Refrigerado',
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(inventoryItems);
+      Inventory.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/inventory');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: inventoryItems,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, inventoryId: 1 });
+    });
+
+    test('creates an inventory item with next inventoryId', async () => {
+      const payload = {
+        category: 'Secos',
+        lots: [
+          {
+            brand: 'Selecta',
+            cost: 320,
+            expiryDate: '2026-11-20',
+            location: 'Anaquel 2',
+            lotId: 'lot-1',
+            purchaseDate: '2026-06-04',
+            quality: 4,
+            quantity: 10,
+            supplier: 'Mayoreo Dulce',
+            supplierId: 1,
+            unit: 'kg',
+          },
+        ],
+        name: 'Harina',
+        storage: 'Seco',
+      };
+      const createdInventoryItem = {
+        inventoryId: 2,
+        ...payload,
+        minimumStock: 0,
+        notes: '',
+      };
+      const sort = jest.fn().mockResolvedValue({ inventoryId: 1 });
+      Inventory.findOne.mockReturnValue({ sort });
+      Inventory.create.mockResolvedValue(createdInventoryItem);
+
+      const response = await request(app).post('/api/v1/inventory').send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          inventoryItem: createdInventoryItem,
+        },
+      });
+      expect(Inventory.create).toHaveBeenCalledWith({
+        category: payload.category,
+        lots: [
+          {
+            ...payload.lots[0],
+            notes: '',
+          },
+        ],
+        minimumStock: 0,
+        notes: '',
+        inventoryId: 2,
+        name: payload.name,
+        storage: payload.storage,
+      });
+    });
+
+    test('updates an inventory item by inventoryId', async () => {
+      const payload = {
+        category: 'Chocolate',
+        lots: [],
+        minimumStock: 1,
+        name: 'Chocolate semi amargo',
+        notes: 'Mantener fresco',
+        storage: 'Fresco y seco',
+      };
+      const updatedInventoryItem = {
+        inventoryId: 3,
+        ...payload,
+      };
+      Inventory.findOneAndUpdate.mockResolvedValue(updatedInventoryItem);
+
+      const response = await request(app)
+        .patch('/api/v1/inventory/3')
+        .send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          inventoryItem: updatedInventoryItem,
+        },
+      });
+      expect(Inventory.findOneAndUpdate).toHaveBeenCalledWith(
+        { inventoryId: 3 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    });
+
+    test('returns 404 when updating a missing inventory item', async () => {
+      Inventory.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/inventory/404').send({
+        name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Ingrediente no encontrado',
+      });
+    });
+
+    test('deletes an inventory item by inventoryId', async () => {
+      Inventory.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/inventory/1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Inventory.deleteOne).toHaveBeenCalledWith({ inventoryId: 1 });
+    });
+
+    test('returns 404 when deleting a missing inventory item', async () => {
+      Inventory.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/inventory/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Ingrediente no encontrado',
       });
     });
   });

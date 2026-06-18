@@ -7,7 +7,7 @@ import { useTransactionBalanceTheme } from '../context/TransactionBalanceThemeCo
 const tabs = [
   { key: 'home', label: 'Inicio' },
   { key: 'recipes', label: 'Recetas' },
-  { key: 'purchases', label: 'Compras' },
+  { key: 'inventory', label: 'Inventario' },
 ];
 
 export default function AppBottomNavigation({ activeTab, onTabPress }) {

@@ -358,38 +358,29 @@ export default function AddStoreModal({
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
         {mode === 'edit' ? 'Editar tienda' : 'Nueva tienda'}
       </Text>
-      <TextInput
+      <StoreFormField
+        colors={colors}
+        label="Nombre"
         onChangeText={(value) => updateFormValue('Name', value)}
-        placeholder="Nombre"
-        placeholderTextColor={colors.textMuted}
+        placeholder="Nombre de la tienda"
         returnKeyType="next"
-        style={[
-          styles.textInput,
-          { backgroundColor: colors.fieldBackground, color: colors.textPrimary },
-        ]}
         value={form.Name}
       />
-      <TextInput
+      <StoreFormField
         autoCapitalize="characters"
+        colors={colors}
+        label="Alias"
         onChangeText={(value) => updateFormValue('Alias', value)}
-        placeholder="Alias"
-        placeholderTextColor={colors.textMuted}
+        placeholder="Alias corto"
         returnKeyType="next"
-        style={[
-          styles.textInput,
-          { backgroundColor: colors.fieldBackground, color: colors.textPrimary },
-        ]}
         value={form.Alias}
       />
-      <TextInput
+      <StoreFormField
+        colors={colors}
+        label="Direccion"
         onChangeText={(value) => updateFormValue('Address', value)}
-        placeholder="Direccion"
-        placeholderTextColor={colors.textMuted}
+        placeholder="Direccion de la tienda"
         returnKeyType="done"
-        style={[
-          styles.textInput,
-          { backgroundColor: colors.fieldBackground, color: colors.textPrimary },
-        ]}
         value={form.Address}
       />
       <View style={styles.formActions}>
@@ -420,6 +411,37 @@ export default function AddStoreModal({
           )}
         </TouchableOpacity>
       </View>
+    </View>
+  );
+
+  const StoreFormField = ({
+    autoCapitalize,
+    colors: fieldColors,
+    label,
+    onChangeText,
+    placeholder,
+    returnKeyType,
+    value,
+  }) => (
+    <View style={styles.formField}>
+      <Text style={[styles.formLabel, { color: fieldColors.textMuted }]}>
+        {label}
+      </Text>
+      <TextInput
+        autoCapitalize={autoCapitalize}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={fieldColors.textMuted}
+        returnKeyType={returnKeyType}
+        style={[
+          styles.textInput,
+          {
+            backgroundColor: fieldColors.fieldBackground,
+            color: fieldColors.textPrimary,
+          },
+        ]}
+        value={value}
+      />
     </View>
   );
 
@@ -580,6 +602,13 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     gap: 10,
+  },
+  formField: {
+    gap: 6,
+  },
+  formLabel: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.medium,
   },
   helperText: {
     fontSize: typography.sizes.caption,

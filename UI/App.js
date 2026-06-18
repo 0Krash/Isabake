@@ -1,11 +1,11 @@
-import { SafeAreaView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { SafeAreaView, StyleSheet, useColorScheme, View } from 'react-native';
 import { useState } from 'react';
 import TransactionBalanceScreen from './screens/TransactionBalance/TransactionBalanceScreen';
 import RecipeBookScreen from './screens/RecipeBook/RecipeBookScreen';
+import InventoryScreen from './screens/Inventory/InventoryScreen';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
-import typography from './constants/TransactionBalance/Typography';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -17,22 +17,8 @@ export default function App() {
       return <RecipeBookScreen />;
     }
 
-    if (activeTab === 'purchases') {
-      return (
-        <View
-          style={[
-            styles.placeholderScreen,
-            { backgroundColor: theme.colors.screenBackground },
-          ]}
-        >
-          <Text style={[styles.placeholderTitle, { color: theme.colors.textPrimary }]}>
-            Compras
-          </Text>
-          <Text style={[styles.placeholderText, { color: theme.colors.textMuted }]}>
-            Esta seccion quedara lista para administrar compras.
-          </Text>
-        </View>
-      );
+    if (activeTab === 'inventory') {
+      return <InventoryScreen />;
     }
 
     return <TransactionBalanceScreen />;
@@ -53,23 +39,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  placeholderScreen: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    flex: 1,
-    marginHorizontal: 8,
-    marginTop: 50,
-    padding: 24,
-  },
-  placeholderText: {
-    fontSize: typography.sizes.body,
-    lineHeight: 22,
-    marginTop: 8,
-  },
-  placeholderTitle: {
-    fontSize: typography.sizes.title,
-    fontWeight: typography.weights.bold,
   },
   screenContainer: {
     flex: 1,

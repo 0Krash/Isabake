@@ -15,6 +15,10 @@ import {
   View,
 } from 'react-native';
 
+import TransactionMenu, {
+  TransactionMenuButton,
+} from '../../components/TransactionBalance/TransactionMenu';
+import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useRecipeBookData, {
@@ -169,8 +173,10 @@ export default function RecipeBookScreen() {
     refreshRecipes,
     setRecipes,
   } = useRecipeBookData();
+  const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
+  const [menuIsVisible, setMenuIsVisible] = useState(false);
   const [recipeName, setRecipeName] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState(null);
   const [ingredientName, setIngredientName] = useState('');
@@ -197,6 +203,13 @@ export default function RecipeBookScreen() {
       recipe.name.toLowerCase().includes(normalizedSearch)
     );
   }, [recipes, searchText]);
+
+  const handleOpenStoreManager = () => {
+    setMenuIsVisible(false);
+    setTimeout(() => {
+      setAddStoreModalIsVisible(true);
+    }, 90);
+  };
 
   const closeModal = useCallback(() => {
     setRecipeName('');
@@ -440,6 +453,10 @@ export default function RecipeBookScreen() {
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           Recetario
         </Text>
+        <TransactionMenuButton
+          isOpen={menuIsVisible}
+          onPress={() => setMenuIsVisible(true)}
+        />
       </View>
 
       <View style={styles.searchContainer}>
@@ -532,6 +549,19 @@ export default function RecipeBookScreen() {
       >
         <Text style={[styles.addButtonText, { color: colors.textInverse }]}>+</Text>
       </TouchableOpacity>
+
+      <TransactionMenu
+        isVisible={menuIsVisible}
+        onClose={() => setMenuIsVisible(false)}
+        onOpenStoreManager={handleOpenStoreManager}
+      />
+
+      {addStoreModalIsVisible && (
+        <AddStoreModal
+          AddStoreModalIsVisible={addStoreModalIsVisible}
+          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
+        />
+      )}
 
       <Modal
         animationType="none"
