@@ -22,8 +22,17 @@ jest.mock('../models/storeModel', () => ({
   findOneAndUpdate: jest.fn(),
 }));
 
+jest.mock('../models/recipeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
+
 const app = require('../app');
 const Category = require('../models/categoryModel');
+const Recipe = require('../models/recipeModel');
 const Store = require('../models/storeModel');
 const Transaction = require('../models/transactionModel');
 
@@ -344,6 +353,146 @@ describe('TransBalance API', () => {
       expect(response.body).toEqual({
         status: 'failed',
         message: 'Tienda no encontrada',
+      });
+    });
+  });
+
+  describe('recipes', () => {
+    test('returns all recipes', async () => {
+      const recipes = [
+        {
+          recipeId: 1,
+          name: 'Cheesecake',
+          servings: 10,
+        cost: 128.4,
+        ingredients: [],
+        steps: [],
+      },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipes);
+      Recipe.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipes');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipes,
+      });
+      expect(sort).toHaveBeenCalledWith({ recipeId: 1 });
+    });
+
+    test('creates a recipe with next recipeId', async () => {
+      const payload = {
+        name: 'Brownies',
+        servings: 12,
+        cost: 90,
+        ingredients: [
+          {
+            ingredientId: 'ing-1',
+            name: 'Chocolate',
+            quantity: '250',
+            unit: 'g',
+          },
+        ],
+        steps: [
+          {
+            description: 'Mezclar ingredientes secos.',
+            order: 1,
+            stepId: 'step-1',
+          },
+        ],
+      };
+      const createdRecipe = {
+        recipeId: 2,
+        ...payload,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeId: 1 });
+      Recipe.findOne.mockReturnValue({ sort });
+      Recipe.create.mockResolvedValue(createdRecipe);
+
+      const response = await request(app).post('/api/v1/recipes').send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipe: createdRecipe,
+        },
+      });
+      expect(Recipe.create).toHaveBeenCalledWith({
+        ...payload,
+        recipeId: 2,
+      });
+    });
+
+    test('updates a recipe by recipeId', async () => {
+      const payload = {
+        name: 'Cheesecake',
+        servings: 8,
+        cost: 120,
+        ingredients: [],
+        steps: [],
+      };
+      const updatedRecipe = {
+        recipeId: 1,
+        ...payload,
+      };
+      Recipe.findOneAndUpdate.mockResolvedValue(updatedRecipe);
+
+      const response = await request(app).patch('/api/v1/recipes/1').send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipe: updatedRecipe,
+        },
+      });
+      expect(Recipe.findOneAndUpdate).toHaveBeenCalledWith(
+        { recipeId: 1 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        }
+      );
+    });
+
+    test('returns 404 when updating a missing recipe', async () => {
+      Recipe.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/recipes/404').send({
+        name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Receta no encontrada',
+      });
+    });
+
+    test('deletes a recipe by recipeId', async () => {
+      Recipe.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipes/1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.deleteOne).toHaveBeenCalledWith({ recipeId: 1 });
+    });
+
+    test('returns 404 when deleting a missing recipe', async () => {
+      Recipe.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/recipes/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Receta no encontrada',
       });
     });
   });

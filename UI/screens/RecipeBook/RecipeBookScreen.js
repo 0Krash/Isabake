@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   FlatList,
   Modal,
@@ -16,44 +17,24 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import useRecipeBookData, {
+  normalizeRecipe,
+  toApiRecipe,
+} from '../../hooks/RecipeBook/useRecipeBookData';
+import recipeService from '../../services/TransactionBalance/API/recipeService';
 
-const initialRecipes = [
-  {
-    cost: '$128.40',
-    id: '1',
-    ingredients: [
-      { id: '1-1', name: 'Queso crema', quantity: '600', unit: 'g' },
-      { id: '1-2', name: 'Galleta molida', quantity: '220', unit: 'g' },
-      { id: '1-3', name: 'Mantequilla', quantity: '90', unit: 'g' },
-    ],
-    name: 'Cheesecake',
-    servings: 10,
-  },
-  {
-    cost: '$96.20',
-    id: '2',
-    ingredients: [
-      { id: '2-1', name: 'Harina', quantity: '180', unit: 'g' },
-      { id: '2-2', name: 'Leche evaporada', quantity: '360', unit: 'ml' },
-      { id: '2-3', name: 'Huevo', quantity: '5', unit: 'pza' },
-    ],
-    name: 'Tres Leches',
-    servings: 12,
-  },
-  {
-    cost: '$142.80',
-    id: '3',
-    ingredients: [
-      { id: '3-1', name: 'Chocolate semi amargo', quantity: '250', unit: 'g' },
-      { id: '3-2', name: 'Cocoa', quantity: '45', unit: 'g' },
-      { id: '3-3', name: 'Crema para batir', quantity: '300', unit: 'ml' },
-    ],
-    name: 'Triple Chocolate',
-    servings: 8,
-  },
+const ingredientUnits = [
+  { description: 'Gramos', key: 'g' },
+  { description: 'Kilogramos', key: 'kg' },
+  { description: 'Mililitros', key: 'ml' },
+  { description: 'Litros', key: 'l' },
+  { description: 'Piezas', key: 'pza' },
+  { description: 'Cucharadas', key: 'cda' },
+  { description: 'Cucharaditas', key: 'cdta' },
 ];
 
-const ingredientUnits = ['g', 'kg', 'ml', 'l', 'pza', 'cda', 'cdta'];
+const getIngredientUnitLabel = (unitKey) =>
+  ingredientUnits.find((unit) => unit.key === unitKey)?.description || 'Unidad';
 
 const getInitials = (name) =>
   name
@@ -182,7 +163,12 @@ function useBottomSheet(isVisible, onClose) {
 
 export default function RecipeBookScreen() {
   const { colors } = useTransactionBalanceTheme();
-  const [recipes, setRecipes] = useState(initialRecipes);
+  const {
+    isLoadingRecipes,
+    recipes,
+    refreshRecipes,
+    setRecipes,
+  } = useRecipeBookData();
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
   const [recipeName, setRecipeName] = useState('');
@@ -190,6 +176,10 @@ export default function RecipeBookScreen() {
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQuantity, setIngredientQuantity] = useState('');
   const [ingredientUnit, setIngredientUnit] = useState('g');
+  const [unitPickerIsVisible, setUnitPickerIsVisible] = useState(false);
+  const [recipeDetailTab, setRecipeDetailTab] = useState('Ingredientes');
+  const [stepDescription, setStepDescription] = useState('');
+  const [recipeNameDraft, setRecipeNameDraft] = useState('');
 
   const selectedRecipe = useMemo(
     () => recipes.find((recipe) => recipe.id === selectedRecipeId),
@@ -213,24 +203,75 @@ export default function RecipeBookScreen() {
     setModalIsVisible(false);
   }, []);
 
-  const createRecipe = () => {
+  const createRecipe = async () => {
     const name = recipeName.trim();
 
     if (!name) {
       return;
     }
 
-    setRecipes((currentRecipes) => [
-      {
-        cost: '$0.00',
-        id: `${Date.now()}`,
+    try {
+      const response = await recipeService.postRecipe({
+        cost: 0,
         ingredients: [],
         name,
         servings: 1,
-      },
-      ...currentRecipes,
-    ]);
-    closeModal();
+        steps: [],
+      });
+      const createdRecipe = normalizeRecipe(response.data.recipe);
+      setRecipes((currentRecipes) => [createdRecipe, ...currentRecipes]);
+      refreshRecipes();
+      closeModal();
+    } catch (error) {
+      console.warn('Error al crear receta:', error);
+      Alert.alert(
+        'No se pudo guardar',
+        'Revisa la conexion con el backend e intenta crear la receta nuevamente.'
+      );
+    }
+  };
+
+  const deleteSelectedRecipe = async () => {
+    if (!selectedRecipe) {
+      return;
+    }
+
+    try {
+      await recipeService.deleteRecipeById(selectedRecipe.recipeId);
+      setRecipes((currentRecipes) =>
+        currentRecipes.filter((recipe) => recipe.id !== selectedRecipe.id)
+      );
+      recipeDetailSheet.closeBottomSheet();
+      refreshRecipes();
+    } catch (error) {
+      console.warn('Error al eliminar receta:', error);
+      Alert.alert(
+        'No se pudo eliminar',
+        'Revisa la conexion con el backend e intenta eliminar la receta nuevamente.'
+      );
+    }
+  };
+
+  const confirmDeleteRecipe = () => {
+    if (!selectedRecipe) {
+      return;
+    }
+
+    Alert.alert(
+      'Eliminar receta',
+      `Esta accion eliminara "${selectedRecipe.name}" del recetario.`,
+      [
+        {
+          style: 'cancel',
+          text: 'Cancelar',
+        },
+        {
+          onPress: deleteSelectedRecipe,
+          style: 'destructive',
+          text: 'Eliminar',
+        },
+      ]
+    );
   };
 
   const closeRecipeDetail = useCallback(() => {
@@ -238,23 +279,86 @@ export default function RecipeBookScreen() {
     setIngredientName('');
     setIngredientQuantity('');
     setIngredientUnit('g');
+    setUnitPickerIsVisible(false);
+    setRecipeDetailTab('Ingredientes');
+    setStepDescription('');
+    setRecipeNameDraft('');
   }, []);
 
   const createRecipeSheet = useBottomSheet(modalIsVisible, closeModal);
   const recipeDetailSheet = useBottomSheet(Boolean(selectedRecipe), closeRecipeDetail);
 
+  const handleRecipeDetailBack = () => {
+    if (unitPickerIsVisible) {
+      setUnitPickerIsVisible(false);
+      return;
+    }
+
+    recipeDetailSheet.closeBottomSheet();
+  };
+
+  const persistRecipe = (recipe) => {
+    recipeService
+      .updateRecipeById(recipe.recipeId, toApiRecipe(recipe))
+      .then(refreshRecipes)
+      .catch(async (error) => {
+        const status = error?.response?.status;
+
+        if (status === 404) {
+          try {
+            await recipeService.postRecipe({
+              ...toApiRecipe(recipe),
+              recipeId: recipe.recipeId,
+            });
+            refreshRecipes();
+            return;
+          } catch (createError) {
+            console.warn('Error al crear receta local en backend:', createError);
+            return;
+          }
+        }
+
+        console.warn('Error al actualizar receta:', error);
+      });
+  };
+
   const updateSelectedRecipe = (updater) => {
+    if (!selectedRecipe) {
+      return;
+    }
+
+    const nextRecipe = updater(selectedRecipe);
     setRecipes((currentRecipes) =>
       currentRecipes.map((recipe) =>
-        recipe.id === selectedRecipeId ? updater(recipe) : recipe
+        recipe.id === selectedRecipeId ? nextRecipe : recipe
       )
     );
+
+    persistRecipe(nextRecipe);
   };
 
   const updateServings = (nextServings) => {
     updateSelectedRecipe((recipe) => ({
       ...recipe,
       servings: Math.max(1, nextServings),
+    }));
+  };
+
+  const saveRecipeNameEdition = () => {
+    if (!selectedRecipe) {
+      return;
+    }
+
+    const name = recipeNameDraft.trim();
+
+    if (!name || name === selectedRecipe.name) {
+      setRecipeNameDraft(selectedRecipe.name);
+      return;
+    }
+
+    updateSelectedRecipe((recipe) => ({
+      ...recipe,
+      name,
     }));
   };
 
@@ -267,7 +371,7 @@ export default function RecipeBookScreen() {
     }
 
     const ingredient = {
-      id: `${Date.now()}`,
+      id: `${selectedRecipeId}-${Date.now()}`,
       name,
       quantity,
       unit: ingredientUnit,
@@ -288,6 +392,43 @@ export default function RecipeBookScreen() {
       ingredients: recipe.ingredients.filter(
         (ingredient) => ingredient.id !== ingredientId
       ),
+    }));
+  };
+
+  const addPreparationStep = () => {
+    const description = stepDescription.trim();
+
+    if (!description) {
+      return;
+    }
+
+    updateSelectedRecipe((recipe) => {
+      const nextOrder = (recipe.steps || []).length + 1;
+
+      return {
+        ...recipe,
+        steps: [
+          ...(recipe.steps || []),
+          {
+            description,
+            id: `${selectedRecipeId}-step-${Date.now()}`,
+            order: nextOrder,
+          },
+        ],
+      };
+    });
+    setStepDescription('');
+  };
+
+  const removePreparationStep = (stepId) => {
+    updateSelectedRecipe((recipe) => ({
+      ...recipe,
+      steps: (recipe.steps || [])
+        .filter((step) => step.id !== stepId)
+        .map((step, index) => ({
+          ...step,
+          order: index + 1,
+        })),
     }));
   };
 
@@ -372,10 +513,12 @@ export default function RecipeBookScreen() {
         ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              No encontramos recetas
+              {isLoadingRecipes ? 'Cargando recetas' : 'No encontramos recetas'}
             </Text>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              Prueba con otro nombre o agrega una nueva receta.
+              {isLoadingRecipes
+                ? 'Estamos consultando tu recetario.'
+                : 'Prueba con otro nombre o agrega una nueva receta.'}
             </Text>
           </View>
         }
@@ -474,7 +617,7 @@ export default function RecipeBookScreen() {
 
       <Modal
         animationType="none"
-        onRequestClose={recipeDetailSheet.closeBottomSheet}
+        onRequestClose={handleRecipeDetailBack}
         transparent
         visible={Boolean(selectedRecipe)}
       >
@@ -513,33 +656,27 @@ export default function RecipeBookScreen() {
                 </View>
                 <View style={styles.detailHeader}>
                   <View style={styles.detailTitleContainer}>
-                    <Text
-                      style={[styles.detailTitle, { color: colors.textPrimary }]}
-                    >
-                      {selectedRecipe.name}
-                    </Text>
+                    <TextInput
+                      onChangeText={setRecipeNameDraft}
+                      onEndEditing={saveRecipeNameEdition}
+                      onFocus={() => setRecipeNameDraft(selectedRecipe.name)}
+                      placeholder="Nombre de la receta"
+                      placeholderTextColor={colors.textMuted}
+                      style={[
+                        styles.recipeNameEditInput,
+                        {
+                          backgroundColor: colors.fieldBackground,
+                          color: colors.textPrimary,
+                        },
+                      ]}
+                      value={recipeNameDraft || selectedRecipe.name}
+                    />
                     <Text
                       style={[styles.detailSubtitle, { color: colors.textMuted }]}
                     >
                       Define porciones e ingredientes de elaboracion.
                     </Text>
                   </View>
-                  <Pressable
-                    onPress={recipeDetailSheet.closeBottomSheet}
-                    style={[
-                      styles.detailCloseButton,
-                      { backgroundColor: colors.surfaceMuted },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.detailCloseButtonText,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      x
-                    </Text>
-                  </Pressable>
                 </View>
 
                 <ScrollView
@@ -620,156 +757,382 @@ export default function RecipeBookScreen() {
                   </View>
 
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                    Ingredientes
+                    Receta
                   </Text>
 
-                  {selectedRecipe.ingredients.map((ingredient) => (
-                    <View
-                      key={ingredient.id}
-                      style={[
-                        styles.ingredientRow,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                      ]}
-                    >
-                      <View style={styles.ingredientInfo}>
-                        <Text
+                  <View style={[styles.detailTabs, { backgroundColor: colors.surface }]}>
+                    {['Ingredientes', 'Preparacion'].map((tab) => {
+                      const isSelected = recipeDetailTab === tab;
+
+                      return (
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          key={tab}
+                          onPress={() => setRecipeDetailTab(tab)}
                           style={[
-                            styles.ingredientName,
-                            { color: colors.textPrimary },
+                            styles.detailTabButton,
+                            {
+                              backgroundColor: isSelected
+                                ? colors.primaryMuted
+                                : colors.surface,
+                            },
                           ]}
                         >
-                          {ingredient.name}
-                        </Text>
-                        <Text
+                          <Text
+                            style={[
+                              styles.detailTabText,
+                              {
+                                color: isSelected
+                                  ? colors.primaryText
+                                  : colors.inactiveText,
+                              },
+                            ]}
+                          >
+                            {tab}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {recipeDetailTab === 'Ingredientes' ? (
+                    <>
+                      {selectedRecipe.ingredients.map((ingredient) => (
+                        <View
+                          key={ingredient.id}
                           style={[
-                            styles.ingredientAmount,
-                            { color: colors.textMuted },
+                            styles.ingredientRow,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
                           ]}
                         >
-                          {ingredient.quantity} {ingredient.unit}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        onPress={() => removeIngredient(ingredient.id)}
+                          <View style={styles.ingredientInfo}>
+                            <Text
+                              style={[
+                                styles.ingredientName,
+                                { color: colors.textPrimary },
+                              ]}
+                            >
+                              {ingredient.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.ingredientAmount,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              {ingredient.quantity} {ingredient.unit}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            onPress={() => removeIngredient(ingredient.id)}
+                            style={[
+                              styles.removeIngredientButton,
+                              { borderColor: colors.danger },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.removeIngredientText,
+                                { color: colors.danger },
+                              ]}
+                            >
+                              Eliminar
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+
+                      <View
                         style={[
-                          styles.removeIngredientButton,
-                          { borderColor: colors.danger },
+                          styles.ingredientForm,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                          },
                         ]}
                       >
                         <Text
                           style={[
-                            styles.removeIngredientText,
-                            { color: colors.danger },
+                            styles.sectionLabel,
+                            { color: colors.textSecondary },
                           ]}
                         >
-                          Eliminar
+                          Agregar ingrediente
                         </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-
-                  <View
-                    style={[
-                      styles.ingredientForm,
-                      { backgroundColor: colors.surface, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.sectionLabel,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      Agregar ingrediente
-                    </Text>
-                    <TextInput
-                      onChangeText={setIngredientName}
-                      placeholder="Ej. Harina, mantequilla, cocoa"
-                      placeholderTextColor={colors.textMuted}
-                      style={[
-                        styles.detailInput,
-                        {
-                          backgroundColor: colors.fieldBackground,
-                          color: colors.textPrimary,
-                        },
-                      ]}
-                      value={ingredientName}
-                    />
-                    <View style={styles.quantityRow}>
-                      <TextInput
-                        keyboardType="decimal-pad"
-                        onChangeText={setIngredientQuantity}
-                        placeholder="Cantidad"
-                        placeholderTextColor={colors.textMuted}
-                        style={[
-                          styles.quantityInput,
-                          {
-                            backgroundColor: colors.fieldBackground,
-                            color: colors.textPrimary,
-                          },
-                        ]}
-                        value={ingredientQuantity}
-                      />
-                      <View style={styles.unitGrid}>
-                        {ingredientUnits.map((unit) => {
-                          const isSelected = ingredientUnit === unit;
-
-                          return (
-                            <Pressable
-                              key={unit}
-                              onPress={() => setIngredientUnit(unit)}
+                        <TextInput
+                          onChangeText={setIngredientName}
+                          placeholder="Ej. Harina, mantequilla, cocoa"
+                          placeholderTextColor={colors.textMuted}
+                          style={[
+                            styles.detailInput,
+                            {
+                              backgroundColor: colors.fieldBackground,
+                              color: colors.textPrimary,
+                            },
+                          ]}
+                          value={ingredientName}
+                        />
+                        <View style={styles.quantityRow}>
+                          <TextInput
+                            keyboardType="decimal-pad"
+                            onChangeText={setIngredientQuantity}
+                            placeholder="Cantidad"
+                            placeholderTextColor={colors.textMuted}
+                            style={[
+                              styles.quantityInput,
+                              {
+                                backgroundColor: colors.fieldBackground,
+                                color: colors.textPrimary,
+                              },
+                            ]}
+                            value={ingredientQuantity}
+                          />
+                          <View style={styles.unitListContainer}>
+                            <TouchableOpacity
+                              activeOpacity={0.75}
+                              onPress={() => setUnitPickerIsVisible(true)}
                               style={[
-                                styles.unitChip,
+                                styles.unitSelectBox,
                                 {
-                                  backgroundColor: isSelected
-                                    ? colors.primaryMuted
-                                    : colors.fieldBackground,
-                                  borderColor: isSelected
-                                    ? colors.primary
-                                    : colors.border,
+                                  backgroundColor: colors.fieldBackground,
+                                  borderColor: colors.border,
                                 },
                               ]}
                             >
                               <Text
                                 style={[
-                                  styles.unitChipText,
-                                  {
-                                    color: isSelected
-                                      ? colors.primaryText
-                                      : colors.textSecondary,
-                                  },
+                                  styles.unitSelectText,
+                                  { color: colors.textPrimary },
                                 ]}
                               >
-                                {unit}
+                                {ingredientUnit}
                               </Text>
-                            </Pressable>
-                          );
-                        })}
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.unitSelectDescription,
+                                  { color: colors.textMuted },
+                                ]}
+                              >
+                                {getIngredientUnitLabel(ingredientUnit)}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={addIngredient}
+                          style={[
+                            styles.addIngredientButton,
+                            { backgroundColor: colors.primary },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.addIngredientText,
+                              { color: colors.textInverse },
+                            ]}
+                          >
+                            Agregar ingrediente
+                          </Text>
+                        </TouchableOpacity>
                       </View>
-                    </View>
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={addIngredient}
-                      style={[
-                        styles.addIngredientButton,
-                        { backgroundColor: colors.primary },
-                      ]}
-                    >
-                      <Text
+                    </>
+                  ) : (
+                    <>
+                      {(selectedRecipe.steps || []).map((step) => (
+                        <View
+                          key={step.id}
+                          style={[
+                            styles.stepRow,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.stepNumber,
+                              { backgroundColor: colors.primaryMuted },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.stepNumberText,
+                                { color: colors.primaryText },
+                              ]}
+                            >
+                              {step.order}
+                            </Text>
+                          </View>
+                          <Text style={[styles.stepText, { color: colors.textPrimary }]}>
+                            {step.description}
+                          </Text>
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            onPress={() => removePreparationStep(step.id)}
+                            style={[
+                              styles.removeIngredientButton,
+                              { borderColor: colors.danger },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.removeIngredientText,
+                                { color: colors.danger },
+                              ]}
+                            >
+                              Eliminar
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+
+                      <View
                         style={[
-                          styles.addIngredientText,
-                          { color: colors.textInverse },
+                          styles.ingredientForm,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                          },
                         ]}
                       >
-                        Agregar ingrediente
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                        <Text
+                          style={[
+                            styles.sectionLabel,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Agregar paso
+                        </Text>
+                        <TextInput
+                          multiline
+                          onChangeText={setStepDescription}
+                          placeholder="Ej. Batir queso crema con azucar hasta suavizar."
+                          placeholderTextColor={colors.textMuted}
+                          style={[
+                            styles.stepInput,
+                            {
+                              backgroundColor: colors.fieldBackground,
+                              color: colors.textPrimary,
+                            },
+                          ]}
+                          textAlignVertical="top"
+                          value={stepDescription}
+                        />
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={addPreparationStep}
+                          style={[
+                            styles.addIngredientButton,
+                            { backgroundColor: colors.primary },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.addIngredientText,
+                              { color: colors.textInverse },
+                            ]}
+                          >
+                            Agregar paso
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={confirmDeleteRecipe}
+                    style={[
+                      styles.deleteRecipeButton,
+                      { borderColor: colors.danger },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.deleteRecipeText,
+                        { color: colors.danger },
+                      ]}
+                    >
+                      Eliminar receta
+                    </Text>
+                  </TouchableOpacity>
                 </ScrollView>
               </>
             )}
           </Animated.View>
+          {unitPickerIsVisible && (
+            <View style={styles.unitPickerOverlay}>
+              <View
+                style={[
+                  styles.unitPickerBackdrop,
+                  { backgroundColor: colors.backdrop },
+                ]}
+              />
+              <View
+                style={[
+                  styles.unitPopupCard,
+                  {
+                    backgroundColor: colors.screenBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.unitPopupTitle, { color: colors.textPrimary }]}>
+                  Unidad de medida
+                </Text>
+                {ingredientUnits.map((unit) => {
+                  const isSelected = unit.key === ingredientUnit;
+
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      key={unit.key}
+                      onPress={() => {
+                        setIngredientUnit(unit.key);
+                        setUnitPickerIsVisible(false);
+                      }}
+                      style={[
+                        styles.unitOptionRow,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primaryMuted
+                            : colors.surface,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.unitOptionKey,
+                          {
+                            color: isSelected
+                              ? colors.primaryText
+                              : colors.textPrimary,
+                          },
+                        ]}
+                      >
+                        {unit.key}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.unitOptionDescription,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {unit.description}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
     </View>
@@ -832,24 +1195,25 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
   },
-  detailCloseButton: {
-    alignItems: 'center',
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  detailCloseButtonText: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.bold,
-    lineHeight: 20,
-  },
   detailContent: {
     paddingBottom: 20,
+  },
+  deleteRecipeButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  deleteRecipeText: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
   },
   detailHeader: {
     alignItems: 'flex-start',
     flexDirection: 'row',
+    gap: 10,
     justifyContent: 'space-between',
     marginBottom: 16,
   },
@@ -870,7 +1234,27 @@ const styles = StyleSheet.create({
   },
   detailTitleContainer: {
     flex: 1,
+    minWidth: 0,
     paddingRight: 12,
+  },
+  detailTabButton: {
+    alignItems: 'center',
+    borderRadius: 12,
+    flex: 1,
+    height: 34,
+    justifyContent: 'center',
+  },
+  detailTabs: {
+    alignItems: 'center',
+    borderRadius: 16,
+    flexDirection: 'row',
+    height: 44,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  detailTabText: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
   },
   dragHandle: {
     alignSelf: 'center',
@@ -1013,6 +1397,13 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 4,
   },
+  recipeNameEditInput: {
+    borderRadius: 8,
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
   recipeModal: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -1059,6 +1450,40 @@ const styles = StyleSheet.create({
   sheetRoot: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  stepInput: {
+    borderRadius: 8,
+    fontSize: typography.sizes.body,
+    minHeight: 88,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  stepNumber: {
+    alignItems: 'center',
+    borderRadius: 14,
+    height: 28,
+    justifyContent: 'center',
+    marginRight: 10,
+    width: 28,
+  },
+  stepNumberText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.bold,
+  },
+  stepRow: {
+    alignItems: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginBottom: 8,
+    minHeight: 68,
+    padding: 12,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: typography.sizes.body,
+    lineHeight: 20,
+    paddingRight: 10,
   },
   quantityInput: {
     borderRadius: 8,
@@ -1139,22 +1564,71 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.bold,
     lineHeight: 22,
   },
-  unitChip: {
+  unitListContainer: {
+    width: 126,
+  },
+  unitOptionDescription: {
+    flex: 1,
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.regular,
+  },
+  unitOptionKey: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.bold,
+    minWidth: 46,
+  },
+  unitOptionRow: {
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: 9,
-  },
-  unitChipText: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
-  },
-  unitGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    width: 150,
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: 12,
+  },
+  unitPickerBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  unitPickerOverlay: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  unitPopupCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 16,
+    width: '84%',
+  },
+  unitPopupTitle: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
+    marginBottom: 4,
+  },
+  unitSelectBox: {
+    alignItems: 'flex-start',
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  unitSelectDescription: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.regular,
+    lineHeight: 16,
+  },
+  unitSelectText: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
   },
 });

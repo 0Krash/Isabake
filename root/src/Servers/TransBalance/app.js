@@ -7,6 +7,7 @@ require('dotenv').config();
 const transactionRouter = require('./routes/transactionRoutes');
 const categoryRouter = require('./routes/categoryRoutes');
 const storeRouter = require('./routes/storeRoutes');
+const recipeRouter = require('./routes/recipeRoutes');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
 app.use('/api/v1/transactions', transactionRouter);
 app.use('/api/v1/categories', categoryRouter);
 app.use('/api/v1/stores', storeRouter);
+app.use('/api/v1/recipes', recipeRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);
