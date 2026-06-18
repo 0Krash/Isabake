@@ -20,6 +20,11 @@ const ingredientSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    section: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     unit: {
       type: String,
       enum: ['g', 'kg', 'ml', 'l', 'pza', 'cda', 'cdta'],

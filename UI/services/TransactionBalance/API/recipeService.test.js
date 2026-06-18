@@ -5,6 +5,8 @@ import { URL_Recipes } from '@env';
 
 jest.mock('axios');
 
+const URL_RecipeSections = URL_Recipes.replace('/recipes', '/recipe-sections');
+
 describe('recipeService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,6 +84,54 @@ describe('recipeService', () => {
 
     await expect(recipeService.deleteRecipeById(1)).resolves.toBe(apiResponse);
     expect(axios.delete).toHaveBeenCalledWith(`${URL_Recipes}/1`);
+  });
+
+  test('getAllRecipeSections returns sections from response data payload', async () => {
+    const recipeSections = [
+      {
+        name: 'Masa',
+        recipeSectionId: 1,
+      },
+    ];
+    axios.get.mockResolvedValue({
+      data: {
+        data: recipeSections,
+      },
+    });
+
+    await expect(recipeService.getAllRecipeSections()).resolves.toBe(
+      recipeSections
+    );
+    expect(axios.get).toHaveBeenCalledWith(URL_RecipeSections);
+  });
+
+  test('postRecipeSection sends payload and returns API response', async () => {
+    const payload = { name: 'Relleno' };
+    const apiResponse = {
+      status: 'success',
+      data: {
+        recipeSection: {
+          recipeSectionId: 2,
+          ...payload,
+        },
+      },
+    };
+    axios.post.mockResolvedValue({ data: apiResponse });
+
+    await expect(recipeService.postRecipeSection(payload)).resolves.toBe(
+      apiResponse
+    );
+    expect(axios.post).toHaveBeenCalledWith(URL_RecipeSections, payload);
+  });
+
+  test('deleteRecipeSectionById deletes a shared section by URL id', async () => {
+    const apiResponse = { status: 'success' };
+    axios.delete.mockResolvedValue({ data: apiResponse });
+
+    await expect(recipeService.deleteRecipeSectionById(3)).resolves.toBe(
+      apiResponse
+    );
+    expect(axios.delete).toHaveBeenCalledWith(`${URL_RecipeSections}/3`);
   });
 
   test('propagates request errors', async () => {

@@ -4,6 +4,7 @@ import {
   Animated,
   FlatList,
   InteractionManager,
+  Keyboard,
   LayoutAnimation,
   Modal,
   PanResponder,
@@ -29,6 +30,9 @@ import useRecipeBookData, {
   normalizeRecipe,
   toApiRecipe,
 } from '../../hooks/RecipeBook/useRecipeBookData';
+import useRecipeSectionsData, {
+  normalizeRecipeSection,
+} from '../../hooks/RecipeBook/useRecipeSectionsData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import recipeService from '../../services/TransactionBalance/API/recipeService';
 
@@ -200,6 +204,11 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     inventoryItems,
     isLoadingInventory,
   } = useInventoryData();
+  const {
+    recipeSections,
+    refreshRecipeSections,
+    setRecipeSections,
+  } = useRecipeSectionsData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
@@ -212,11 +221,16 @@ export default function RecipeBookScreen({ onOpenInventory }) {
   const [editingIngredientId, setEditingIngredientId] = useState(null);
   const [isSavingIngredient, setIsSavingIngredient] = useState(false);
   const [ingredientQuantity, setIngredientQuantity] = useState('');
+  const [ingredientSection, setIngredientSection] = useState('');
+  const [newIngredientSection, setNewIngredientSection] = useState('');
   const [ingredientUnit, setIngredientUnit] = useState('g');
   const [ingredientPickerIsVisible, setIngredientPickerIsVisible] =
     useState(false);
+  const [ingredientSectionPickerIsVisible, setIngredientSectionPickerIsVisible] =
+    useState(false);
   const [unitPickerIsVisible, setUnitPickerIsVisible] = useState(false);
   const [recipeDetailTab, setRecipeDetailTab] = useState('Ingredientes');
+  const [expandedIngredientSections, setExpandedIngredientSections] = useState({});
   const [isReorderingStep, setIsReorderingStep] = useState(false);
   const [stepDragPreview, setStepDragPreview] = useState(null);
   const [editingStepId, setEditingStepId] = useState(null);
@@ -241,6 +255,111 @@ export default function RecipeBookScreen({ onOpenInventory }) {
       ),
     [selectedRecipe?.ingredients]
   );
+
+  const groupedRecipeIngredients = useMemo(() => {
+    const hasSections = sortedRecipeIngredients.some(
+      (ingredient) => !!ingredient.section
+    );
+
+    if (!hasSections) {
+      return [];
+    }
+
+    const groups = sortedRecipeIngredients.reduce((currentGroups, ingredient) => {
+      const section = ingredient.section || 'Sin seccion';
+
+      return {
+        ...currentGroups,
+        [section]: [...(currentGroups[section] || []), ingredient],
+      };
+    }, {});
+
+    const sectionOrder = recipeSections.map((section) => section.name);
+    const orderedSections = [
+      ...sectionOrder,
+      ...Object.keys(groups).filter(
+        (section) =>
+          section !== 'Sin seccion' && !sectionOrder.includes(section)
+      ),
+      'Sin seccion',
+    ];
+
+    return orderedSections
+      .filter((section) => groups[section]?.length)
+      .map((section) => ({
+        ingredients: groups[section],
+        section,
+      }));
+  }, [recipeSections, sortedRecipeIngredients]);
+
+  const shouldGroupRecipeIngredients = groupedRecipeIngredients.length > 0;
+
+  const ingredientSectionOptions = useMemo(() => {
+    const sectionsByName = new Map();
+
+    recipeSections.forEach((section) => {
+      sectionsByName.set(section.name.toLowerCase(), section);
+    });
+
+    if (ingredientSection) {
+      const normalizedSection = ingredientSection.toLowerCase();
+
+      if (!sectionsByName.has(normalizedSection)) {
+        sectionsByName.set(normalizedSection, {
+          id: `local-${ingredientSection}`,
+          name: ingredientSection,
+          normalizedName: normalizedSection,
+          recipeSectionId: null,
+        });
+      }
+    }
+
+    return [...sectionsByName.values()].sort((sectionA, sectionB) =>
+      sectionA.name.localeCompare(sectionB.name, 'es', {
+        sensitivity: 'base',
+      })
+    );
+  }, [ingredientSection, recipeSections]);
+
+  const ingredientStickyHeaderIndices = useMemo(() => {
+    if (recipeDetailTab !== 'Ingredientes' || !shouldGroupRecipeIngredients) {
+      return [];
+    }
+
+    let sectionOffset = 0;
+
+    return groupedRecipeIngredients.map(({ ingredients, section }) => {
+      const headerIndex = 3 + sectionOffset;
+      const isExpanded = expandedIngredientSections[section] !== false;
+
+      sectionOffset += 1 + (isExpanded ? ingredients.length : 0);
+
+      return headerIndex;
+    });
+  }, [
+    expandedIngredientSections,
+    groupedRecipeIngredients,
+    recipeDetailTab,
+    shouldGroupRecipeIngredients,
+  ]);
+
+  const ingredientAlreadyExistsInSection = useMemo(() => {
+    if (!selectedInventoryIngredient) {
+      return false;
+    }
+
+    return (selectedRecipe?.ingredients || []).some(
+      (ingredient) =>
+        ingredient.id !== editingIngredientId &&
+        ingredient.inventoryId === selectedInventoryIngredient.inventoryId &&
+        (ingredient.section || '') === ingredientSection
+    );
+  }, [
+    editingIngredientId,
+    ingredientSection,
+    selectedInventoryIngredient,
+    selectedRecipe?.ingredients,
+  ]);
 
   const filteredRecipes = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
@@ -415,8 +534,11 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     setSelectedInventoryIngredient(null);
     setEditingIngredientId(null);
     setIngredientQuantity('');
+    setIngredientSection('');
+    setNewIngredientSection('');
     setIngredientUnit('g');
     setIngredientPickerIsVisible(false);
+    setIngredientSectionPickerIsVisible(false);
     setUnitPickerIsVisible(false);
     setRecipeDetailTab('Ingredientes');
     setEditingStepId(null);
@@ -430,6 +552,11 @@ export default function RecipeBookScreen({ onOpenInventory }) {
   const handleRecipeDetailBack = () => {
     if (ingredientPickerIsVisible) {
       setIngredientPickerIsVisible(false);
+      return;
+    }
+
+    if (ingredientSectionPickerIsVisible) {
+      setIngredientSectionPickerIsVisible(false);
       return;
     }
 
@@ -516,6 +643,95 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     }));
   };
 
+  const addIngredientSection = async () => {
+    const section = newIngredientSection.trim();
+
+    if (!section) {
+      return;
+    }
+
+    try {
+      const response = await recipeService.postRecipeSection({ name: section });
+      const recipeSection = normalizeRecipeSection(response.data.recipeSection);
+
+      setRecipeSections((currentSections) => {
+        const nextSections = currentSections.filter(
+          (currentSection) =>
+            currentSection.normalizedName !== recipeSection.normalizedName
+        );
+
+        return [...nextSections, recipeSection].sort((sectionA, sectionB) =>
+          sectionA.name.localeCompare(sectionB.name, 'es', {
+            sensitivity: 'base',
+          })
+        );
+      });
+      setIngredientSection(recipeSection.name);
+      setNewIngredientSection('');
+      setIngredientSectionPickerIsVisible(false);
+    } catch (error) {
+      Alert.alert(
+        'No se pudo guardar',
+        'Revisa la conexion con el backend e intenta agregar la seccion nuevamente.'
+      );
+    }
+  };
+
+  const deleteIngredientSection = async (sectionToDelete) => {
+    if (!sectionToDelete?.name) {
+      return;
+    }
+
+    const sectionName = sectionToDelete.name;
+
+    try {
+      if (sectionToDelete.recipeSectionId) {
+        await recipeService.deleteRecipeSectionById(
+          sectionToDelete.recipeSectionId
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'No se pudo eliminar',
+        'Revisa la conexion con el backend e intenta eliminar la seccion nuevamente.'
+      );
+      return;
+    }
+
+    setRecipeSections((currentSections) =>
+      currentSections.filter(
+        (currentSection) =>
+          currentSection.normalizedName !== sectionToDelete.normalizedName
+      )
+    );
+
+    if (ingredientSection === sectionName) {
+      setIngredientSection('');
+    }
+
+    setExpandedIngredientSections((currentSections) => {
+      const nextSections = { ...currentSections };
+      delete nextSections[sectionName];
+      return nextSections;
+    });
+
+    setRecipes((currentRecipes) =>
+      currentRecipes.map((recipe) => ({
+        ...recipe,
+        ingredients: recipe.ingredients.map((ingredient) =>
+          ingredient.section === sectionName
+            ? {
+                ...ingredient,
+                section: '',
+              }
+            : ingredient
+        ),
+      }))
+    );
+
+    refreshRecipeSections();
+  };
+
   const addIngredient = () => {
     if (isSavingIngredientRef.current) {
       return;
@@ -524,7 +740,12 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     const name = selectedInventoryIngredient?.name || ingredientName.trim();
     const quantity = ingredientQuantity.trim();
 
-    if (!selectedInventoryIngredient || !name || !quantity) {
+    if (
+      !selectedInventoryIngredient ||
+      !name ||
+      !quantity ||
+      ingredientAlreadyExistsInSection
+    ) {
       return;
     }
 
@@ -536,6 +757,7 @@ export default function RecipeBookScreen({ onOpenInventory }) {
       inventoryId: selectedInventoryIngredient.inventoryId,
       name,
       quantity,
+      section: ingredientSection,
       unit: ingredientUnit,
     };
 
@@ -547,17 +769,14 @@ export default function RecipeBookScreen({ onOpenInventory }) {
               ? ingredient
               : currentIngredient
           )
-        : recipe.ingredients.some(
-            (currentIngredient) =>
-              currentIngredient.inventoryId === selectedInventoryIngredient.inventoryId
-          )
-          ? recipe.ingredients
-          : [...recipe.ingredients, ingredient],
+        : [...recipe.ingredients, ingredient],
     }));
     setIngredientName('');
     setSelectedInventoryIngredient(null);
     setEditingIngredientId(null);
     setIngredientQuantity('');
+    setIngredientSection('');
+    setNewIngredientSection('');
     setIngredientUnit('g');
 
     setTimeout(() => {
@@ -583,6 +802,7 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     );
     setIngredientName(ingredient.name);
     setIngredientQuantity(ingredient.quantity);
+    setIngredientSection(ingredient.section || '');
     setIngredientUnit(ingredient.unit);
   };
 
@@ -593,6 +813,8 @@ export default function RecipeBookScreen({ onOpenInventory }) {
     setSelectedInventoryIngredient(null);
     setIngredientName('');
     setIngredientQuantity('');
+    setIngredientSection('');
+    setNewIngredientSection('');
     setIngredientUnit('g');
   };
 
@@ -987,6 +1209,7 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                   scrollEventThrottle={16}
                   scrollEnabled={!isReorderingStep}
                   showsVerticalScrollIndicator={false}
+                  stickyHeaderIndices={ingredientStickyHeaderIndices}
                 >
                   <View
                     style={[
@@ -1097,26 +1320,111 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                     })}
                   </View>
 
-                  {recipeDetailTab === 'Ingredientes' ? (
-                    <>
-                      {sortedRecipeIngredients.map((ingredient) => {
-                        const isEditingIngredient =
-                          ingredient.id === editingIngredientId;
+                  {recipeDetailTab === 'Ingredientes' ? [
+                      shouldGroupRecipeIngredients
+                        ? groupedRecipeIngredients.flatMap(({ ingredients, section }) => {
+                            const isExpanded =
+                              expandedIngredientSections[section] !== false;
 
-                        return (
-                          <EditableIngredientRow
-                            colors={colors}
-                            ingredient={ingredient}
-                            isEditing={isEditingIngredient}
-                            key={ingredient.id}
-                            onEdit={editIngredient}
-                            onRemove={removeIngredient}
-                          />
-                        );
-                      })}
+                            return [
+                              <TouchableOpacity
+                                activeOpacity={0.75}
+                                key={`${section}-header`}
+                                onPress={() =>
+                                  setExpandedIngredientSections(
+                                    (currentSections) => ({
+                                      ...currentSections,
+                                      [section]: !isExpanded,
+                                    })
+                                  )
+                                }
+                                style={[
+                                  styles.ingredientSectionHeader,
+                                  {
+                                    backgroundColor: colors.fieldBackground,
+                                    borderColor: colors.border,
+                                  },
+                                ]}
+                              >
+                                <View style={styles.ingredientSectionHeaderContent}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.ingredientSectionHeaderTitle,
+                                      { color: colors.textPrimary },
+                                    ]}
+                                  >
+                                    {section}
+                                  </Text>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[
+                                      styles.ingredientSectionHeaderMeta,
+                                      { color: colors.textMuted },
+                                    ]}
+                                  >
+                                    {ingredients.length}{' '}
+                                    {ingredients.length === 1
+                                      ? 'ingrediente'
+                                      : 'ingredientes'}
+                                  </Text>
+                                  <View
+                                    style={[
+                                      styles.ingredientSectionToggle,
+                                      {
+                                        backgroundColor: colors.surface,
+                                        borderColor: colors.border,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.ingredientSectionToggleText,
+                                        { color: colors.textSecondary },
+                                      ]}
+                                    >
+                                      {isExpanded ? '-' : '+'}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </TouchableOpacity>,
+                              ...(isExpanded
+                                ? ingredients.map((ingredient) => {
+                                    const isEditingIngredient =
+                                      ingredient.id === editingIngredientId;
 
-                      {sortedRecipeIngredients.length === 0 && (
+                                    return (
+                                      <EditableIngredientRow
+                                        colors={colors}
+                                        ingredient={ingredient}
+                                        isEditing={isEditingIngredient}
+                                        key={ingredient.id}
+                                        onEdit={editIngredient}
+                                        onRemove={removeIngredient}
+                                      />
+                                    );
+                                  })
+                                : []),
+                            ];
+                          })
+                        : sortedRecipeIngredients.map((ingredient) => {
+                            const isEditingIngredient =
+                              ingredient.id === editingIngredientId;
+
+                            return (
+                              <EditableIngredientRow
+                                colors={colors}
+                                ingredient={ingredient}
+                                isEditing={isEditingIngredient}
+                                key={ingredient.id}
+                                onEdit={editIngredient}
+                                onRemove={removeIngredient}
+                              />
+                            );
+                          }),
+                      sortedRecipeIngredients.length === 0 && (
                         <View
+                          key="empty-ingredients"
                           style={[
                             styles.detailEmptyState,
                             { borderColor: colors.border },
@@ -1131,9 +1439,10 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                             Los ingredientes se veran reflejados cuando los agregues.
                           </Text>
                         </View>
-                      )}
+                      ),
 
                       <View
+                        key="ingredient-form"
                         onLayout={(event) => {
                           ingredientFormOffsetY.current = event.nativeEvent.layout.y;
                         }}
@@ -1195,6 +1504,43 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                             </Text>
                           )}
                         </TouchableOpacity>
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={() => setIngredientSectionPickerIsVisible(true)}
+                          style={[
+                            styles.inventoryIngredientSelect,
+                            {
+                              backgroundColor: colors.fieldBackground,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <View style={styles.inlineSelectRow}>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.inventoryIngredientSelectText,
+                                styles.inlineSelectText,
+                                {
+                                  color: ingredientSection
+                                    ? colors.textPrimary
+                                    : colors.textMuted,
+                                },
+                              ]}
+                            >
+                              {ingredientSection || 'Seleccionar seccion'}
+                            </Text>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.inventoryIngredientSelectMeta,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              Opcional
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
                         <View style={styles.quantityRow}>
                           <TextInput
                             keyboardType="decimal-pad"
@@ -1213,7 +1559,10 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                           <View style={styles.unitListContainer}>
                             <TouchableOpacity
                               activeOpacity={0.75}
-                              onPress={() => setUnitPickerIsVisible(true)}
+                              onPress={() => {
+                                Keyboard.dismiss();
+                                setUnitPickerIsVisible(true);
+                              }}
                               style={[
                                 styles.unitSelectBox,
                                 {
@@ -1242,12 +1591,23 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                             </TouchableOpacity>
                           </View>
                         </View>
+                        {ingredientAlreadyExistsInSection && (
+                          <Text
+                            style={[
+                              styles.ingredientDuplicateWarning,
+                              { color: colors.danger },
+                            ]}
+                          >
+                            Este ingrediente ya fue agregado en esta seccion.
+                          </Text>
+                        )}
                         <TouchableOpacity
                           activeOpacity={0.75}
                           disabled={
                             isSavingIngredient ||
                             !selectedInventoryIngredient ||
-                            !ingredientQuantity.trim()
+                            !ingredientQuantity.trim() ||
+                            ingredientAlreadyExistsInSection
                           }
                           onPress={addIngredient}
                           style={[
@@ -1256,7 +1616,8 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                               backgroundColor:
                                 isSavingIngredient ||
                                 !selectedInventoryIngredient ||
-                                !ingredientQuantity.trim()
+                                !ingredientQuantity.trim() ||
+                                ingredientAlreadyExistsInSection
                                   ? colors.surfaceMuted
                                   : colors.primary,
                             },
@@ -1269,7 +1630,8 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                                 color:
                                   isSavingIngredient ||
                                   !selectedInventoryIngredient ||
-                                  !ingredientQuantity.trim()
+                                  !ingredientQuantity.trim() ||
+                                  ingredientAlreadyExistsInSection
                                     ? colors.inactiveText
                                     : colors.textInverse,
                               },
@@ -1302,8 +1664,8 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </>
-                  ) : (
+                    ]
+                  : (
                     <>
                       {(() => {
                         const sortedSteps = [...(selectedRecipe.steps || [])].sort(
@@ -1492,50 +1854,58 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                 <Text style={[styles.unitPopupTitle, { color: colors.textPrimary }]}>
                   Unidad de medida
                 </Text>
-                {ingredientUnits.map((unit) => {
-                  const isSelected = unit.key === ingredientUnit;
+                <ScrollView
+                  contentContainerStyle={styles.unitOptionsList}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                  style={styles.unitOptionsScroll}
+                >
+                  {ingredientUnits.map((unit) => {
+                    const isSelected = unit.key === ingredientUnit;
 
-                  return (
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      key={unit.key}
-                      onPress={() => {
-                        setIngredientUnit(unit.key);
-                        setUnitPickerIsVisible(false);
-                      }}
-                      style={[
-                        styles.unitOptionRow,
-                        {
-                          backgroundColor: isSelected
-                            ? colors.primaryMuted
-                            : colors.surface,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
+                    return (
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        key={unit.key}
+                        onPress={() => {
+                          setIngredientUnit(unit.key);
+                          setUnitPickerIsVisible(false);
+                        }}
                         style={[
-                          styles.unitOptionKey,
+                          styles.unitOptionRow,
+                          styles.sectionOptionRow,
                           {
-                            color: isSelected
-                              ? colors.primaryText
-                              : colors.textPrimary,
+                            backgroundColor: isSelected
+                              ? colors.primaryMuted
+                              : colors.surface,
+                            borderColor: isSelected ? colors.primary : colors.border,
                           },
                         ]}
                       >
-                        {unit.key}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.unitOptionDescription,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {unit.description}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.unitOptionKey,
+                            {
+                              color: isSelected
+                                ? colors.primaryText
+                                : colors.textPrimary,
+                            },
+                          ]}
+                        >
+                          {unit.key}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.unitOptionDescription,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {unit.description}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
             </View>
           )}
@@ -1646,6 +2016,138 @@ export default function RecipeBookScreen({ onOpenInventory }) {
                     Ir a inventario
                   </Text>
                 </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          {ingredientSectionPickerIsVisible && (
+            <View style={styles.unitPickerOverlay}>
+              <Pressable
+                onPress={() => setIngredientSectionPickerIsVisible(false)}
+                style={[
+                  styles.unitPickerBackdrop,
+                  { backgroundColor: colors.backdrop },
+                ]}
+              />
+              <View
+                style={[
+                  styles.unitPopupCard,
+                  {
+                    backgroundColor: colors.screenBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.unitPopupTitle, { color: colors.textPrimary }]}>
+                  Seccion del ingrediente
+                </Text>
+                <ScrollView
+                  contentContainerStyle={styles.sectionOptionsList}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                  style={styles.sectionOptionsScroll}
+                >
+                  {[
+                    {
+                      id: 'empty-section',
+                      name: '',
+                      normalizedName: '',
+                      recipeSectionId: null,
+                    },
+                    ...ingredientSectionOptions,
+                  ].map((section) => {
+                    const label = section.name || 'Sin seccion';
+                    const isSelected = ingredientSection === section.name;
+
+                    return (
+                      <TouchableOpacity
+                        activeOpacity={0.75}
+                        key={section.id}
+                        onPress={() => {
+                          setIngredientSection(section.name);
+                          setIngredientSectionPickerIsVisible(false);
+                        }}
+                        style={[
+                          styles.unitOptionRow,
+                          styles.sectionOptionRow,
+                          {
+                            backgroundColor: isSelected
+                              ? colors.primaryMuted
+                              : colors.surface,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.unitOptionDescription,
+                            styles.sectionOptionText,
+                            {
+                              color: isSelected
+                                ? colors.primaryText
+                                : colors.textPrimary,
+                            },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                        {!!section.name && (
+                          <TouchableOpacity
+                            accessibilityLabel={`Eliminar seccion ${section.name}`}
+                            activeOpacity={0.7}
+                            onPress={(event) => {
+                              event.stopPropagation();
+                              deleteIngredientSection(section);
+                            }}
+                            style={styles.sectionDeleteButton}
+                          >
+                            <TrashIcon color={colors.danger} />
+                          </TouchableOpacity>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.newSectionContainer}>
+                  <TextInput
+                    onChangeText={setNewIngredientSection}
+                    placeholder="Nueva seccion"
+                    placeholderTextColor={colors.textMuted}
+                    style={[
+                      styles.newSectionInput,
+                      {
+                        backgroundColor: colors.fieldBackground,
+                        color: colors.textPrimary,
+                      },
+                    ]}
+                    value={newIngredientSection}
+                  />
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    disabled={!newIngredientSection.trim()}
+                    onPress={addIngredientSection}
+                    style={[
+                      styles.newSectionButton,
+                      {
+                        backgroundColor: newIngredientSection.trim()
+                          ? colors.primary
+                          : colors.surfaceMuted,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.newSectionButtonText,
+                        {
+                          color: newIngredientSection.trim()
+                            ? colors.textInverse
+                            : colors.inactiveText,
+                        },
+                      ]}
+                    >
+                      Agregar
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
@@ -2142,6 +2644,31 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.semibold,
     marginBottom: 14,
   },
+  newSectionButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 44,
+    justifyContent: 'center',
+    minWidth: 88,
+    paddingHorizontal: 12,
+  },
+  newSectionButtonText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+  },
+  newSectionContainer: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  newSectionInput: {
+    borderRadius: 8,
+    flex: 1,
+    fontSize: typography.sizes.body,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
   ingredientAmount: {
     fontSize: typography.sizes.caption,
     lineHeight: 17,
@@ -2168,6 +2695,11 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.semibold,
   },
+  ingredientDuplicateWarning: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+    lineHeight: 16,
+  },
   ingredientInfo: {
     flex: 1,
     paddingRight: 10,
@@ -2187,6 +2719,71 @@ const styles = StyleSheet.create({
   },
   ingredientRowEditing: {
     borderWidth: 2,
+  },
+  inlineSelectRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  inlineSelectText: {
+    flex: 1,
+  },
+  ingredientSectionHeader: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    elevation: 4,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 8,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    shadowColor: '#000',
+    shadowOffset: { height: 1, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    width: '100%',
+    zIndex: 10,
+  },
+  ingredientSectionHeaderContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 8,
+    minHeight: 24,
+    width: '100%',
+  },
+  ingredientSectionToggle: {
+    alignItems: 'center',
+    borderRadius: 7,
+    borderWidth: 1,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  ingredientSectionToggleText: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.bold,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  ingredientSectionHeaderMeta: {
+    flexShrink: 0,
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+    lineHeight: 20,
+    textAlign: 'right',
+  },
+  ingredientSectionHeaderTitle: {
+    flex: 1,
+    flexShrink: 1,
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+    letterSpacing: 0.4,
+    lineHeight: 20,
   },
   editIngredientText: {
     fontSize: typography.sizes.caption,
@@ -2317,7 +2914,7 @@ const styles = StyleSheet.create({
   recipeDetailModal: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    maxHeight: '88%',
+    maxHeight: '94%',
     padding: 18,
     paddingTop: 0,
     width: '100%',
@@ -2553,8 +3150,35 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.bold,
     lineHeight: 22,
   },
+  sectionDeleteButton: {
+    alignItems: 'center',
+    height: 34,
+    justifyContent: 'center',
+    marginRight: -4,
+    width: 34,
+  },
+  sectionOptionRow: {
+    justifyContent: 'space-between',
+  },
+  sectionOptionText: {
+    flex: 1,
+  },
+  sectionOptionsList: {
+    gap: 8,
+    paddingRight: 2,
+  },
+  sectionOptionsScroll: {
+    maxHeight: 280,
+  },
   unitListContainer: {
     width: 126,
+  },
+  unitOptionsList: {
+    gap: 8,
+    paddingRight: 2,
+  },
+  unitOptionsScroll: {
+    maxHeight: 380,
   },
   unitOptionDescription: {
     flex: 1,
@@ -2604,20 +3228,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   unitSelectBox: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     justifyContent: 'center',
     minHeight: 48,
     paddingHorizontal: 12,
   },
   unitSelectDescription: {
+    flex: 1,
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.regular,
     lineHeight: 16,
+    textAlign: 'right',
   },
   unitSelectText: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+    minWidth: 34,
   },
 });

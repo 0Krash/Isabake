@@ -3,6 +3,9 @@ import { URL_Recipes, URL_Stores } from '@env';
 
 const recipesUrl =
   URL_Recipes || (URL_Stores ? URL_Stores.replace('/stores', '/recipes') : '');
+const recipeSectionsUrl = recipesUrl
+  ? recipesUrl.replace('/recipes', '/recipe-sections')
+  : '';
 
 const getAllRecipes = async () => {
   try {
@@ -44,10 +47,52 @@ const deleteRecipeById = async (recipeId) => {
   }
 };
 
+const getAllRecipeSections = async () => {
+  try {
+    const response = await axios.get(recipeSectionsUrl);
+    return response.data.data;
+  } catch (error) {
+    console.warn(
+      'Error al hacer la petición desde getAllRecipeSections:',
+      error
+    );
+    throw error;
+  }
+};
+
+const postRecipeSection = async (data) => {
+  try {
+    const response = await axios.post(recipeSectionsUrl, data);
+    return response.data;
+  } catch (error) {
+    console.warn('Error al hacer la petición desde postRecipeSection:', error);
+    throw error;
+  }
+};
+
+const deleteRecipeSectionById = async (recipeSectionId) => {
+  try {
+    const response = await axios.delete(
+      `${recipeSectionsUrl}/${recipeSectionId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.warn(
+      'Error al hacer la petición desde deleteRecipeSectionById:',
+      error
+    );
+    throw error;
+  }
+};
+
 export default {
   deleteRecipeById,
+  deleteRecipeSectionById,
   getAllRecipes,
+  getAllRecipeSections,
   postRecipe,
+  postRecipeSection,
   recipesUrl,
+  recipeSectionsUrl,
   updateRecipeById,
 };

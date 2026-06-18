@@ -28,6 +28,14 @@ jest.mock('../models/recipeModel', () => ({
   find: jest.fn(),
   findOne: jest.fn(),
   findOneAndUpdate: jest.fn(),
+  updateMany: jest.fn(),
+}));
+
+jest.mock('../models/recipeSectionModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
 }));
 
 jest.mock('../models/inventoryModel', () => ({
@@ -42,6 +50,7 @@ const app = require('../app');
 const Category = require('../models/categoryModel');
 const Inventory = require('../models/inventoryModel');
 const Recipe = require('../models/recipeModel');
+const RecipeSection = require('../models/recipeSectionModel');
 const Store = require('../models/storeModel');
 const Transaction = require('../models/transactionModel');
 
@@ -503,6 +512,101 @@ describe('TransBalance API', () => {
       expect(response.body).toEqual({
         status: 'failed',
         message: 'Receta no encontrada',
+      });
+    });
+  });
+
+  describe('recipe sections', () => {
+    test('returns all recipe sections', async () => {
+      const recipeSections = [
+        {
+          name: 'Masa',
+          normalizedName: 'masa',
+          recipeSectionId: 1,
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipeSections);
+      RecipeSection.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipe-sections');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipeSections,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, recipeSectionId: 1 });
+    });
+
+    test('creates a recipe section with next recipeSectionId', async () => {
+      const payload = { name: 'Betun' };
+      const createdRecipeSection = {
+        name: 'Betun',
+        normalizedName: 'betun',
+        recipeSectionId: 2,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeSectionId: 1 });
+      RecipeSection.findOne.mockImplementation((query) => {
+        if (query?.normalizedName) {
+          return Promise.resolve(null);
+        }
+
+        return { sort };
+      });
+      RecipeSection.create.mockResolvedValue(createdRecipeSection);
+
+      const response = await request(app)
+        .post('/api/v1/recipe-sections')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipeSection: createdRecipeSection,
+        },
+      });
+      expect(RecipeSection.create).toHaveBeenCalledWith({
+        name: 'Betun',
+        normalizedName: 'betun',
+        recipeSectionId: 2,
+      });
+    });
+
+    test('deletes a recipe section and clears it from recipe ingredients', async () => {
+      const recipeSection = {
+        name: 'Relleno',
+        normalizedName: 'relleno',
+        recipeSectionId: 3,
+      };
+      RecipeSection.findOne.mockResolvedValue(recipeSection);
+      Recipe.updateMany.mockResolvedValue({ modifiedCount: 2 });
+      RecipeSection.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipe-sections/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.updateMany).toHaveBeenCalledWith(
+        { 'ingredients.section': 'Relleno' },
+        { $set: { 'ingredients.$[ingredient].section': '' } },
+        { arrayFilters: [{ 'ingredient.section': 'Relleno' }] }
+      );
+      expect(RecipeSection.deleteOne).toHaveBeenCalledWith({
+        recipeSectionId: 3,
+      });
+    });
+
+    test('returns 404 when deleting a missing recipe section', async () => {
+      RecipeSection.findOne.mockResolvedValue(null);
+
+      const response = await request(app).delete('/api/v1/recipe-sections/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Seccion no encontrada',
       });
     });
   });
