@@ -400,6 +400,7 @@ describe('TransBalance API', () => {
         ingredients: [
           {
             ingredientId: 'ing-1',
+            inventoryId: 1,
             name: 'Chocolate',
             quantity: '250',
             unit: 'g',

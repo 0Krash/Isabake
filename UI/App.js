@@ -14,7 +14,7 @@ export default function App() {
 
   const renderScreen = () => {
     if (activeTab === 'recipes') {
-      return <RecipeBookScreen />;
+      return <RecipeBookScreen onOpenInventory={() => setActiveTab('inventory')} />;
     }
 
     if (activeTab === 'inventory') {

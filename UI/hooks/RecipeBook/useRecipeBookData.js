@@ -12,6 +12,10 @@ export const normalizeRecipe = (recipe) => ({
   id: `${recipe.recipeId || recipe.id || recipe._id}`,
   ingredients: (recipe.ingredients || []).map((ingredient) => ({
     id: `${ingredient.ingredientId || ingredient.id || ingredient._id}`,
+    inventoryId:
+      ingredient.inventoryId === null || ingredient.inventoryId === undefined
+        ? null
+        : Number(ingredient.inventoryId),
     name: ingredient.name,
     quantity: ingredient.quantity,
     unit: ingredient.unit,
@@ -30,6 +34,10 @@ export const toApiRecipe = (recipe) => ({
   cost: Number(String(recipe.cost || '0').replace(/[^0-9.]/g, '')) || 0,
   ingredients: (recipe.ingredients || []).map((ingredient) => ({
     ingredientId: `${ingredient.id}`,
+    inventoryId:
+      ingredient.inventoryId === null || ingredient.inventoryId === undefined
+        ? null
+        : Number(ingredient.inventoryId),
     name: ingredient.name,
     quantity: ingredient.quantity,
     unit: ingredient.unit,

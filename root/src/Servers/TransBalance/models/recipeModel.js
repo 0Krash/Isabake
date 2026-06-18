@@ -6,6 +6,10 @@ const ingredientSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    inventoryId: {
+      type: Number,
+      default: null,
+    },
     name: {
       type: String,
       required: true,
