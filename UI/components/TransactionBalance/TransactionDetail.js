@@ -157,22 +157,20 @@ const TransactionDetail = ({
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 5,
-    marginHorizontal: 15,
     marginBottom: 20,
   },
   transactionDetailContainer: {
     flex: 1,
-    borderRadius: 20,
-    marginVertical: 10,
+    marginTop: 10,
   },
   transactionDetailContent: {
-    paddingBottom: 8,
+    paddingBottom: 92,
+    paddingHorizontal: 15,
   },
   monthHeader: {
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.bold,
     marginVertical: 10,
-    marginLeft: 10,
   },
   footer: {
     alignItems: 'center',
