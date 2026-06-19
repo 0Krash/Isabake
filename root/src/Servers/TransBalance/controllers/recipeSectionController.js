@@ -3,7 +3,10 @@ const RecipeSection = require('../models/recipeSectionModel');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendFail, sendSuccess } = require('../utils/httpResponses');
 
-const normalizeSectionName = (name) => String(name || '').trim().toLowerCase();
+const normalizeSectionName = (name) =>
+  String(name || '')
+    .trim()
+    .toLowerCase();
 
 exports.getAllRecipeSections = asyncHandler(async (req, res) => {
   const recipeSections = await RecipeSection.find().sort({
@@ -22,7 +25,7 @@ exports.createRecipeSection = asyncHandler(async (req, res) => {
 
   if (!name) {
     return sendFail(res, {
-      message: 'La seccion es requerida',
+      message: 'La sección es requerida',
     });
   }
 
@@ -62,14 +65,14 @@ exports.deleteRecipeSectionById = asyncHandler(async (req, res) => {
   if (!recipeSection) {
     return sendFail(res, {
       statusCode: 404,
-      message: 'Seccion no encontrada',
+      message: 'Sección no encontrada',
     });
   }
 
   await Recipe.updateMany(
     { 'ingredients.section': recipeSection.name },
     { $set: { 'ingredients.$[ingredient].section': '' } },
-    { arrayFilters: [{ 'ingredient.section': recipeSection.name }] }
+    { arrayFilters: [{ 'ingredient.section': recipeSection.name }] },
   );
 
   await RecipeSection.deleteOne({ recipeSectionId });

@@ -76,7 +76,7 @@ describe('TransBalance API', () => {
       Transaction.countDocuments.mockResolvedValue(21);
 
       const response = await request(app).get(
-        '/api/v1/transactions?page=2&limit=20&transactionType=Ventas'
+        '/api/v1/transactions?page=2&limit=20&transactionType=Ventas',
       );
 
       expect(response.status).toBe(200);
@@ -140,9 +140,7 @@ describe('TransBalance API', () => {
       Transaction.create.mockRejectedValue(new Error('invalid payload'));
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      const response = await request(app)
-        .post('/api/v1/transactions')
-        .send({});
+      const response = await request(app).post('/api/v1/transactions').send({});
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
@@ -192,7 +190,7 @@ describe('TransBalance API', () => {
       Transaction.aggregate.mockResolvedValue(summary);
 
       const response = await request(app).get(
-        '/api/v1/transactions/totalAmountByCategory'
+        '/api/v1/transactions/totalAmountByCategory',
       );
 
       expect(response.status).toBe(200);
@@ -211,7 +209,7 @@ describe('TransBalance API', () => {
       Transaction.aggregate.mockResolvedValue(summary);
 
       const response = await request(app).get(
-        '/api/v1/transactions/totalAmountByDateCategory'
+        '/api/v1/transactions/totalAmountByDateCategory',
       );
 
       expect(response.status).toBe(200);
@@ -319,7 +317,9 @@ describe('TransBalance API', () => {
       };
       Store.findOneAndUpdate.mockResolvedValue(updatedStore);
 
-      const response = await request(app).patch('/api/v1/stores/3').send(payload);
+      const response = await request(app)
+        .patch('/api/v1/stores/3')
+        .send(payload);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -334,7 +334,7 @@ describe('TransBalance API', () => {
         {
           new: true,
           runValidators: true,
-        }
+        },
       );
     });
 
@@ -382,10 +382,10 @@ describe('TransBalance API', () => {
           recipeId: 1,
           name: 'Cheesecake',
           servings: 10,
-        cost: 128.4,
-        ingredients: [],
-        steps: [],
-      },
+          cost: 128.4,
+          ingredients: [],
+          steps: [],
+        },
       ];
       const sort = jest.fn().mockResolvedValue(recipes);
       Recipe.find.mockReturnValue({ sort });
@@ -460,7 +460,9 @@ describe('TransBalance API', () => {
       };
       Recipe.findOneAndUpdate.mockResolvedValue(updatedRecipe);
 
-      const response = await request(app).patch('/api/v1/recipes/1').send(payload);
+      const response = await request(app)
+        .patch('/api/v1/recipes/1')
+        .send(payload);
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -475,7 +477,7 @@ describe('TransBalance API', () => {
         {
           new: true,
           runValidators: true,
-        }
+        },
       );
     });
 
@@ -591,7 +593,7 @@ describe('TransBalance API', () => {
       expect(Recipe.updateMany).toHaveBeenCalledWith(
         { 'ingredients.section': 'Relleno' },
         { $set: { 'ingredients.$[ingredient].section': '' } },
-        { arrayFilters: [{ 'ingredient.section': 'Relleno' }] }
+        { arrayFilters: [{ 'ingredient.section': 'Relleno' }] },
       );
       expect(RecipeSection.deleteOne).toHaveBeenCalledWith({
         recipeSectionId: 3,
@@ -606,7 +608,7 @@ describe('TransBalance API', () => {
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
         status: 'failed',
-        message: 'Seccion no encontrada',
+        message: 'Sección no encontrada',
       });
     });
   });
@@ -667,7 +669,9 @@ describe('TransBalance API', () => {
       Inventory.findOne.mockReturnValue({ sort });
       Inventory.create.mockResolvedValue(createdInventoryItem);
 
-      const response = await request(app).post('/api/v1/inventory').send(payload);
+      const response = await request(app)
+        .post('/api/v1/inventory')
+        .send(payload);
 
       expect(response.status).toBe(201);
       expect(response.body).toEqual({
@@ -724,7 +728,7 @@ describe('TransBalance API', () => {
         {
           new: true,
           runValidators: true,
-        }
+        },
       );
     });
 

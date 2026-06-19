@@ -3,7 +3,6 @@ import {
   Modal,
   View,
   StyleSheet,
-  Image,
   Text,
   TouchableOpacity,
 } from 'react-native';
@@ -39,10 +38,6 @@ export default function DeleteTransactionModal({
     >
       <View style={[styles.backdrop, { backgroundColor: colors.softBackdrop }]}>
         <View style={[styles.modalView, { backgroundColor: colors.surface }]}>
-          <Image
-            source={require('../../../assets/images/delete.png')}
-            style={styles.image}
-          />
           <Text style={[styles.text, { color: colors.textPrimary }]}>
             Desea eliminar {transactionDetail.transactionType} de{' '}
             {transactionDetail.description}?
@@ -86,11 +81,6 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  image: {
-    width: 50,
-    height: 50,
-    marginBottom: 30,
   },
   text: {
     fontSize: typography.sizes.bodyLarge,
