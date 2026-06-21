@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { Keyboard, TouchableOpacity, StyleSheet, Text } from 'react-native';
 
 import TransactionAlertModal from '../TransactionAlertModal';
 import transactionService from '../../../../services/TransactionBalance/API/transactionService';
@@ -71,6 +71,7 @@ export default function InsertTransactionButton(props) {
           },
         ]}
         onPress={() => {
+          Keyboard.dismiss();
           postTransaction();
         }}
         disabled={!props.validationError}

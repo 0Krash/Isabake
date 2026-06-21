@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 
 import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
@@ -26,7 +26,10 @@ export default function CategoryInputComponent({ category, setCategory }) {
         <RNPickerSelect
           placeholder={{}}
           items={options}
-          onValueChange={setCategory}
+          onValueChange={(value) => {
+            setCategory(value);
+            Keyboard.dismiss();
+          }}
           value={category}
           style={{
             inputIOS: { color: colors.textPrimary },

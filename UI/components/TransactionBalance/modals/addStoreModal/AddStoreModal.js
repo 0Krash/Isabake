@@ -30,6 +30,45 @@ const emptyForm = {
 const getStoreValue = (store, key) => store?.[key] || store?.[key.toLowerCase()] || '';
 const SCREEN_HEIGHT = Dimensions.get('screen').height;
 
+const sortStoresAlphabetically = (stores) =>
+  [...stores].sort((storeA, storeB) => {
+    const nameA = getStoreValue(storeA, 'Alias') || getStoreValue(storeA, 'Name');
+    const nameB = getStoreValue(storeB, 'Alias') || getStoreValue(storeB, 'Name');
+
+    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+  });
+
+const StoreFormField = ({
+  autoCapitalize,
+  colors: fieldColors,
+  label,
+  onChangeText,
+  placeholder,
+  returnKeyType,
+  value,
+}) => (
+  <View style={styles.formField}>
+    <Text style={[styles.formLabel, { color: fieldColors.textMuted }]}>
+      {label}
+    </Text>
+    <TextInput
+      autoCapitalize={autoCapitalize}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={fieldColors.textMuted}
+      returnKeyType={returnKeyType}
+      style={[
+        styles.textInput,
+        {
+          backgroundColor: fieldColors.fieldBackground,
+          color: fieldColors.textPrimary,
+        },
+      ]}
+      value={value}
+    />
+  </View>
+);
+
 export default function AddStoreModal({
   AddStoreModalIsVisible,
   setAddStoreModalIsVisible,
@@ -61,7 +100,7 @@ export default function AddStoreModal({
     setIsLoadingStores(true);
 
     try {
-      setStores(await storeService.getAllStores());
+      setStores(sortStoresAlphabetically(await storeService.getAllStores()));
     } catch (error) {
       console.error('Error al obtener tiendas desde StoreManagerModal:', error);
     } finally {
@@ -306,8 +345,13 @@ export default function AddStoreModal({
     }
 
     return stores.map((store) => (
-      <View
+      <TouchableOpacity
+        activeOpacity={0.82}
         key={store.storeId}
+        onPress={() => {
+          Keyboard.dismiss();
+          handleEditStore(store);
+        }}
         style={[
           styles.storeCard,
           { backgroundColor: colors.surface, borderColor: colors.border },
@@ -322,9 +366,6 @@ export default function AddStoreModal({
               {getStoreValue(store, 'Alias')}
             </Text>
           </View>
-          <Text style={[styles.storeId, { color: colors.textMuted }]}>
-            #{store.storeId}
-          </Text>
         </View>
         <Text style={[styles.storeAddress, { color: colors.textSecondary }]}>
           {getStoreValue(store, 'Address')}
@@ -332,16 +373,11 @@ export default function AddStoreModal({
         <View style={styles.storeActions}>
           <TouchableOpacity
             activeOpacity={0.75}
-            onPress={() => handleEditStore(store)}
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>
-              Editar
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            onPress={() => handleDeleteStore(store)}
+            onPress={(event) => {
+              event.stopPropagation();
+              Keyboard.dismiss();
+              handleDeleteStore(store);
+            }}
             style={[styles.secondaryButton, { borderColor: colors.danger }]}
           >
             <Text style={[styles.secondaryButtonText, { color: colors.danger }]}>
@@ -349,7 +385,7 @@ export default function AddStoreModal({
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     ));
   };
 
@@ -369,9 +405,9 @@ export default function AddStoreModal({
       <StoreFormField
         autoCapitalize="characters"
         colors={colors}
-        label="Alias"
+        label="Alias visible"
         onChangeText={(value) => updateFormValue('Alias', value)}
-        placeholder="Alias corto"
+        placeholder="Nombre que se vera reflejado"
         returnKeyType="next"
         value={form.Alias}
       />
@@ -386,7 +422,10 @@ export default function AddStoreModal({
       <View style={styles.formActions}>
         <TouchableOpacity
           activeOpacity={0.75}
-          onPress={resetForm}
+          onPress={() => {
+            Keyboard.dismiss();
+            resetForm();
+          }}
           style={[styles.cancelButton, { borderColor: colors.border }]}
         >
           <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
@@ -396,7 +435,10 @@ export default function AddStoreModal({
         <TouchableOpacity
           activeOpacity={0.75}
           disabled={!isFormValid || isSavingStore}
-          onPress={handleSaveStore}
+          onPress={() => {
+            Keyboard.dismiss();
+            handleSaveStore();
+          }}
           style={[
             styles.saveButton,
             { backgroundColor: isFormValid ? colors.primary : colors.primaryMuted },
@@ -411,37 +453,6 @@ export default function AddStoreModal({
           )}
         </TouchableOpacity>
       </View>
-    </View>
-  );
-
-  const StoreFormField = ({
-    autoCapitalize,
-    colors: fieldColors,
-    label,
-    onChangeText,
-    placeholder,
-    returnKeyType,
-    value,
-  }) => (
-    <View style={styles.formField}>
-      <Text style={[styles.formLabel, { color: fieldColors.textMuted }]}>
-        {label}
-      </Text>
-      <TextInput
-        autoCapitalize={autoCapitalize}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={fieldColors.textMuted}
-        returnKeyType={returnKeyType}
-        style={[
-          styles.textInput,
-          {
-            backgroundColor: fieldColors.fieldBackground,
-            color: fieldColors.textPrimary,
-          },
-        ]}
-        value={value}
-      />
     </View>
   );
 
@@ -503,7 +514,10 @@ export default function AddStoreModal({
               {mode === 'list' && (
                 <TouchableOpacity
                   activeOpacity={0.75}
-                  onPress={handleCreateStore}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    handleCreateStore();
+                  }}
                   style={[styles.addButton, { backgroundColor: colors.primary }]}
                 >
                   <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
@@ -669,8 +683,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   storeActions: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
+    justifyContent: 'flex-end',
     marginTop: 12,
   },
   storeAddress: {

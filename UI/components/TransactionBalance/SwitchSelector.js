@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { Keyboard, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
@@ -24,6 +24,7 @@ export default function SwitchSelector({ onTabChange }) {
             },
           ]}
           onPress={() => {
+            Keyboard.dismiss();
             handleTabChange('Ventas');
           }}
         >
@@ -50,6 +51,7 @@ export default function SwitchSelector({ onTabChange }) {
             },
           ]}
           onPress={() => {
+            Keyboard.dismiss();
             handleTabChange('Gastos');
           }}
         >

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
@@ -63,7 +64,10 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
     <TouchableOpacity
       accessibilityLabel={isOpen ? 'Cerrar menu' : 'Abrir menu'}
       activeOpacity={0.75}
-      onPress={onPress}
+      onPress={() => {
+        Keyboard.dismiss();
+        onPress?.();
+      }}
       style={[styles.menuButton, { backgroundColor: colors.surface }]}
     >
       <MenuIcon color={colors.textPrimary} isOpen={isOpen} />
@@ -168,7 +172,10 @@ export default function TransactionMenu({
         >
           <Pressable
             accessibilityLabel="Cerrar menu"
-            onPress={onClose}
+            onPress={() => {
+              Keyboard.dismiss();
+              onClose();
+            }}
             style={styles.backdropPressable}
           />
         </Animated.View>
@@ -195,7 +202,10 @@ export default function TransactionMenu({
                 activeOpacity={item.onPress ? 0.75 : 1}
                 disabled={!item.onPress}
                 key={item.label}
-                onPress={item.onPress}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  item.onPress?.();
+                }}
                 style={[
                   styles.menuItem,
                   {

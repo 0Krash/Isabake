@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { Keyboard, StyleSheet, View, Text } from 'react-native';
 
 import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
@@ -60,7 +60,10 @@ const TransactionBalanceScreen = () => {
         </Text>
         <TransactionMenuButton
           isOpen={transactionMenuIsVisible}
-          onPress={() => setTransactionMenuIsVisible(true)}
+          onPress={() => {
+            Keyboard.dismiss();
+            setTransactionMenuIsVisible(true);
+          }}
         />
       </View>
       <Dashboard

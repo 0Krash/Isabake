@@ -18,6 +18,14 @@ const normalizeQuality = (quality) => {
   return qualityMap[String(quality || '').trim().toLowerCase()] || 3;
 };
 
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  return String(value || '').trim().toLowerCase() === 'true';
+};
+
 export const normalizeInventoryItem = (item) => ({
   category: item.category || '',
   id: `${item.inventoryId || item.id || item._id}`,
@@ -37,6 +45,9 @@ export const normalizeInventoryItem = (item) => ({
       lot.supplierId === null || lot.supplierId === undefined
         ? null
         : Number(lot.supplierId),
+    taxApplies: normalizeBoolean(lot.taxApplies),
+    taxRate:
+      lot.taxRate === null || lot.taxRate === undefined ? '' : `${lot.taxRate}`,
     unit: lot.unit || 'g',
   })),
   minimumStock: Number(item.minimumStock || 0),
@@ -53,7 +64,7 @@ export const toApiInventoryItem = (item) => ({
   lots: (item.lots || []).map((lot) => ({
     brand: lot.brand,
     cost: formatCostForApi(lot.cost),
-    expiryDate: lot.expiryDate,
+    expiryDate: lot.expiryDate || '',
     location: lot.location || '',
     lotId: `${lot.id}`,
     notes: lot.notes || '',
@@ -65,6 +76,8 @@ export const toApiInventoryItem = (item) => ({
       lot.supplierId === null || lot.supplierId === undefined
         ? null
         : Number(lot.supplierId),
+    taxApplies: normalizeBoolean(lot.taxApplies),
+    taxRate: Number(String(lot.taxRate || '0').replace(/[^0-9.]/g, '')) || 0,
     unit: lot.unit || 'g',
   })),
   minimumStock: Number(item.minimumStock || 0),

@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Keyboard,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -232,6 +233,7 @@ export default function TransactionDetailModal({
 
           <ScrollView
             contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
             onScroll={(event) => {
               scrollOffsetY.current = event.nativeEvent.contentOffset.y;
             }}
@@ -248,7 +250,10 @@ export default function TransactionDetailModal({
                 <DetailRow
                   colors={colors}
                   label="Tienda"
-                  onPress={() => setStorePopupIsVisible(true)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setStorePopupIsVisible(true);
+                  }}
                   value={storeAlias}
                 />
                 <DetailRow
@@ -283,7 +288,10 @@ export default function TransactionDetailModal({
               <StoreInfoRow colors={colors} label="Direccion" value={storeAddress} />
               <TouchableOpacity
                 activeOpacity={0.75}
-                onPress={() => setStorePopupIsVisible(false)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setStorePopupIsVisible(false);
+                }}
                 style={[styles.storePopupButton, { backgroundColor: colors.primary }]}
               >
                 <Text style={[styles.storePopupButtonText, { color: colors.textInverse }]}>

@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, Text, View } from 'react-native';
+import { Keyboard, StyleSheet, TouchableOpacity, Text, View } from 'react-native';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
@@ -11,6 +11,7 @@ export default function AddTransactionButton({
     <TouchableOpacity
       style={[styles.mainContainer, { backgroundColor: colors.primary }]}
       onPress={() => {
+        Keyboard.dismiss();
         setAddTransactionModalIsVisible(true);
       }}
     >

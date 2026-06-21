@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { Keyboard, StyleSheet, View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
 import { createStylesBase } from '../../../../constants/TransactionBalance/Styles';
@@ -50,6 +50,7 @@ export default function StoreInputComponent({
 
   const onSelectHandler = () => {
     setValidationErrorStore(true);
+    Keyboard.dismiss();
   };
 
   return (

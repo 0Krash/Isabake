@@ -14,7 +14,7 @@ const inventoryLotSchema = new mongoose.Schema(
     },
     expiryDate: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     location: {
@@ -63,6 +63,15 @@ const inventoryLotSchema = new mongoose.Schema(
     supplierId: {
       type: Number,
       default: null,
+    },
+    taxApplies: {
+      type: Boolean,
+      default: false,
+    },
+    taxRate: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     unit: {
       type: String,

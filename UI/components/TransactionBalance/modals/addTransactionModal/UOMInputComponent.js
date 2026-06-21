@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 
 import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
@@ -28,7 +28,10 @@ export default function UOMInputComponent({ unitValue, setUnitValue }) {
         <RNPickerSelect
           placeholder={{}}
           items={options}
-          onValueChange={setUnitValue}
+          onValueChange={(value) => {
+            setUnitValue(value);
+            Keyboard.dismiss();
+          }}
           value={unitValue}
           style={{
             inputIOS: { color: colors.textPrimary },

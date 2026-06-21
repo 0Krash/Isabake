@@ -18,10 +18,18 @@ const normalizeQuality = (quality) => {
   return qualityMap[String(quality || '').trim().toLowerCase()] || 3;
 };
 
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  return String(value || '').trim().toLowerCase() === 'true';
+};
+
 const sanitizeLotPayload = (lot, index) => ({
   brand: lot.brand,
   cost: Number(lot.cost || 0),
-  expiryDate: lot.expiryDate,
+  expiryDate: lot.expiryDate || '',
   location: lot.location || '',
   lotId: lot.lotId || lot.id || `lot-${Date.now()}-${index}`,
   notes: lot.notes || '',
@@ -33,6 +41,8 @@ const sanitizeLotPayload = (lot, index) => ({
     lot.supplierId === null || lot.supplierId === undefined
       ? null
       : Number(lot.supplierId),
+  taxApplies: normalizeBoolean(lot.taxApplies),
+  taxRate: Number(lot.taxRate || 0),
   unit: lot.unit || 'g',
 });
 

@@ -686,6 +686,8 @@ describe('TransBalance API', () => {
           {
             ...payload.lots[0],
             notes: '',
+            taxApplies: false,
+            taxRate: 0,
           },
         ],
         minimumStock: 0,
