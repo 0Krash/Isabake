@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "start": "expo start -c",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
+    "start": "node scripts/run-expo.js start -c",
+    "android": "node scripts/run-expo.js start --android",
+    "ios": "node scripts/run-expo.js start --ios",
+    "web": "node scripts/run-expo.js start --web",
     "test": "jest --runInBand"
   },
   "dependencies": {

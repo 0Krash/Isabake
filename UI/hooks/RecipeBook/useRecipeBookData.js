@@ -29,6 +29,7 @@ export const normalizeRecipe = (recipe) => ({
     id: `${step.stepId || step.id || step._id}`,
     order: Number(step.order || index + 1),
   })),
+  type: recipe.type || '',
 });
 
 export const toApiRecipe = (recipe) => ({
@@ -51,6 +52,7 @@ export const toApiRecipe = (recipe) => ({
     order: Number(step.order || index + 1),
     stepId: `${step.id}`,
   })),
+  type: recipe.type || '',
 });
 
 export default function useRecipeBookData() {

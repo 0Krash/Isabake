@@ -6,6 +6,7 @@ import { URL_Recipes } from '@env';
 jest.mock('axios');
 
 const URL_RecipeSections = URL_Recipes.replace('/recipes', '/recipe-sections');
+const URL_RecipeTypes = URL_Recipes.replace('/recipes', '/recipe-types');
 
 describe('recipeService', () => {
   beforeEach(() => {
@@ -132,6 +133,52 @@ describe('recipeService', () => {
       apiResponse
     );
     expect(axios.delete).toHaveBeenCalledWith(`${URL_RecipeSections}/3`);
+  });
+
+  test('getAllRecipeTypes returns types from response data payload', async () => {
+    const recipeTypes = [
+      {
+        name: 'Pastel',
+        recipeTypeId: 1,
+      },
+    ];
+    axios.get.mockResolvedValue({
+      data: {
+        data: recipeTypes,
+      },
+    });
+
+    await expect(recipeService.getAllRecipeTypes()).resolves.toBe(recipeTypes);
+    expect(axios.get).toHaveBeenCalledWith(URL_RecipeTypes);
+  });
+
+  test('postRecipeType sends payload and returns API response', async () => {
+    const payload = { name: 'Cupcake' };
+    const apiResponse = {
+      status: 'success',
+      data: {
+        recipeType: {
+          recipeTypeId: 2,
+          ...payload,
+        },
+      },
+    };
+    axios.post.mockResolvedValue({ data: apiResponse });
+
+    await expect(recipeService.postRecipeType(payload)).resolves.toBe(
+      apiResponse
+    );
+    expect(axios.post).toHaveBeenCalledWith(URL_RecipeTypes, payload);
+  });
+
+  test('deleteRecipeTypeById deletes a shared type by URL id', async () => {
+    const apiResponse = { status: 'success' };
+    axios.delete.mockResolvedValue({ data: apiResponse });
+
+    await expect(recipeService.deleteRecipeTypeById(3)).resolves.toBe(
+      apiResponse
+    );
+    expect(axios.delete).toHaveBeenCalledWith(`${URL_RecipeTypes}/3`);
   });
 
   test('propagates request errors', async () => {

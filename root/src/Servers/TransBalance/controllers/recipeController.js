@@ -8,6 +8,7 @@ const sanitizeRecipePayload = (payload) => ({
   name: payload.name,
   servings: Number(payload.servings || 1),
   steps: Array.isArray(payload.steps) ? payload.steps : [],
+  type: payload.type || '',
 });
 
 exports.getAllRecipes = asyncHandler(async (req, res) => {

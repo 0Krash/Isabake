@@ -48,6 +48,7 @@ export default function TransactionDetailModal({
     amount = '',
     category = {},
     description = '',
+    financials,
     itemQuantity = '',
     quantity = '',
     selectedDate = '',
@@ -245,6 +246,67 @@ export default function TransactionDetailModal({
               label="Fecha"
               value={DateFormatter.convertISOtoSelected(selectedDate)}
             />
+            {financials && (
+              <>
+                <Text style={[styles.financialTitle, { color: colors.textPrimary }]}>
+                  Conciliación de rentabilidad
+                </Text>
+                <DetailRow colors={colors} label="Receta" value={financials.recipeName} />
+                <DetailRow
+                  colors={colors}
+                  label="Porciones vendidas"
+                  value={`${financials.saleQuantity || quantity || 0}`}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Costo por porción"
+                  value={CurrencyFormatter.convertCentsToCurrency(financials.costPerPortion)}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Costo de elaboración"
+                  value={CurrencyFormatter.convertCentsToCurrency(financials.productionCost)}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Margen objetivo"
+                  value={`${Number(financials.targetMargin || 0).toFixed(1)}%`}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Precio sugerido por porción"
+                  value={CurrencyFormatter.convertCentsToCurrency(financials.suggestedUnitPrice)}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Total sugerido"
+                  value={CurrencyFormatter.convertCentsToCurrency(financials.suggestedTotal)}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Utilidad bruta"
+                  value={`${CurrencyFormatter.convertCentsToCurrency(financials.grossProfit)} · ${Number(financials.grossMargin || 0).toFixed(1)}%`}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Gastos adicionales"
+                  value={CurrencyFormatter.convertCentsToCurrency(financials.extraExpenses)}
+                />
+                <DetailRow
+                  colors={colors}
+                  label="Utilidad neta estimada"
+                  value={`${CurrencyFormatter.convertCentsToCurrency(financials.netProfit)} · ${Number(financials.netMargin || 0).toFixed(1)}%`}
+                />
+                {(financials.ingredients || []).map((ingredient, index) => (
+                  <DetailRow
+                    colors={colors}
+                    key={`${ingredient.inventoryId || ingredient.name}-${index}`}
+                    label={`Ingrediente · ${ingredient.name}`}
+                    value={`${ingredient.quantity} ${ingredient.unit} · ${CurrencyFormatter.convertCentsToCurrency(ingredient.cost)}`}
+                  />
+                ))}
+              </>
+            )}
             {(category.categoryId === '1' || category.categoryId === '2') && (
               <>
                 <DetailRow
@@ -359,6 +421,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
+  },
+  financialTitle: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.bold,
+    marginBottom: 8,
+    marginTop: 12,
   },
   categoryAccent: {
     borderRadius: 4,

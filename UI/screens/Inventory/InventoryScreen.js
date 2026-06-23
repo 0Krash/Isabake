@@ -1,7 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Animated,
+  BackHandler,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -95,7 +102,9 @@ const hasLotFormChanges = (lotForm) =>
 const allowedUnits = ['g', 'kg', 'ml', 'l', 'pza', 'cda', 'cdta'];
 
 const normalizeUnit = (unit) => {
-  const normalizedUnit = String(unit || 'g').trim().toLowerCase();
+  const normalizedUnit = String(unit || 'g')
+    .trim()
+    .toLowerCase();
   return allowedUnits.includes(normalizedUnit) ? normalizedUnit : 'g';
 };
 
@@ -223,15 +232,12 @@ const getIngredientSummary = (item) => {
     const daysUntilExpiry = getDaysUntilExpiry(lot.expiryDate);
     return daysUntilExpiry === null || daysUntilExpiry > 0;
   });
-  const totals = availableLots.reduce(
-    (result, lot) => {
-      const group = unitGroups[lot.unit] || lot.unit;
-      result[group] =
-        (result[group] || 0) + toBaseQuantity(lot.quantity, lot.unit);
-      return result;
-    },
-    {},
-  );
+  const totals = availableLots.reduce((result, lot) => {
+    const group = unitGroups[lot.unit] || lot.unit;
+    result[group] =
+      (result[group] || 0) + toBaseQuantity(lot.quantity, lot.unit);
+    return result;
+  }, {});
   const totalText =
     Object.entries(totals)
       .map(([group, quantity]) => formatQuantity(quantity, group))
@@ -240,7 +246,7 @@ const getIngredientSummary = (item) => {
   const nextExpiry = expiringLots.reduce(
     (nearest, lot) =>
       !nearest || lot.expiryDate < nearest.expiryDate ? lot : nearest,
-    null
+    null,
   );
 
   return {
@@ -331,7 +337,7 @@ function useBottomSheet(isVisible, onClose) {
         },
         onPanResponderTerminate: resetSwipePosition,
       }),
-    [closeBottomSheet, resetSwipePosition, sheetTranslateY]
+    [closeBottomSheet, resetSwipePosition, sheetTranslateY],
   );
 
   const handlePanResponder = useMemo(
@@ -358,7 +364,7 @@ function useBottomSheet(isVisible, onClose) {
         },
         onPanResponderTerminate: resetSwipePosition,
       }),
-    [closeBottomSheet, resetSwipePosition, sheetTranslateY]
+    [closeBottomSheet, resetSwipePosition, sheetTranslateY],
   );
 
   const handleScroll = useCallback((event) => {
@@ -385,15 +391,19 @@ export default function InventoryScreen() {
   } = useInventoryData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [deleteDialog, setDeleteDialog] = useState(null);
+  const [deleteIsProcessing, setDeleteIsProcessing] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [formIsVisible, setFormIsVisible] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
   const [inventoryForm, setInventoryForm] = useState(emptyInventoryForm);
+  const [storeRefreshKey, setStoreRefreshKey] = useState(0);
+  const keyboardIsVisibleRef = useRef(false);
 
   const selectedItem = useMemo(
     () => inventoryItems.find((item) => item.id === selectedItemId),
-    [inventoryItems, selectedItemId]
+    [inventoryItems, selectedItemId],
   );
 
   const filteredItems = useMemo(() => {
@@ -406,9 +416,55 @@ export default function InventoryScreen() {
     return inventoryItems.filter((item) =>
       `${item.name} ${item.category} ${item.storage}`
         .toLowerCase()
-        .includes(normalizedSearch)
+        .includes(normalizedSearch),
     );
   }, [inventoryItems, searchText]);
+
+  useEffect(() => {
+    const keyboardShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardIsVisibleRef.current = true;
+    });
+    const keyboardHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardIsVisibleRef.current = false;
+    });
+
+    return () => {
+      keyboardShowListener.remove();
+      keyboardHideListener.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        const canClearInventorySearch =
+          searchText.trim().length > 0 &&
+          !keyboardIsVisibleRef.current &&
+          !addStoreModalIsVisible &&
+          !formIsVisible &&
+          !menuIsVisible &&
+          !selectedItemId;
+
+        if (canClearInventorySearch) {
+          setSearchText('');
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => {
+      backSubscription.remove();
+    };
+  }, [
+    addStoreModalIsVisible,
+    formIsVisible,
+    menuIsVisible,
+    searchText,
+    selectedItemId,
+  ]);
 
   const handleOpenStoreManager = () => {
     setMenuIsVisible(false);
@@ -449,7 +505,9 @@ export default function InventoryScreen() {
       return;
     }
 
-    const currentItem = inventoryItems.find((item) => item.id === editingItemId);
+    const currentItem = inventoryItems.find(
+      (item) => item.id === editingItemId,
+    );
     const payload = {
       ...currentItem,
       ...inventoryForm,
@@ -462,15 +520,17 @@ export default function InventoryScreen() {
       if (currentItem) {
         const response = await inventoryService.updateInventoryItemById(
           currentItem.inventoryId,
-          toApiInventoryItem(payload)
+          toApiInventoryItem(payload),
         );
         const updatedItem = normalizeInventoryItem(response.data.inventoryItem);
         setInventoryItems((items) =>
-          items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+          items.map((item) =>
+            item.id === updatedItem.id ? updatedItem : item,
+          ),
         );
       } else {
         const response = await inventoryService.postInventoryItem(
-          toApiInventoryItem(payload)
+          toApiInventoryItem(payload),
         );
         const createdItem = normalizeInventoryItem(response.data.inventoryItem);
         setInventoryItems((items) => [createdItem, ...items]);
@@ -483,7 +543,7 @@ export default function InventoryScreen() {
       console.warn('Error al guardar ingrediente:', error);
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexion con el backend e intenta nuevamente.'
+        'Revisa la conexion con el backend e intenta nuevamente.',
       );
     }
   };
@@ -491,11 +551,11 @@ export default function InventoryScreen() {
   const persistInventoryItem = async (itemToUpdate) => {
     const response = await inventoryService.updateInventoryItemById(
       itemToUpdate.inventoryId,
-      toApiInventoryItem(itemToUpdate)
+      toApiInventoryItem(itemToUpdate),
     );
     const updatedItem = normalizeInventoryItem(response.data.inventoryItem);
     setInventoryItems((items) =>
-      items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+      items.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
     );
     setSelectedItemId(updatedItem.id);
     refreshInventory();
@@ -512,7 +572,7 @@ export default function InventoryScreen() {
     if (!brand || !quantity || !lotForm.supplier) {
       Alert.alert(
         'Datos incompletos',
-        'Agrega marca, cantidad y proveedor para el lote.'
+        'Agrega marca, cantidad y proveedor para el lote.',
       );
       return false;
     }
@@ -520,7 +580,7 @@ export default function InventoryScreen() {
     if (lotForm.expiryApplies && !lotForm.expiryDate) {
       Alert.alert(
         'Caducidad requerida',
-        'Selecciona la fecha de caducidad o indica que no aplica.'
+        'Selecciona la fecha de caducidad o indica que no aplica.',
       );
       return false;
     }
@@ -539,7 +599,7 @@ export default function InventoryScreen() {
     try {
       const nextLots = lotIdToUpdate
         ? selectedItem.lots.map((lot) =>
-            lot.id === lotIdToUpdate ? nextLot : lot
+            lot.id === lotIdToUpdate ? nextLot : lot,
           )
         : [...selectedItem.lots, nextLot];
 
@@ -552,7 +612,7 @@ export default function InventoryScreen() {
       console.warn('Error al guardar lote:', error);
       Alert.alert(
         'No se pudo guardar el lote',
-        'Revisa la conexion con el backend e intenta nuevamente.'
+        'Revisa la conexion con el backend e intenta nuevamente.',
       );
       return false;
     }
@@ -572,44 +632,66 @@ export default function InventoryScreen() {
       console.warn('Error al eliminar lote:', error);
       Alert.alert(
         'No se pudo eliminar el lote',
-        'Revisa la conexion con el backend e intenta nuevamente.'
+        'Revisa la conexion con el backend e intenta nuevamente.',
       );
     }
   };
 
+  const requestDeleteConfirmation = (dialog) => {
+    setDeleteDialog(dialog);
+  };
+
+  const closeDeleteDialog = () => {
+    if (!deleteIsProcessing) {
+      setDeleteDialog(null);
+    }
+  };
+
+  const confirmDeleteDialog = async () => {
+    if (!deleteDialog || deleteIsProcessing) {
+      return;
+    }
+
+    setDeleteIsProcessing(true);
+
+    try {
+      await deleteDialog.onConfirm();
+      setDeleteDialog(null);
+    } finally {
+      setDeleteIsProcessing(false);
+    }
+  };
+
   const confirmDeleteInventoryItem = (item) => {
-    Alert.alert(
-      'Eliminar ingrediente',
-      `Se eliminara ${item.name} y todos sus lotes del inventario.`,
-      [
-        { style: 'cancel', text: 'Cancelar' },
-        {
-          style: 'destructive',
-          text: 'Eliminar',
-          onPress: async () => {
-            try {
-              await inventoryService.deleteInventoryItemById(item.inventoryId);
-              setInventoryItems((items) =>
-                items.filter((currentItem) => currentItem.id !== item.id)
-              );
-              setSelectedItemId(null);
-              refreshInventory();
-            } catch (error) {
-              console.warn('Error al eliminar ingrediente:', error);
-              Alert.alert(
-                'No se pudo eliminar',
-                'Revisa la conexion con el backend e intenta nuevamente.'
-              );
-            }
-          },
-        },
-      ]
-    );
+    requestDeleteConfirmation({
+      confirmLabel: 'Eliminar',
+      message: `Se eliminara ${item.name} y todos sus lotes del inventario.`,
+      onConfirm: async () => {
+        try {
+          await inventoryService.deleteInventoryItemById(item.inventoryId);
+          setInventoryItems((items) =>
+            items.filter((currentItem) => currentItem.id !== item.id),
+          );
+          setSelectedItemId(null);
+          refreshInventory();
+        } catch (error) {
+          console.warn('Error al eliminar ingrediente:', error);
+          Alert.alert(
+            'No se pudo eliminar',
+            'Revisa la conexion con el backend e intenta nuevamente.',
+          );
+        }
+      },
+      title: 'Eliminar ingrediente',
+    });
   };
 
   return (
     <View
-      style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}
+      style={[
+        styles.mainContainer,
+        { backgroundColor: colors.screenBackground },
+      ]}
     >
       <View style={styles.headerContainer}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
@@ -645,9 +727,14 @@ export default function InventoryScreen() {
               Keyboard.dismiss();
               setSearchText('');
             }}
-            style={[styles.clearButton, { backgroundColor: colors.surfaceMuted }]}
+            style={[
+              styles.clearButton,
+              { backgroundColor: colors.surfaceMuted },
+            ]}
           >
-            <Text style={[styles.clearButtonText, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.clearButtonText, { color: colors.textSecondary }]}
+            >
               x
             </Text>
           </Pressable>
@@ -690,13 +777,25 @@ export default function InventoryScreen() {
                 </Text>
               </View>
               <View style={styles.ingredientInfo}>
-                <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>
+                <Text
+                  style={[styles.ingredientName, { color: colors.textPrimary }]}
+                >
                   {item.name}
                 </Text>
-                <Text style={[styles.ingredientMeta, { color: colors.textMuted }]}>
-                  {summary.totalText} · {item.lots.length} marcas/lotes
+                <Text
+                  style={[styles.ingredientMeta, { color: colors.textMuted }]}
+                >
+                  {item.lots.length} marcas/lotes
                 </Text>
               </View>
+              <Text
+                style={[
+                  styles.inventoryQuantity,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {summary.totalText}
+              </Text>
             </TouchableOpacity>
           );
         }}
@@ -723,7 +822,9 @@ export default function InventoryScreen() {
         }}
         style={[styles.addButton, { backgroundColor: colors.primary }]}
       >
-        <Text style={[styles.addButtonText, { color: colors.textInverse }]}>+</Text>
+        <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
+          +
+        </Text>
       </TouchableOpacity>
 
       <TransactionMenu
@@ -735,6 +836,9 @@ export default function InventoryScreen() {
       {addStoreModalIsVisible && (
         <AddStoreModal
           AddStoreModalIsVisible={addStoreModalIsVisible}
+          onStoresChanged={() =>
+            setStoreRefreshKey((currentKey) => currentKey + 1)
+          }
           setAddStoreModalIsVisible={setAddStoreModalIsVisible}
         />
       )}
@@ -744,11 +848,25 @@ export default function InventoryScreen() {
         inventoryItems={inventoryItems}
         item={selectedItem}
         onAddLot={addLotToSelectedItem}
-        onClose={() => setSelectedItemId(null)}
+        onClose={() => {
+          setSelectedItemId(null);
+        }}
         onDeleteItem={confirmDeleteInventoryItem}
-        onDeleteLot={removeLotFromSelectedItem}
+        onDeleteLot={(lotId) => {
+          const lot = selectedItem?.lots.find(
+            (currentLot) => currentLot.id === lotId,
+          );
+
+          requestDeleteConfirmation({
+            confirmLabel: 'Eliminar lote',
+            message: `Se eliminara el lote "${lot?.brand || 'sin marca'}" de ${selectedItem?.name}.`,
+            onConfirm: () => removeLotFromSelectedItem(lotId),
+            title: 'Eliminar lote',
+          });
+        }}
         onEditItem={openEditForm}
         onOpenStoreManager={handleOpenStoreManager}
+        storeRefreshKey={storeRefreshKey}
       />
 
       <InventoryFormModal
@@ -760,6 +878,99 @@ export default function InventoryScreen() {
         onSave={saveInventoryItem}
         title={editingItemId ? 'Editar ingrediente' : 'Nuevo ingrediente'}
       />
+      <Modal
+        animationType="fade"
+        onRequestClose={closeDeleteDialog}
+        transparent
+        visible={Boolean(deleteDialog)}
+      >
+        <View style={styles.deleteModalRoot}>
+          <Pressable
+            onPress={closeDeleteDialog}
+            style={[
+              styles.deleteModalBackdrop,
+              { backgroundColor: colors.backdrop },
+            ]}
+          />
+          <View
+            style={[
+              styles.deleteModalCard,
+              {
+                backgroundColor: colors.screenBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.deleteModalTitle, { color: colors.textPrimary }]}
+            >
+              {deleteDialog?.title}
+            </Text>
+            <Text
+              style={[styles.deleteModalMessage, { color: colors.textMuted }]}
+            >
+              {deleteDialog?.message}
+            </Text>
+            <Text
+              style={[styles.deleteModalMessage, { color: colors.textMuted }]}
+            >
+              ¿Estas seguro de eliminar?
+            </Text>
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={deleteIsProcessing}
+                onPress={closeDeleteDialog}
+                style={[
+                  styles.secondaryButton,
+                  styles.deleteModalButton,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.secondaryButtonText,
+                    { color: colors.textPrimary },
+                  ]}
+                >
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={deleteIsProcessing}
+                onPress={confirmDeleteDialog}
+                style={[
+                  styles.primaryButton,
+                  styles.deleteModalButton,
+                  {
+                    backgroundColor: deleteIsProcessing
+                      ? colors.surfaceMuted
+                      : colors.danger,
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.primaryButtonText,
+                    {
+                      color: deleteIsProcessing
+                        ? colors.inactiveText
+                        : colors.textInverse,
+                    },
+                  ]}
+                >
+                  {deleteIsProcessing
+                    ? 'Eliminando…'
+                    : deleteDialog?.confirmLabel || 'Eliminar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -774,6 +985,7 @@ const InventoryDetailModal = ({
   onDeleteLot,
   onEditItem,
   onOpenStoreManager,
+  storeRefreshKey,
 }) => {
   const [lotForm, setLotForm] = useState(emptyLotForm);
   const detailScrollRef = useRef(null);
@@ -789,16 +1001,21 @@ const InventoryDetailModal = ({
   const [editingLotId, setEditingLotId] = useState(null);
   const [isSavingLot, setIsSavingLot] = useState(false);
   const [focusedLotField, setFocusedLotField] = useState(null);
+  const [feedbackLotId, setFeedbackLotId] = useState(null);
+  const [lotFeedbackMessage, setLotFeedbackMessage] = useState('');
+  const lotCardPositions = useRef({});
+  const feedbackAnimationId = useRef(0);
   const isSavingLotRef = useRef(false);
+  const updateFeedbackOpacity = useRef(new Animated.Value(0)).current;
   const isVisible = Boolean(item);
   const detailSheet = useBottomSheet(isVisible, onClose);
   const lotCreationIsActive =
     !editingLotId && (Boolean(focusedLotField) || hasLotFormChanges(lotForm));
   const lotFormIsValid = Boolean(
     lotForm.brand.trim() &&
-      Number(lotForm.quantity || 0) &&
-      lotForm.supplier &&
-      (!lotForm.expiryApplies || lotForm.expiryDate),
+    Number(lotForm.quantity || 0) &&
+    lotForm.supplier &&
+    (!lotForm.expiryApplies || lotForm.expiryDate),
   );
 
   useEffect(() => {
@@ -811,16 +1028,22 @@ const InventoryDetailModal = ({
       isSavingLotRef.current = false;
       setIsSavingLot(false);
       setFocusedLotField(null);
+      setFeedbackLotId(null);
+      setLotFeedbackMessage('');
+      feedbackAnimationId.current += 1;
+      updateFeedbackOpacity.setValue(0);
+      lotCardPositions.current = {};
     }
-  }, [isVisible]);
+  }, [isVisible, updateFeedbackOpacity]);
 
   useEffect(
     () => () => {
+      updateFeedbackOpacity.stopAnimation();
       if (lotFormScrollTimer.current) {
         clearTimeout(lotFormScrollTimer.current);
       }
     },
-    []
+    [updateFeedbackOpacity],
   );
 
   const loadStores = useCallback(async () => {
@@ -845,8 +1068,12 @@ const InventoryDetailModal = ({
   }, [isVisible, loadStores, storesAreLoading, storesHaveLoaded]);
 
   useEffect(() => {
-    if (storePickerIsVisible) loadStores();
-  }, [loadStores, storePickerIsVisible]);
+    if (!isVisible || storeRefreshKey === 0) {
+      return;
+    }
+
+    loadStores();
+  }, [isVisible, loadStores, storeRefreshKey]);
 
   useEffect(() => {
     if (!storesHaveLoaded || storesAreLoading || !lotForm.supplierId) {
@@ -871,7 +1098,8 @@ const InventoryDetailModal = ({
     }
 
     const nextSupplier =
-      getStoreValue(selectedStore, 'Alias') || getStoreValue(selectedStore, 'Name');
+      getStoreValue(selectedStore, 'Alias') ||
+      getStoreValue(selectedStore, 'Name');
 
     if (nextSupplier && nextSupplier !== lotForm.supplier) {
       setLotForm((current) =>
@@ -891,11 +1119,43 @@ const InventoryDetailModal = ({
     storesHaveLoaded,
   ]);
 
-  if (!item) {
-    return null;
-  }
+  const showLotFeedback = (lotId, message) => {
+    const animationId = feedbackAnimationId.current + 1;
+    feedbackAnimationId.current = animationId;
+    setFeedbackLotId(lotId);
+    setLotFeedbackMessage(message);
+    updateFeedbackOpacity.stopAnimation();
+    updateFeedbackOpacity.setValue(1);
 
-  const summary = getIngredientSummary(item);
+    const scrollToLot = () => {
+      detailScrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max((lotCardPositions.current[lotId] || 0) - 10, 0),
+      });
+    };
+
+    requestAnimationFrame(scrollToLot);
+    setTimeout(scrollToLot, 120);
+    setTimeout(scrollToLot, 280);
+
+    Animated.sequence([
+      Animated.delay(650),
+      Animated.timing(updateFeedbackOpacity, {
+        duration: 420,
+        toValue: 0,
+        useNativeDriver: false,
+      }),
+    ]).start(() => {
+      if (feedbackAnimationId.current !== animationId) {
+        return;
+      }
+
+      setFeedbackLotId((currentLotId) =>
+        currentLotId === lotId ? null : currentLotId,
+      );
+      setLotFeedbackMessage('');
+    });
+  };
 
   const handleAddLot = async () => {
     if (isSavingLotRef.current || !lotFormIsValid) {
@@ -904,6 +1164,7 @@ const InventoryDetailModal = ({
 
     isSavingLotRef.current = true;
     setIsSavingLot(true);
+    const lotIdBeingUpdated = editingLotId;
     const savedLot = await onAddLot(lotForm, editingLotId);
 
     if (savedLot) {
@@ -911,6 +1172,11 @@ const InventoryDetailModal = ({
       setEditingLotId(null);
       setFocusedLotField(null);
 
+      if (lotIdBeingUpdated) {
+        showLotFeedback(lotIdBeingUpdated, 'Lote actualizado');
+      } else {
+        showLotFeedback(savedLot.id, 'Lote agregado');
+      }
     }
 
     isSavingLotRef.current = false;
@@ -918,9 +1184,14 @@ const InventoryDetailModal = ({
   };
 
   const cancelLotEdition = () => {
+    const lotIdBeingEdited = editingLotId;
     setEditingLotId(null);
     setLotForm(emptyLotForm);
     setFocusedLotField(null);
+
+    if (lotIdBeingEdited) {
+      showLotFeedback(lotIdBeingEdited, 'Edicion cancelada');
+    }
   };
 
   const cancelLotCreation = () => {
@@ -958,10 +1229,16 @@ const InventoryDetailModal = ({
 
     if (duplicatedLot) {
       setLotForm(emptyLotForm);
+      showLotFeedback(duplicatedLot.id, 'Lote agregado');
     }
   };
 
   const editLot = (lot) => {
+    feedbackAnimationId.current += 1;
+    setFeedbackLotId(null);
+    setLotFeedbackMessage('');
+    updateFeedbackOpacity.stopAnimation();
+    updateFeedbackOpacity.setValue(0);
     setEditingLotId(lot.id);
     setLotForm({
       ...emptyLotForm,
@@ -978,6 +1255,12 @@ const InventoryDetailModal = ({
       });
     });
   };
+
+  if (!item) {
+    return null;
+  }
+
+  const summary = getIngredientSummary(item);
 
   const scrollToLotFormStart = () => {
     const scrollToTitle = (animated = true) => {
@@ -1019,14 +1302,18 @@ const InventoryDetailModal = ({
         const daysUntilExpiry = getDaysUntilExpiry(lot.expiryDate);
         const isExpired = daysUntilExpiry !== null && daysUntilExpiry <= 0;
         const isEditingLot = editingLotId === lot.id;
+        const hasFeedback = feedbackLotId === lot.id;
         const lotCostText = `$${Number(
-          String(lot.cost || '0').replace(/[^0-9.]/g, '') || 0
+          String(lot.cost || '0').replace(/[^0-9.]/g, '') || 0,
         ).toFixed(2)}`;
 
         return (
           <TouchableOpacity
             activeOpacity={0.82}
             key={lot.id}
+            onLayout={(event) => {
+              lotCardPositions.current[lot.id] = event.nativeEvent.layout.y;
+            }}
             onPress={() => {
               if (!isEditingLot) {
                 editLot(lot);
@@ -1035,12 +1322,26 @@ const InventoryDetailModal = ({
             style={[
               styles.lotCard,
               {
-                backgroundColor: isExpired ? colors.dangerSurface : colors.surface,
+                backgroundColor: isExpired
+                  ? colors.dangerSurface
+                  : colors.surface,
                 borderColor: isEditingLot ? colors.primary : colors.border,
               },
               isEditingLot && styles.lotCardEditing,
             ]}
           >
+            {hasFeedback && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.lotFeedbackBorder,
+                  {
+                    borderColor: colors.primary,
+                    opacity: updateFeedbackOpacity,
+                  },
+                ]}
+              />
+            )}
             <View style={styles.lotHeader}>
               <View style={styles.lotInfo}>
                 <Text style={[styles.lotBrand, { color: colors.textPrimary }]}>
@@ -1094,6 +1395,23 @@ const InventoryDetailModal = ({
                   Actualmente en edicion
                 </Text>
               </View>
+            ) : hasFeedback ? (
+              <Animated.View
+                style={[
+                  styles.successIndicator,
+                  { backgroundColor: colors.primaryMuted },
+                  { opacity: updateFeedbackOpacity },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.successIndicatorText,
+                    { color: colors.primaryText },
+                  ]}
+                >
+                  {lotFeedbackMessage}
+                </Text>
+              </Animated.View>
             ) : (
               <View style={styles.lotActionRow}>
                 <TouchableOpacity
@@ -1102,7 +1420,10 @@ const InventoryDetailModal = ({
                     event.stopPropagation();
                     duplicateLot(lot);
                   }}
-                  style={[styles.inlineActionButton, { borderColor: colors.border }]}
+                  style={[
+                    styles.inlineActionButton,
+                    { borderColor: colors.border },
+                  ]}
                 >
                   <Text
                     style={[
@@ -1124,7 +1445,9 @@ const InventoryDetailModal = ({
                     { borderColor: colors.danger },
                   ]}
                 >
-                  <Text style={[styles.dangerButtonText, { color: colors.danger }]}>
+                  <Text
+                    style={[styles.dangerButtonText, { color: colors.danger }]}
+                  >
                     Eliminar
                   </Text>
                 </TouchableOpacity>
@@ -1167,8 +1490,13 @@ const InventoryDetailModal = ({
           ]}
           {...detailSheet.sheetPanHandlers}
         >
-          <View style={styles.dragHandleArea} {...detailSheet.handlePanHandlers}>
-            <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
+          <View
+            style={styles.dragHandleArea}
+            {...detailSheet.handlePanHandlers}
+          >
+            <View
+              style={[styles.dragHandle, { backgroundColor: colors.border }]}
+            />
           </View>
           <View style={styles.detailHeader}>
             <View
@@ -1212,8 +1540,11 @@ const InventoryDetailModal = ({
                   <Edit3Icon color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.detailSubtitle, { color: colors.textMuted }]}>
-                {item.category || 'Sin categoria'} · {item.storage || 'Sin ubicacion'}
+              <Text
+                style={[styles.detailSubtitle, { color: colors.textMuted }]}
+              >
+                {item.category || 'Sin categoria'} ·{' '}
+                {item.storage || 'Sin ubicacion'}
               </Text>
             </View>
           </View>
@@ -1232,7 +1563,11 @@ const InventoryDetailModal = ({
                 { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
-              <InfoBlock colors={colors} label="Total" value={summary.totalText} />
+              <InfoBlock
+                colors={colors}
+                label="Total"
+                value={summary.totalText}
+              />
               <InfoBlock
                 colors={colors}
                 label="Marcas y lotes"
@@ -1415,7 +1750,7 @@ const InventoryDetailModal = ({
                   rate={lotForm.taxRate}
                 />
               </View>
-                <StoreSelector
+              <StoreSelector
                 colors={colors}
                 isFocused={focusedLotField === 'supplier'}
                 onPress={() => {
@@ -1468,7 +1803,10 @@ const InventoryDetailModal = ({
                       Keyboard.dismiss();
                       cancelLotEdition();
                     }}
-                    style={[styles.secondaryButton, { borderColor: colors.border }]}
+                    style={[
+                      styles.secondaryButton,
+                      { borderColor: colors.border },
+                    ]}
                   >
                     <Text
                       style={[
@@ -1483,7 +1821,10 @@ const InventoryDetailModal = ({
                   <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={cancelLotCreation}
-                    style={[styles.secondaryButton, { borderColor: colors.border }]}
+                    style={[
+                      styles.secondaryButton,
+                      { borderColor: colors.border },
+                    ]}
                   >
                     <Text
                       style={[
@@ -1504,7 +1845,10 @@ const InventoryDetailModal = ({
                 Keyboard.dismiss();
                 onDeleteItem(item);
               }}
-              style={[styles.deleteIngredientButton, { borderColor: colors.danger }]}
+              style={[
+                styles.deleteIngredientButton,
+                { borderColor: colors.danger },
+              ]}
             >
               <Text style={[styles.dangerButtonText, { color: colors.danger }]}>
                 Eliminar ingrediente
@@ -1583,7 +1927,9 @@ const UnitSelector = ({ colors, isFocused, onPress, value }) => (
 
 const StoreSelector = ({ colors, isFocused, onPress, value }) => (
   <View style={styles.formField}>
-    <Text style={[styles.formLabel, { color: colors.textMuted }]}>Proveedor</Text>
+    <Text style={[styles.formLabel, { color: colors.textMuted }]}>
+      Proveedor
+    </Text>
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
@@ -1751,7 +2097,9 @@ const ExpirySelector = ({
   onShowPicker,
 }) => (
   <View style={styles.formField}>
-    <Text style={[styles.formLabel, { color: colors.textMuted }]}>Caducidad</Text>
+    <Text style={[styles.formLabel, { color: colors.textMuted }]}>
+      Caducidad
+    </Text>
     <View
       style={[
         styles.taxSelector,
@@ -1778,14 +2126,18 @@ const ExpirySelector = ({
             style={[
               styles.taxOption,
               {
-                backgroundColor: isSelected ? colors.primaryMuted : 'transparent',
+                backgroundColor: isSelected
+                  ? colors.primaryMuted
+                  : 'transparent',
               },
             ]}
           >
             <Text
               style={[
                 styles.taxOptionText,
-                { color: isSelected ? colors.primaryText : colors.textSecondary },
+                {
+                  color: isSelected ? colors.primaryText : colors.textSecondary,
+                },
               ]}
             >
               {option.label}
@@ -1812,7 +2164,9 @@ const ExpirySelector = ({
             { color: expiryDate ? colors.textPrimary : colors.textMuted },
           ]}
         >
-          {expiryDate ? inventoryDateToSelected(expiryDate) : 'Seleccionar fecha'}
+          {expiryDate
+            ? inventoryDateToSelected(expiryDate)
+            : 'Seleccionar fecha'}
         </Text>
       </TouchableOpacity>
     )}
@@ -1875,14 +2229,18 @@ const TaxSelector = ({
             style={[
               styles.taxOption,
               {
-                backgroundColor: isSelected ? colors.primaryMuted : 'transparent',
+                backgroundColor: isSelected
+                  ? colors.primaryMuted
+                  : 'transparent',
               },
             ]}
           >
             <Text
               style={[
                 styles.taxOptionText,
-                { color: isSelected ? colors.primaryText : colors.textSecondary },
+                {
+                  color: isSelected ? colors.primaryText : colors.textSecondary,
+                },
               ]}
             >
               {option.label}
@@ -1926,24 +2284,24 @@ const CenteredPickerShell = ({ children, colors, isVisible, onClose }) => {
       visible={isVisible}
     >
       <View style={styles.centeredPickerOverlay}>
-      <Pressable
-        onPress={onClose}
-        style={[
-          styles.centeredPickerBackdrop,
-          { backgroundColor: colors.backdrop },
-        ]}
-      />
-      <View
-        style={[
-          styles.centeredPickerCard,
-          {
-            backgroundColor: colors.screenBackground,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {children}
-      </View>
+        <Pressable
+          onPress={onClose}
+          style={[
+            styles.centeredPickerBackdrop,
+            { backgroundColor: colors.backdrop },
+          ]}
+        />
+        <View
+          style={[
+            styles.centeredPickerCard,
+            {
+              backgroundColor: colors.screenBackground,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          {children}
+        </View>
       </View>
     </Modal>
   );
@@ -1974,7 +2332,9 @@ const UnitPickerModal = ({
           style={[
             styles.pickerOptionRow,
             {
-              backgroundColor: isSelected ? colors.primaryMuted : colors.surface,
+              backgroundColor: isSelected
+                ? colors.primaryMuted
+                : colors.surface,
               borderColor: isSelected ? colors.primary : colors.border,
             },
           ]}
@@ -1988,7 +2348,10 @@ const UnitPickerModal = ({
             {unit.key}
           </Text>
           <Text
-            style={[styles.pickerOptionDescription, { color: colors.textSecondary }]}
+            style={[
+              styles.pickerOptionDescription,
+              { color: colors.textSecondary },
+            ]}
           >
             {unit.description}
           </Text>
@@ -2037,7 +2400,11 @@ const StorePickerModal = ({
   }, [isVisible]);
 
   return (
-    <CenteredPickerShell colors={colors} isVisible={isVisible} onClose={onClose}>
+    <CenteredPickerShell
+      colors={colors}
+      isVisible={isVisible}
+      onClose={onClose}
+    >
       <Text style={[styles.pickerTitle, { color: colors.textPrimary }]}>
         Seleccionar proveedor
       </Text>
@@ -2098,7 +2465,9 @@ const StorePickerModal = ({
                         backgroundColor: isSelected
                           ? colors.primaryMuted
                           : colors.surface,
-                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderColor: isSelected
+                          ? colors.primary
+                          : colors.border,
                       },
                     ]}
                   >
@@ -2138,7 +2507,12 @@ const StorePickerModal = ({
             }}
             style={[styles.storeManagerButton, { borderColor: colors.border }]}
           >
-            <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.secondaryButtonText,
+                { color: colors.textPrimary },
+              ]}
+            >
               Ir al administrador de tiendas
             </Text>
           </TouchableOpacity>
@@ -2203,10 +2577,17 @@ const InventoryFormModal = ({
             ]}
             {...formSheet.sheetPanHandlers}
           >
-            <View style={styles.dragHandleArea} {...formSheet.handlePanHandlers}>
-              <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
+            <View
+              style={styles.dragHandleArea}
+              {...formSheet.handlePanHandlers}
+            >
+              <View
+                style={[styles.dragHandle, { backgroundColor: colors.border }]}
+              />
             </View>
-            <Text style={[styles.formModalTitle, { color: colors.textPrimary }]}>
+            <Text
+              style={[styles.formModalTitle, { color: colors.textPrimary }]}
+            >
               {title}
             </Text>
             <ScrollView
@@ -2260,7 +2641,12 @@ const InventoryFormModal = ({
                 }}
                 style={[styles.secondaryButton, { borderColor: colors.border }]}
               >
-                <Text style={[styles.secondaryButtonText, { color: colors.textPrimary }]}>
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    { color: colors.textPrimary },
+                  ]}
+                >
                   Cancelar
                 </Text>
               </TouchableOpacity>
@@ -2339,7 +2725,9 @@ const FormInput = ({
 const InfoBlock = ({ colors, label, style, value }) => (
   <View style={[styles.infoBlock, style]}>
     <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{label}</Text>
-    <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{value}</Text>
+    <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+      {value}
+    </Text>
   </View>
 );
 
@@ -2500,6 +2888,44 @@ const styles = StyleSheet.create({
     marginTop: 18,
     minHeight: 46,
   },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  deleteModalButton: {
+    flex: 1,
+    minHeight: 48,
+    paddingHorizontal: 8,
+  },
+  deleteModalBackdrop: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  deleteModalCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    marginHorizontal: 18,
+    padding: 18,
+    width: '90%',
+  },
+  deleteModalMessage: {
+    fontSize: typography.sizes.label,
+    lineHeight: 19,
+    marginTop: 8,
+  },
+  deleteModalRoot: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  deleteModalTitle: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.bold,
+  },
   editIngredientIconButton: {
     alignItems: 'center',
     borderRadius: 8,
@@ -2581,6 +3007,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   editingIndicatorText: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+  },
+  successIndicator: {
+    alignItems: 'center',
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 12,
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  successIndicatorText: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
   },
@@ -2747,6 +3185,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  inventoryQuantity: {
+    flexShrink: 0,
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.bold,
+    marginLeft: 10,
+    maxWidth: 118,
+    textAlign: 'right',
+  },
   inventoryList: {
     paddingBottom: 92,
     paddingHorizontal: 15,
@@ -2775,6 +3221,15 @@ const styles = StyleSheet.create({
   },
   lotCardEditing: {
     borderWidth: 2,
+  },
+  lotFeedbackBorder: {
+    borderRadius: 8,
+    borderWidth: 2,
+    bottom: -1,
+    left: -1,
+    position: 'absolute',
+    right: -1,
+    top: -1,
   },
   lotDetails: {
     flexDirection: 'row',

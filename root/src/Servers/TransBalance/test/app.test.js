@@ -38,6 +38,13 @@ jest.mock('../models/recipeSectionModel', () => ({
   findOne: jest.fn(),
 }));
 
+jest.mock('../models/recipeTypeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+}));
+
 jest.mock('../models/inventoryModel', () => ({
   create: jest.fn(),
   deleteOne: jest.fn(),
@@ -51,6 +58,7 @@ const Category = require('../models/categoryModel');
 const Inventory = require('../models/inventoryModel');
 const Recipe = require('../models/recipeModel');
 const RecipeSection = require('../models/recipeSectionModel');
+const RecipeType = require('../models/recipeTypeModel');
 const Store = require('../models/storeModel');
 const Transaction = require('../models/transactionModel');
 
@@ -113,6 +121,16 @@ describe('TransBalance API', () => {
       const payload = {
         transactionType: 'Gastos',
         description: 'Harina',
+        financials: {
+          grossMargin: 40,
+          grossProfit: 1000,
+          netMargin: 32,
+          netProfit: 800,
+          productionCost: 1500,
+          recipeId: 1,
+          recipeName: 'Pastel',
+          saleTotal: 2500,
+        },
         amount: 2500,
         quantity: '1',
       };
@@ -422,6 +440,7 @@ describe('TransBalance API', () => {
             stepId: 'step-1',
           },
         ],
+        type: 'Pastel',
       };
       const createdRecipe = {
         recipeId: 2,
@@ -453,6 +472,7 @@ describe('TransBalance API', () => {
         cost: 120,
         ingredients: [],
         steps: [],
+        type: 'Pastel',
       };
       const updatedRecipe = {
         recipeId: 1,
@@ -609,6 +629,100 @@ describe('TransBalance API', () => {
       expect(response.body).toEqual({
         status: 'failed',
         message: 'Sección no encontrada',
+      });
+    });
+  });
+
+  describe('recipe types', () => {
+    test('returns all recipe types', async () => {
+      const recipeTypes = [
+        {
+          name: 'Pastel',
+          normalizedName: 'pastel',
+          recipeTypeId: 1,
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipeTypes);
+      RecipeType.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipe-types');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipeTypes,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, recipeTypeId: 1 });
+    });
+
+    test('creates a recipe type with next recipeTypeId', async () => {
+      const payload = { name: 'Cupcake' };
+      const createdRecipeType = {
+        name: 'Cupcake',
+        normalizedName: 'cupcake',
+        recipeTypeId: 2,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeTypeId: 1 });
+      RecipeType.findOne.mockImplementation((query) => {
+        if (query?.normalizedName) {
+          return Promise.resolve(null);
+        }
+
+        return { sort };
+      });
+      RecipeType.create.mockResolvedValue(createdRecipeType);
+
+      const response = await request(app)
+        .post('/api/v1/recipe-types')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipeType: createdRecipeType,
+        },
+      });
+      expect(RecipeType.create).toHaveBeenCalledWith({
+        name: 'Cupcake',
+        normalizedName: 'cupcake',
+        recipeTypeId: 2,
+      });
+    });
+
+    test('deletes a recipe type and clears it from recipes', async () => {
+      const recipeType = {
+        name: 'Pan',
+        normalizedName: 'pan',
+        recipeTypeId: 3,
+      };
+      RecipeType.findOne.mockResolvedValue(recipeType);
+      Recipe.updateMany.mockResolvedValue({ modifiedCount: 2 });
+      RecipeType.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipe-types/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.updateMany).toHaveBeenCalledWith(
+        { type: 'Pan' },
+        { $set: { type: '' } },
+      );
+      expect(RecipeType.deleteOne).toHaveBeenCalledWith({
+        recipeTypeId: 3,
+      });
+    });
+
+    test('returns 404 when deleting a missing recipe type', async () => {
+      RecipeType.findOne.mockResolvedValue(null);
+
+      const response = await request(app).delete('/api/v1/recipe-types/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tipo de receta no encontrado',
       });
     });
   });

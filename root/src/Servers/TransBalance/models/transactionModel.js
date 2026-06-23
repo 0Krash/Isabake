@@ -15,6 +15,39 @@ function getTransactionId() {
   return `${year}${month}${day}${hours}${minutes}${seconds}${milliseconds}`;
 }
 
+const financialIngredientSchema = new mongoose.Schema(
+  {
+    cost: { type: Number, default: 0 },
+    inventoryId: { type: Number, default: null },
+    name: { type: String, default: '' },
+    quantity: { type: String, default: '' },
+    unit: { type: String, default: '' },
+  },
+  { _id: false },
+);
+
+const financialSchema = new mongoose.Schema(
+  {
+    costPerPortion: { type: Number, default: 0 },
+    extraExpenses: { type: Number, default: 0 },
+    grossMargin: { type: Number, default: 0 },
+    grossProfit: { type: Number, default: 0 },
+    ingredients: { type: [financialIngredientSchema], default: [] },
+    netMargin: { type: Number, default: 0 },
+    netProfit: { type: Number, default: 0 },
+    productionCost: { type: Number, default: 0 },
+    recipeId: { type: Number, default: null },
+    recipeName: { type: String, default: '' },
+    recipeServings: { type: Number, default: 1 },
+    saleQuantity: { type: Number, default: 0 },
+    saleTotal: { type: Number, default: 0 },
+    suggestedTotal: { type: Number, default: 0 },
+    suggestedUnitPrice: { type: Number, default: 0 },
+    targetMargin: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const transactionSchema = new mongoose.Schema({
   transactionId: {
     type: String,
@@ -77,6 +110,10 @@ const transactionSchema = new mongoose.Schema({
   },
   itemQuantity: {
     type: String,
+  },
+  financials: {
+    type: financialSchema,
+    default: undefined,
   },
 });
 

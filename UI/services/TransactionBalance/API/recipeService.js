@@ -6,6 +6,9 @@ const recipesUrl =
 const recipeSectionsUrl = recipesUrl
   ? recipesUrl.replace('/recipes', '/recipe-sections')
   : '';
+const recipeTypesUrl = recipesUrl
+  ? recipesUrl.replace('/recipes', '/recipe-types')
+  : '';
 
 const getAllRecipes = async () => {
   try {
@@ -85,14 +88,48 @@ const deleteRecipeSectionById = async (recipeSectionId) => {
   }
 };
 
+const getAllRecipeTypes = async () => {
+  try {
+    const response = await axios.get(recipeTypesUrl);
+    return response.data.data;
+  } catch (error) {
+    console.warn('Error al hacer la petición desde getAllRecipeTypes:', error);
+    throw error;
+  }
+};
+
+const postRecipeType = async (data) => {
+  try {
+    const response = await axios.post(recipeTypesUrl, data);
+    return response.data;
+  } catch (error) {
+    console.warn('Error al hacer la petición desde postRecipeType:', error);
+    throw error;
+  }
+};
+
+const deleteRecipeTypeById = async (recipeTypeId) => {
+  try {
+    const response = await axios.delete(`${recipeTypesUrl}/${recipeTypeId}`);
+    return response.data;
+  } catch (error) {
+    console.warn('Error al hacer la petición desde deleteRecipeTypeById:', error);
+    throw error;
+  }
+};
+
 export default {
   deleteRecipeById,
   deleteRecipeSectionById,
+  deleteRecipeTypeById,
   getAllRecipes,
   getAllRecipeSections,
+  getAllRecipeTypes,
   postRecipe,
   postRecipeSection,
+  postRecipeType,
   recipesUrl,
   recipeSectionsUrl,
+  recipeTypesUrl,
   updateRecipeById,
 };

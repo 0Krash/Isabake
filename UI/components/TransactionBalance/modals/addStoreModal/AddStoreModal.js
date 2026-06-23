@@ -71,6 +71,7 @@ const StoreFormField = ({
 
 export default function AddStoreModal({
   AddStoreModalIsVisible,
+  onStoresChanged,
   setAddStoreModalIsVisible,
 }) {
   const { colors } = useTransactionBalanceTheme();
@@ -286,6 +287,7 @@ export default function AddStoreModal({
       }
 
       await fetchStores();
+      onStoresChanged?.();
       resetForm();
     } catch (error) {
       console.error('Error al guardar tienda desde StoreManagerModal:', error);
@@ -305,6 +307,7 @@ export default function AddStoreModal({
             try {
               await storeService.deleteStoreById(store.storeId);
               await fetchStores();
+              onStoresChanged?.();
             } catch (error) {
               console.error(
                 'Error al eliminar tienda desde StoreManagerModal:',
