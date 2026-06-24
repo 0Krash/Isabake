@@ -47,23 +47,23 @@ const number = (value) =>
 
 const ingredientRoundingModes = [
   {
-    description: '987g → 987g',
+    description: 'sin ajustar',
     label: 'Exacto',
     value: 'exact',
   },
   {
     description: '987.5g → 988g',
-    label: 'Cierre 1',
+    label: 'Entero',
     value: 'minimum',
   },
   {
     description: '987g → 990g',
-    label: 'Cierre 2',
+    label: 'Práctico',
     value: 'soft',
   },
   {
-    description: '987g → 1Kg',
-    label: 'Cierre 3',
+    description: '987g → 1000g',
+    label: 'Cerrado',
     value: 'wide',
   },
 ];
@@ -196,6 +196,11 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
     () =>
       cost.ingredients
         .map((ingredient) => {
+          const exactIngredient = scaleIngredientQuantity(
+            ingredient,
+            ingredientScale,
+            'exact',
+          );
           const scaledIngredient = scaleIngredientQuantity(
             ingredient,
             ingredientScale,
@@ -216,6 +221,13 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
           return {
             ...ingredient,
             cost: roundedBaseQuantity * costPerBaseUnit,
+            hasRoundedQuantity:
+              ingredientRoundingMode !== 'exact' &&
+              (`${exactIngredient.quantity}` !==
+                `${scaledIngredient.quantity}` ||
+                exactIngredient.unit !== scaledIngredient.unit),
+            originalQuantity: exactIngredient.quantity,
+            originalUnit: exactIngredient.unit,
             quantity: scaledIngredient.quantity,
             unit: scaledIngredient.unit,
           };
@@ -346,14 +358,16 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
             Ingredientes
           </Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            {cost.ingredients.length} registrados
+            {isSticky
+              ? `${money(productionCost)} · ${selectedRoundingMode.label}`
+              : `${cost.ingredients.length} registrados`}
           </Text>
         </View>
         <Text style={[styles.sectionToggle, { color: colors.primaryText }]}>
           {showIngredients ? 'Ocultar −' : 'Mostrar +'}
         </Text>
       </TouchableOpacity>
-      {showIngredients && (
+      {showIngredients && !isSticky && (
         <View style={styles.roundingControls}>
           <View style={styles.roundingHeaderRow}>
             <View style={styles.rowCopy}>
@@ -361,13 +375,13 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
                 Redondeo de cantidades
               </Text>
               <Text
-                style={[
-                  styles.roundingSelected,
-                  { color: colors.textPrimary },
-                ]}
+                style={[styles.roundingSelected, { color: colors.textPrimary }]}
               >
                 {selectedRoundingMode.label} ·{' '}
                 {selectedRoundingMode.description}
+              </Text>
+              <Text style={[styles.hint, { color: colors.textMuted }]}>
+                Actualiza cantidades, costos y precio sugerido.
               </Text>
             </View>
             <TouchableOpacity
@@ -411,7 +425,9 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
                         backgroundColor: isSelected
                           ? colors.primaryMuted
                           : colors.surface,
-                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderColor: isSelected
+                          ? colors.primary
+                          : colors.border,
                       },
                     ]}
                   >
@@ -530,308 +546,413 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
           }
           scrollEventThrottle={16}
         >
-        <View style={[styles.summary, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>
-            Costo por porción
-          </Text>
-          <Text style={[styles.amount, { color: colors.textPrimary }]}>
-            {isLoadingInventory ? 'Calculando…' : money(roundedPortionCost)}
-          </Text>
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {money(productionCost)} para esta venta · {saleQuantity || 0}{' '}
-            porciones
-          </Text>
-          <Text style={[styles.scaleNote, { color: colors.textMuted }]}>
-            Ingredientes y costos ajustados proporcionalmente para{' '}
-            {saleQuantity || 0} de {recipeServings} porciones.
-          </Text>
-        </View>
-
-        {renderIngredientsHeader()}
-        {showIngredients &&
-          groupedIngredients.map((group) => (
-            <View key={group.section} style={styles.ingredientGroup}>
-              <View
-                style={[
-                  styles.ingredientGroupHeader,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.groupTitle, { color: colors.textPrimary }]}
-                >
-                  {group.section}
-                </Text>
-                <Text style={[styles.rowCost, { color: colors.textPrimary }]}>
-                  {money(group.total)}
-                </Text>
-              </View>
-              {group.ingredients.map((ingredient) => (
-                <TouchableOpacity
-                  activeOpacity={0.82}
-                  key={ingredient.id}
-                  onPress={() => setSelectedIngredient(ingredient)}
-                  style={[styles.row, { borderBottomColor: colors.border }]}
-                >
-                  <View style={styles.rowCopy}>
-                    <Text
-                      style={[styles.rowTitle, { color: colors.textPrimary }]}
-                    >
-                      {ingredient.name}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {ingredient.quantity} {ingredient.unit}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.rowCost,
-                      {
-                        color: ingredient.hasCost
-                          ? colors.textPrimary
-                          : colors.danger,
-                      },
-                    ]}
-                  >
-                    {ingredient.hasCost ? money(ingredient.cost) : 'Sin costo'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
-
-        {recipe.steps?.length > 0 && (
-          <>
-            <TouchableOpacity
-              onPress={() => setShowPreparation((current) => !current)}
-              style={[
-                styles.sectionHeader,
-                { borderBottomColor: colors.border },
-              ]}
-            >
-              <View>
-                <Text
-                  style={[styles.sectionTitle, { color: colors.textPrimary }]}
-                >
-                  Preparación
-                </Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>
-                  {recipe.steps.length} pasos
-                </Text>
-              </View>
-              <Text
-                style={[styles.sectionToggle, { color: colors.primaryText }]}
-              >
-                {showPreparation ? 'Ocultar −' : 'Mostrar +'}
-              </Text>
-            </TouchableOpacity>
-            {showPreparation &&
-              [...recipe.steps]
-                .sort((a, b) => a.order - b.order)
-                .map((step, index) => (
-                  <Text
-                    key={step.id}
-                    style={[styles.step, { color: colors.textSecondary }]}
-                  >
-                    {index + 1}. {step.description}
-                  </Text>
-                ))}
-          </>
-        )}
-
-        <View
-          onLayout={(event) => setSaleFormY(event.nativeEvent.layout.y)}
-          style={[
-            styles.sale,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.saleTitle, { color: colors.textPrimary }]}>
-            Rentabilidad de la venta
-          </Text>
-          <View style={styles.formRow}>
-            <View style={styles.formField}>
-              <Text style={[styles.label, { color: colors.textMuted }]}>
-                Porciones
-              </Text>
-              <TextInput
-                keyboardType="number-pad"
-                onChangeText={(value) =>
-                  setQuantity(value.replace(/[^0-9]/g, ''))
-                }
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: colors.fieldBackground,
-                    borderColor: colors.border,
-                    color: colors.textPrimary,
-                  },
-                ]}
-                value={quantity}
-              />
-            </View>
-            <View style={styles.formField}>
-              <Text style={[styles.label, { color: colors.textMuted }]}>
-                Margen objetivo %
-              </Text>
-              <TextInput
-                keyboardType="decimal-pad"
-                onChangeText={setTargetMargin}
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: colors.fieldBackground,
-                    borderColor: colors.border,
-                    color: colors.textPrimary,
-                  },
-                ]}
-                value={targetMargin}
-              />
-            </View>
-          </View>
-          <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Define el precio sugerido; 60% significa conservar $60 de cada $100
-            antes de otros gastos.
-          </Text>
-
-          <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
-            Gastos adicionales
-          </Text>
-          <TextInput
-            keyboardType="decimal-pad"
-            onChangeText={setExtraExpenses}
-            placeholder="Empaque, comisión, envío…"
-            placeholderTextColor={colors.textMuted}
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.fieldBackground,
-                borderColor: colors.border,
-                color: colors.textPrimary,
-              },
-            ]}
-            value={extraExpenses}
-          />
-
-          <View style={styles.totalHeader}>
-            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
-              Total de venta
+          <View style={[styles.summary, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.label, { color: colors.textMuted }]}>
+              {saleTotal === null ? 'Total sugerido' : 'Total de venta'}
             </Text>
-            {saleTotal !== null && (
-              <TouchableOpacity onPress={() => setSaleTotal(null)}>
-                <Text style={[styles.resetText, { color: colors.primaryText }]}>
-                  Usar sugerido
+            <Text style={[styles.amount, { color: colors.textPrimary }]}>
+              {isLoadingInventory ? 'Calculando…' : money(amount)}
+            </Text>
+            <View style={styles.summaryMetrics}>
+              <View style={styles.summaryMetric}>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Utilidad neta
                 </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <TextInput
-            keyboardType="decimal-pad"
-            onChangeText={setSaleTotal}
-            style={[
-              styles.totalInput,
-              {
-                backgroundColor: colors.fieldBackground,
-                borderColor: colors.primary,
-                color: colors.textPrimary,
-              },
-            ]}
-            value={saleTotal === null ? suggestedTotal.toFixed(2) : saleTotal}
-          />
-          <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Puedes modificar este monto; utilidad y márgenes se recalculan
-            inmediatamente.
-          </Text>
-
-          <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>
-            Resultado
-          </Text>
-          <View style={[styles.metrics, { borderColor: colors.border }]}>
-            {[
-              [
-                'Costo de elaboración',
-                money(productionCost),
-                'Ingredientes consumidos',
-              ],
-              [
-                'Precio sugerido por porción',
-                money(suggestedUnitPrice),
-                `${normalizedTargetMargin.toFixed(1)}% de margen objetivo`,
-              ],
-              [
-                'Total sugerido',
-                money(suggestedTotal),
-                `${saleQuantity} porciones`,
-              ],
-              [
-                'Utilidad bruta',
-                money(grossProfit),
-                `${grossMargin.toFixed(1)}% de margen bruto`,
-              ],
-              [
-                'Utilidad neta estimada',
-                money(netProfit),
-                `${netMargin.toFixed(1)}% de margen neto`,
-              ],
-            ].map(([label, value, description], index) => (
-              <View
-                key={label}
-                style={[
-                  styles.metricRow,
-                  index === 4 && { backgroundColor: colors.primaryMuted },
-                ]}
-              >
-                <View style={styles.rowCopy}>
-                  <Text
-                    style={[styles.metricLabel, { color: colors.textPrimary }]}
-                  >
-                    {label}
-                  </Text>
-                  <Text style={[styles.hint, { color: colors.textMuted }]}>
-                    {description}
-                  </Text>
-                </View>
                 <Text
+                  style={[styles.summaryValue, { color: colors.textPrimary }]}
+                >
+                  {money(netProfit)}
+                </Text>
+              </View>
+              <View style={styles.summaryMetric}>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Costo elaboración
+                </Text>
+                <Text
+                  style={[styles.summaryValue, { color: colors.textPrimary }]}
+                >
+                  {money(productionCost)}
+                </Text>
+              </View>
+              <View style={styles.summaryMetric}>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Margen neto
+                </Text>
+                <Text
+                  style={[styles.summaryValue, { color: colors.textPrimary }]}
+                >
+                  {netMargin.toFixed(1)}%
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.scaleNote, { color: colors.textMuted }]}>
+              Costos ajustados para {saleQuantity || 0} de {recipeServings}{' '}
+              porciones con redondeo {selectedRoundingMode.label.toLowerCase()}.
+            </Text>
+          </View>
+
+          {renderIngredientsHeader()}
+          {showIngredients &&
+            groupedIngredients.map((group) => (
+              <View key={group.section} style={styles.ingredientGroup}>
+                <View
                   style={[
-                    styles.metricValue,
+                    styles.ingredientGroupHeader,
                     {
-                      color: value.startsWith('-')
-                        ? colors.danger
-                        : colors.textPrimary,
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
                     },
                   ]}
                 >
-                  {value}
-                </Text>
+                  <Text
+                    style={[styles.groupTitle, { color: colors.textPrimary }]}
+                  >
+                    {group.section}
+                  </Text>
+                  <Text style={[styles.rowCost, { color: colors.textPrimary }]}>
+                    {money(group.total)}
+                  </Text>
+                </View>
+                {group.ingredients.map((ingredient) => (
+                  <TouchableOpacity
+                    activeOpacity={0.82}
+                    key={ingredient.id}
+                    onPress={() => setSelectedIngredient(ingredient)}
+                    style={[styles.row, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={styles.rowCopy}>
+                      <Text
+                        style={[styles.rowTitle, { color: colors.textPrimary }]}
+                      >
+                        {ingredient.name}
+                      </Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
+                        {ingredient.quantity} {ingredient.unit}
+                      </Text>
+                      {ingredient.hasRoundedQuantity && (
+                        <Text
+                          style={[
+                            styles.roundingChange,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Exacto: {ingredient.originalQuantity}{' '}
+                          {ingredient.originalUnit} → redondeado
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.rowCost,
+                        {
+                          color: ingredient.hasCost
+                            ? colors.textPrimary
+                            : colors.danger,
+                        },
+                      ]}
+                    >
+                      {ingredient.hasCost
+                        ? money(ingredient.cost)
+                        : 'Sin costo'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             ))}
-          </View>
-          {cost.missingCost && !isLoadingInventory && (
-            <Text style={[styles.warning, { color: colors.danger }]}>
-              Agrega costo y existencia a todos los ingredientes para vender.
-            </Text>
+
+          {recipe.steps?.length > 0 && (
+            <>
+              <TouchableOpacity
+                onPress={() => setShowPreparation((current) => !current)}
+                style={[
+                  styles.sectionHeader,
+                  { borderBottomColor: colors.border },
+                ]}
+              >
+                <View>
+                  <Text
+                    style={[styles.sectionTitle, { color: colors.textPrimary }]}
+                  >
+                    Preparación
+                  </Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    {recipe.steps.length} pasos
+                  </Text>
+                </View>
+                <Text
+                  style={[styles.sectionToggle, { color: colors.primaryText }]}
+                >
+                  {showPreparation ? 'Ocultar −' : 'Mostrar +'}
+                </Text>
+              </TouchableOpacity>
+              {showPreparation &&
+                [...recipe.steps]
+                  .sort((a, b) => a.order - b.order)
+                  .map((step, index) => (
+                    <Text
+                      key={step.id}
+                      style={[styles.step, { color: colors.textSecondary }]}
+                    >
+                      {index + 1}. {step.description}
+                    </Text>
+                  ))}
+            </>
           )}
-          <TouchableOpacity
-            disabled={!canSell}
-            onPress={createSale}
+
+          <View
+            onLayout={(event) => setSaleFormY(event.nativeEvent.layout.y)}
             style={[
-              styles.sellButton,
-              {
-                backgroundColor: canSell ? colors.primary : colors.primaryMuted,
-              },
+              styles.sale,
+              { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
-            <Text style={[styles.sellText, { color: colors.textInverse }]}>
-              {isSaving ? 'Registrando…' : 'Registrar venta'}
+            <Text style={[styles.saleTitle, { color: colors.textPrimary }]}>
+              Rentabilidad de la venta
             </Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.formRow}>
+              <View style={styles.formField}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  Porciones
+                </Text>
+                <TextInput
+                  keyboardType="number-pad"
+                  onChangeText={(value) =>
+                    setQuantity(value.replace(/[^0-9]/g, ''))
+                  }
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                  value={quantity}
+                />
+              </View>
+              <View style={styles.formField}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  Margen objetivo %
+                </Text>
+                <TextInput
+                  keyboardType="decimal-pad"
+                  onChangeText={setTargetMargin}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                  value={targetMargin}
+                />
+              </View>
+            </View>
+            <Text style={[styles.hint, { color: colors.textMuted }]}>
+              Define el precio sugerido; 60% significa conservar $60 de cada
+              $100 antes de otros gastos.
+            </Text>
+
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+              Gastos adicionales
+            </Text>
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setExtraExpenses}
+              placeholder="Empaque, comisión, envío…"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.fieldBackground,
+                  borderColor: colors.border,
+                  color: colors.textPrimary,
+                },
+              ]}
+              value={extraExpenses}
+            />
+
+            <View style={styles.totalHeader}>
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                Total de venta
+              </Text>
+              {saleTotal !== null && (
+                <TouchableOpacity onPress={() => setSaleTotal(null)}>
+                  <Text
+                    style={[styles.resetText, { color: colors.primaryText }]}
+                  >
+                    Restaurar sugerido
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TextInput
+              keyboardType="decimal-pad"
+              onChangeText={setSaleTotal}
+              style={[
+                styles.totalInput,
+                {
+                  backgroundColor: colors.fieldBackground,
+                  borderColor: colors.primary,
+                  color: colors.textPrimary,
+                },
+              ]}
+              value={saleTotal === null ? suggestedTotal.toFixed(2) : saleTotal}
+            />
+            <Text style={[styles.hint, { color: colors.textMuted }]}>
+              {saleTotal === null
+                ? 'Usando precio sugerido. Puedes modificarlo si vendiste a otro monto.'
+                : 'Precio editado manualmente; utilidad y márgenes se recalculan inmediatamente.'}
+            </Text>
+
+            <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>
+              Resultado
+            </Text>
+            <View style={styles.metricSections}>
+              {[
+                [
+                  'Resultado',
+                  [
+                    [
+                      'Utilidad neta estimada',
+                      money(netProfit),
+                      `${netMargin.toFixed(1)}% de margen neto`,
+                      true,
+                    ],
+                    [
+                      'Utilidad bruta',
+                      money(grossProfit),
+                      `${grossMargin.toFixed(1)}% de margen bruto`,
+                    ],
+                  ],
+                ],
+                [
+                  'Precio',
+                  [
+                    [
+                      'Total sugerido',
+                      money(suggestedTotal),
+                      `${saleQuantity} porciones`,
+                    ],
+                    [
+                      'Precio sugerido por porción',
+                      money(suggestedUnitPrice),
+                      `${normalizedTargetMargin.toFixed(1)}% de margen objetivo`,
+                    ],
+                  ],
+                ],
+                [
+                  'Costos',
+                  [
+                    [
+                      'Costo de elaboración',
+                      money(productionCost),
+                      'Ingredientes consumidos',
+                    ],
+                    [
+                      'Gastos adicionales',
+                      money(normalizedExtraExpenses),
+                      'Empaque, comisión, envío…',
+                    ],
+                  ],
+                ],
+              ].map(([sectionTitle, rows]) => (
+                <View
+                  key={sectionTitle}
+                  style={[styles.metrics, { borderColor: colors.border }]}
+                >
+                  <Text
+                    style={[
+                      styles.metricSectionTitle,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    {sectionTitle}
+                  </Text>
+                  {rows.map(([label, value, description, isHighlighted]) => (
+                    <View
+                      key={label}
+                      style={[
+                        styles.metricRow,
+                        isHighlighted && {
+                          backgroundColor: colors.primaryMuted,
+                        },
+                      ]}
+                    >
+                      <View style={styles.rowCopy}>
+                        <Text
+                          style={[
+                            styles.metricLabel,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                        <Text
+                          style={[styles.hint, { color: colors.textMuted }]}
+                        >
+                          {description}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.metricValue,
+                          {
+                            color: value.startsWith('-')
+                              ? colors.danger
+                              : colors.textPrimary,
+                          },
+                        ]}
+                      >
+                        {value}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+            {cost.missingCost && !isLoadingInventory && (
+              <Text style={[styles.warning, { color: colors.danger }]}>
+                Agrega costo y existencia a todos los ingredientes para vender.
+              </Text>
+            )}
+          </View>
         </ScrollView>
         {shouldShowStickyIngredientsHeader &&
           renderIngredientsHeader({ isSticky: true })}
+      </View>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.rowCopy}>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {saleTotal === null ? 'Total sugerido' : 'Total de venta'}
+          </Text>
+          <Text style={[styles.bottomBarAmount, { color: colors.textPrimary }]}>
+            {money(amount)}
+          </Text>
+        </View>
+        <TouchableOpacity
+          disabled={!canSell}
+          onPress={createSale}
+          style={[
+            styles.bottomSellButton,
+            {
+              backgroundColor: canSell ? colors.primary : colors.primaryMuted,
+            },
+          ]}
+        >
+          <Text style={[styles.sellText, { color: colors.textInverse }]}>
+            {isSaving ? 'Registrando…' : 'Registrar venta'}
+          </Text>
+        </TouchableOpacity>
       </View>
       <Modal
         animationType="fade"
@@ -916,7 +1037,27 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
   },
-  content: { padding: 16, paddingBottom: 40 },
+  bottomBar: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: 18,
+  },
+  bottomBarAmount: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.bold,
+    marginTop: 2,
+  },
+  bottomSellButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    justifyContent: 'center',
+    minHeight: 48,
+    paddingHorizontal: 16,
+  },
+  content: { padding: 16, paddingBottom: 96 },
   fieldLabel: { fontSize: typography.sizes.label, marginTop: 16 },
   formField: { flex: 1 },
   formRow: { flexDirection: 'row', gap: 10 },
@@ -1000,7 +1141,35 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 12,
   },
+  marginChip: {
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 30,
+    paddingHorizontal: 10,
+  },
+  marginChipText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+  },
+  marginQuickChips: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
   meta: { fontSize: typography.sizes.caption, marginTop: 3 },
+  metricSections: {
+    gap: 10,
+    marginTop: 8,
+  },
+  metricSectionTitle: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    textTransform: 'uppercase',
+  },
   metricLabel: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
@@ -1046,6 +1215,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.semibold,
   },
   rowTitle: { fontSize: typography.sizes.body },
+  roundingChange: {
+    fontSize: typography.sizes.caption,
+    marginTop: 3,
+  },
   roundingChip: {
     borderRadius: 12,
     borderWidth: 1,
@@ -1135,6 +1308,17 @@ const styles = StyleSheet.create({
   },
   step: { fontSize: typography.sizes.body, lineHeight: 22, marginTop: 10 },
   summary: { borderRadius: 12, padding: 18 },
+  summaryMetric: { flex: 1 },
+  summaryMetrics: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  summaryValue: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+    marginTop: 3,
+  },
   title: {
     flex: 1,
     fontSize: typography.sizes.title,

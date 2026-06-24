@@ -28,6 +28,7 @@ import {
 import TransactionMenu, {
   TransactionMenuButton,
 } from '../../components/TransactionBalance/TransactionMenu';
+import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
 import typography from '../../constants/TransactionBalance/Typography';
@@ -48,6 +49,11 @@ const ingredientUnits = [
   { description: 'Cucharadas', key: 'cda' },
   { description: 'Cucharaditas', key: 'cdta' },
 ];
+
+const LIST_INITIAL_RENDER_COUNT = 12;
+const LIST_RENDER_BATCH_SIZE = 8;
+const LIST_UPDATE_BATCHING_PERIOD = 50;
+const LIST_WINDOW_SIZE = 7;
 
 const getIngredientUnitLabel = (unitKey) =>
   ingredientUnits.find((unit) => unit.key === unitKey)?.description || 'Unidad';
@@ -214,6 +220,15 @@ const formatPercentageInput = (value) => {
   return `${normalizedValue}%`;
 };
 
+const parseNumericInput = (value) =>
+  Number(String(value || '').replace(/[^0-9.]/g, '') || 0);
+
+const formatMoney = (value) =>
+  new Intl.NumberFormat('es-MX', {
+    currency: 'MXN',
+    style: 'currency',
+  }).format(Number(value || 0));
+
 const getDaysUntilExpiry = (dateValue) => {
   if (!dateValue) {
     return null;
@@ -238,6 +253,11 @@ const getIngredientSummary = (item) => {
       (result[group] || 0) + toBaseQuantity(lot.quantity, lot.unit);
     return result;
   }, {});
+  const totalBaseQuantity = Object.values(totals).reduce(
+    (total, quantity) => total + quantity,
+    0,
+  );
+  const totalGroups = Object.keys(totals);
   const totalText =
     Object.entries(totals)
       .map(([group, quantity]) => formatQuantity(quantity, group))
@@ -251,7 +271,76 @@ const getIngredientSummary = (item) => {
 
   return {
     nextExpiry,
+    stockBaseUnitLabel:
+      totalGroups.length === 1
+        ? totalGroups[0] === 'weight'
+          ? 'g'
+          : totalGroups[0] === 'volume'
+            ? 'ml'
+            : totalGroups[0] === 'piece'
+              ? 'pza'
+              : 'cda/cdta'
+        : 'unidad base',
+    totalBaseQuantity,
+    totalGroups,
     totalText,
+  };
+};
+
+const getInventoryStatus = (item) => {
+  const summary = getIngredientSummary(item);
+  const expiredLots = (item.lots || []).filter((lot) => {
+    const daysUntilExpiry = getDaysUntilExpiry(lot.expiryDate);
+    return daysUntilExpiry !== null && daysUntilExpiry <= 0;
+  });
+  const nextExpiryDays = getDaysUntilExpiry(summary.nextExpiry?.expiryDate);
+  const minimumStock = Number(item.minimumStock || 0);
+  const canEvaluateLowStock =
+    minimumStock > 0 && summary.totalGroups.length === 1;
+  const hasLowStock =
+    canEvaluateLowStock && summary.totalBaseQuantity <= minimumStock;
+
+  return {
+    canEvaluateLowStock,
+    hasExpiredLots: expiredLots.length > 0,
+    hasLowStock,
+    hasMixedStockUnits: minimumStock > 0 && summary.totalGroups.length > 1,
+    hasNoLots: (item.lots || []).length === 0,
+    hasSoonExpiry:
+      nextExpiryDays !== null && nextExpiryDays > 0 && nextExpiryDays <= 7,
+    minimumStock,
+    summary,
+  };
+};
+
+const normalizeDeleteName = (value) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
+
+const getLotCostSummary = (lotForm) => {
+  const cost = parseNumericInput(lotForm.cost);
+  const quantity = Number(lotForm.quantity || 0);
+  const taxRate = lotForm.taxApplies ? parseNumericInput(lotForm.taxRate) : 0;
+  const totalWithTax = cost + cost * (taxRate / 100);
+  const baseQuantity = toBaseQuantity(quantity, normalizeUnit(lotForm.unit));
+  const group = unitGroups[normalizeUnit(lotForm.unit)] || 'piece';
+  const unitLabel =
+    group === 'weight'
+      ? 'g'
+      : group === 'volume'
+        ? 'ml'
+        : normalizeUnit(lotForm.unit);
+
+  return {
+    baseQuantity,
+    cost,
+    taxRate,
+    totalWithTax,
+    unitCost: baseQuantity > 0 ? totalWithTax / baseQuantity : 0,
+    unitLabel,
   };
 };
 
@@ -391,7 +480,9 @@ export default function InventoryScreen() {
   } = useInventoryData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [activeInventoryFilter, setActiveInventoryFilter] = useState('all');
   const [deleteDialog, setDeleteDialog] = useState(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deleteIsProcessing, setDeleteIsProcessing] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -406,19 +497,89 @@ export default function InventoryScreen() {
     [inventoryItems, selectedItemId],
   );
 
+  const inventoryItemsWithStatus = useMemo(
+    () =>
+      inventoryItems.map((item) => ({
+        ...item,
+        inventoryStatus: getInventoryStatus(item),
+      })),
+    [inventoryItems],
+  );
+
+  const inventoryFilterOptions = useMemo(() => {
+    const counts = inventoryItemsWithStatus.reduce(
+      (result, item) => {
+        result.all += 1;
+
+        if (item.inventoryStatus.hasLowStock) {
+          result.lowStock += 1;
+        }
+
+        if (item.inventoryStatus.hasSoonExpiry) {
+          result.expiring += 1;
+        }
+
+        if (item.inventoryStatus.hasNoLots) {
+          result.noLots += 1;
+        }
+
+        if (item.inventoryStatus.hasExpiredLots) {
+          result.expired += 1;
+        }
+
+        return result;
+      },
+      {
+        all: 0,
+        expired: 0,
+        expiring: 0,
+        lowStock: 0,
+        noLots: 0,
+      },
+    );
+
+    return [
+      { key: 'all', label: 'Todos', value: counts.all },
+      { key: 'lowStock', label: 'Stock bajo', value: counts.lowStock },
+      { key: 'expiring', label: 'Caduca pronto', value: counts.expiring },
+      { key: 'noLots', label: 'Sin lotes', value: counts.noLots },
+      { key: 'expired', label: 'Vencidos', value: counts.expired },
+    ];
+  }, [inventoryItemsWithStatus]);
+
   const filteredItems = useMemo(() => {
     const normalizedSearch = searchText.trim().toLowerCase();
 
-    if (!normalizedSearch) {
-      return inventoryItems;
-    }
+    return inventoryItemsWithStatus.filter((item) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        `${item.name} ${item.category} ${item.storage}`
+          .toLowerCase()
+          .includes(normalizedSearch);
 
-    return inventoryItems.filter((item) =>
-      `${item.name} ${item.category} ${item.storage}`
-        .toLowerCase()
-        .includes(normalizedSearch),
-    );
-  }, [inventoryItems, searchText]);
+      if (!matchesSearch) {
+        return false;
+      }
+
+      if (activeInventoryFilter === 'lowStock') {
+        return item.inventoryStatus.hasLowStock;
+      }
+
+      if (activeInventoryFilter === 'expiring') {
+        return item.inventoryStatus.hasSoonExpiry;
+      }
+
+      if (activeInventoryFilter === 'noLots') {
+        return item.inventoryStatus.hasNoLots;
+      }
+
+      if (activeInventoryFilter === 'expired') {
+        return item.inventoryStatus.hasExpiredLots;
+      }
+
+      return true;
+    });
+  }, [activeInventoryFilter, inventoryItemsWithStatus, searchText]);
 
   useEffect(() => {
     const keyboardShowListener = Keyboard.addListener('keyboardDidShow', () => {
@@ -543,7 +704,7 @@ export default function InventoryScreen() {
       console.warn('Error al guardar ingrediente:', error);
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexion con el backend e intenta nuevamente.',
+        'Revisa la conexión con el backend e intenta nuevamente.',
       );
     }
   };
@@ -612,7 +773,7 @@ export default function InventoryScreen() {
       console.warn('Error al guardar lote:', error);
       Alert.alert(
         'No se pudo guardar el lote',
-        'Revisa la conexion con el backend e intenta nuevamente.',
+        'Revisa la conexión con el backend e intenta nuevamente.',
       );
       return false;
     }
@@ -632,18 +793,20 @@ export default function InventoryScreen() {
       console.warn('Error al eliminar lote:', error);
       Alert.alert(
         'No se pudo eliminar el lote',
-        'Revisa la conexion con el backend e intenta nuevamente.',
+        'Revisa la conexión con el backend e intenta nuevamente.',
       );
     }
   };
 
   const requestDeleteConfirmation = (dialog) => {
+    setDeleteConfirmationText('');
     setDeleteDialog(dialog);
   };
 
   const closeDeleteDialog = () => {
     if (!deleteIsProcessing) {
       setDeleteDialog(null);
+      setDeleteConfirmationText('');
     }
   };
 
@@ -652,11 +815,21 @@ export default function InventoryScreen() {
       return;
     }
 
+    const deleteNameIsValid =
+      !deleteDialog.requiresName ||
+      normalizeDeleteName(deleteConfirmationText) ===
+        normalizeDeleteName(deleteDialog.targetName);
+
+    if (!deleteNameIsValid) {
+      return;
+    }
+
     setDeleteIsProcessing(true);
 
     try {
       await deleteDialog.onConfirm();
       setDeleteDialog(null);
+      setDeleteConfirmationText('');
     } finally {
       setDeleteIsProcessing(false);
     }
@@ -665,7 +838,7 @@ export default function InventoryScreen() {
   const confirmDeleteInventoryItem = (item) => {
     requestDeleteConfirmation({
       confirmLabel: 'Eliminar',
-      message: `Se eliminara ${item.name} y todos sus lotes del inventario.`,
+      message: `Se eliminará ${item.name} y todos sus lotes del inventario.`,
       onConfirm: async () => {
         try {
           await inventoryService.deleteInventoryItemById(item.inventoryId);
@@ -678,13 +851,46 @@ export default function InventoryScreen() {
           console.warn('Error al eliminar ingrediente:', error);
           Alert.alert(
             'No se pudo eliminar',
-            'Revisa la conexion con el backend e intenta nuevamente.',
+            'Revisa la conexión con el backend e intenta nuevamente.',
           );
         }
       },
+      requiresName: true,
+      targetName: item.name,
       title: 'Eliminar ingrediente',
     });
   };
+
+  const activeFilterLabel =
+    inventoryFilterOptions.find(
+      (filter) => filter.key === activeInventoryFilter,
+    )?.label || 'Todos';
+  const activeFilterEmptyTitle =
+    {
+      expired: 'Sin lotes vencidos',
+      expiring: 'Sin caducidades próximas',
+      lowStock: 'Sin ingredientes con stock bajo',
+      noLots: 'Sin ingredientes sin lotes',
+    }[activeInventoryFilter] || 'Sin resultados';
+  const inventorySearchIsActive = searchText.trim().length > 0;
+  const inventoryFilterIsActive = activeInventoryFilter !== 'all';
+  const inventoryEmptyTitle = isLoadingInventory
+    ? 'Cargando inventario'
+    : inventorySearchIsActive
+      ? 'Sin resultados'
+      : inventoryFilterIsActive
+        ? activeFilterEmptyTitle
+        : 'Sin ingredientes';
+  const inventoryEmptyMessage = isLoadingInventory
+    ? 'Estamos consultando la base de datos.'
+    : inventorySearchIsActive || inventoryFilterIsActive
+      ? `No encontramos ingredientes para ${[
+          inventorySearchIsActive ? `"${searchText.trim()}"` : '',
+          inventoryFilterIsActive ? activeFilterLabel.toLowerCase() : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}.`
+      : 'Agrega un ingrediente para comenzar a controlar tu inventario.';
 
   return (
     <View
@@ -708,8 +914,9 @@ export default function InventoryScreen() {
 
       <View style={styles.searchContainer}>
         <TextInput
+          accessibilityLabel="Buscar ingrediente, categoría o almacén"
           onChangeText={setSearchText}
-          placeholder="Buscar ingrediente..."
+          placeholder="Buscar ingrediente, categoría o almacén..."
           placeholderTextColor={colors.textMuted}
           style={[
             styles.searchInput,
@@ -723,6 +930,8 @@ export default function InventoryScreen() {
         />
         {searchText.length > 0 && (
           <Pressable
+            accessibilityLabel="Limpiar búsqueda"
+            accessibilityRole="button"
             onPress={() => {
               Keyboard.dismiss();
               setSearchText('');
@@ -740,17 +949,44 @@ export default function InventoryScreen() {
           </Pressable>
         )}
       </View>
+      <QuickFilterChips
+        colors={colors}
+        filters={inventoryFilterOptions}
+        getAccessibilityLabel={(filter) =>
+          `Filtrar inventario por ${filter.label}: ${filter.value}`
+        }
+        getKey={(filter) => filter.key}
+        getLabel={(filter) => filter.label}
+        getValue={(filter) => filter.value}
+        inactiveTextColor={colors.textMuted}
+        onSelect={(filter) => setActiveInventoryFilter(filter.key)}
+        scrollStyle={styles.inventoryFilterScroll}
+        selectedKey={activeInventoryFilter}
+      />
 
       <FlatList
         contentContainerStyle={styles.inventoryList}
         data={filteredItems}
-        keyExtractor={(item) => item.id}
+        initialNumToRender={LIST_INITIAL_RENDER_COUNT}
+        keyExtractor={(item) => String(item.id)}
         keyboardShouldPersistTaps="handled"
+        maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+        removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ item }) => {
-          const summary = getIngredientSummary(item);
+          const { inventoryStatus } = item;
+          const summary = inventoryStatus.summary;
+          const statusBadges = [
+            inventoryStatus.hasExpiredLots ? 'Vencido' : '',
+            inventoryStatus.hasLowStock ? 'Stock bajo' : '',
+            inventoryStatus.hasMixedStockUnits ? 'Stock mixto' : '',
+            inventoryStatus.hasSoonExpiry ? 'Caduca pronto' : '',
+            inventoryStatus.hasNoLots ? 'Sin lotes' : '',
+          ].filter(Boolean);
 
           return (
             <TouchableOpacity
+              accessibilityLabel={`Abrir ingrediente ${item.name}. Disponible: ${summary.totalText}`}
+              accessibilityRole="button"
               activeOpacity={0.82}
               onPress={() => {
                 Keyboard.dismiss();
@@ -761,60 +997,132 @@ export default function InventoryScreen() {
                 { backgroundColor: colors.surface, borderColor: colors.border },
               ]}
             >
-              <View
-                style={[
-                  styles.ingredientInitials,
-                  { backgroundColor: colors.primaryMuted },
-                ]}
-              >
-                <Text
+              <View style={styles.inventoryCardHeader}>
+                <View
                   style={[
-                    styles.ingredientInitialsText,
-                    { color: colors.primaryText },
+                    styles.ingredientInitials,
+                    { backgroundColor: colors.primaryMuted },
                   ]}
                 >
-                  {getInitials(item.name)}
+                  <Text
+                    style={[
+                      styles.ingredientInitialsText,
+                      { color: colors.primaryText },
+                    ]}
+                  >
+                    {getInitials(item.name)}
+                  </Text>
+                </View>
+                <View style={styles.ingredientInfo}>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.ingredientName,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.ingredientMeta, { color: colors.textMuted }]}
+                  >
+                    {item.category || 'Sin categoría'} ·{' '}
+                    {item.storage || 'Sin ubicación'} · {item.lots.length} lotes
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.inventoryQuantity,
+                    { color: colors.textPrimary },
+                  ]}
+                >
+                  {summary.totalText}
                 </Text>
               </View>
-              <View style={styles.ingredientInfo}>
+              {item.minimumStock > 0 && (
                 <Text
-                  style={[styles.ingredientName, { color: colors.textPrimary }]}
+                  style={[
+                    styles.inventoryStockHint,
+                    { color: colors.textMuted },
+                  ]}
                 >
-                  {item.name}
+                  Mínimo: {item.minimumStock} {summary.stockBaseUnitLabel}
                 </Text>
-                <Text
-                  style={[styles.ingredientMeta, { color: colors.textMuted }]}
-                >
-                  {item.lots.length} marcas/lotes
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.inventoryQuantity,
-                  { color: colors.textPrimary },
-                ]}
-              >
-                {summary.totalText}
-              </Text>
+              )}
+              {statusBadges.length > 0 && (
+                <View style={styles.inventoryBadgeRow}>
+                  {statusBadges.map((badge) => {
+                    const isDanger = badge === 'Vencido';
+                    return (
+                      <Text
+                        key={badge}
+                        numberOfLines={1}
+                        style={[
+                          styles.inventoryStatusBadge,
+                          {
+                            backgroundColor: isDanger
+                              ? colors.dangerSurface
+                              : colors.primaryMuted,
+                            color: isDanger
+                              ? colors.danger
+                              : colors.primaryText,
+                          },
+                        ]}
+                      >
+                        {badge}
+                      </Text>
+                    );
+                  })}
+                </View>
+              )}
             </TouchableOpacity>
           );
         }}
         ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              {isLoadingInventory ? 'Cargando inventario' : 'Sin ingredientes'}
+              {inventoryEmptyTitle}
             </Text>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              {isLoadingInventory
-                ? 'Estamos consultando la base de datos.'
-                : 'Agrega un ingrediente o prueba con otro criterio de busqueda.'}
+              {inventoryEmptyMessage}
             </Text>
+            {!isLoadingInventory &&
+              (inventorySearchIsActive || inventoryFilterIsActive) && (
+                <TouchableOpacity
+                  accessibilityLabel="Limpiar filtros de inventario"
+                  accessibilityRole="button"
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setSearchText('');
+                    setActiveInventoryFilter('all');
+                  }}
+                  style={[
+                    styles.emptyActionButton,
+                    { backgroundColor: colors.primaryMuted },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.emptyActionText,
+                      { color: colors.primaryText },
+                    ]}
+                  >
+                    Limpiar filtros
+                  </Text>
+                </TouchableOpacity>
+              )}
           </View>
         }
         showsVerticalScrollIndicator={false}
+        updateCellsBatchingPeriod={LIST_UPDATE_BATCHING_PERIOD}
+        windowSize={LIST_WINDOW_SIZE}
       />
 
       <TouchableOpacity
+        accessibilityLabel="Agregar ingrediente"
+        accessibilityRole="button"
         activeOpacity={0.75}
         onPress={() => {
           Keyboard.dismiss();
@@ -859,7 +1167,7 @@ export default function InventoryScreen() {
 
           requestDeleteConfirmation({
             confirmLabel: 'Eliminar lote',
-            message: `Se eliminara el lote "${lot?.brand || 'sin marca'}" de ${selectedItem?.name}.`,
+            message: `Se eliminará el lote "${lot?.brand || 'sin marca'}" de ${selectedItem?.name}. Cantidad: ${lot?.quantity || 0} ${lot?.unit || ''}. Costo: ${formatMoney(parseNumericInput(lot?.cost))}. Proveedor: ${lot?.supplier || 'Sin proveedor'}.`,
             onConfirm: () => removeLotFromSelectedItem(lotId),
             title: 'Eliminar lote',
           });
@@ -914,8 +1222,46 @@ export default function InventoryScreen() {
             <Text
               style={[styles.deleteModalMessage, { color: colors.textMuted }]}
             >
-              ¿Estas seguro de eliminar?
+              ¿Estás seguro de eliminar?
             </Text>
+            {deleteDialog?.requiresName && (
+              <View style={styles.deleteNameBlock}>
+                <Text
+                  style={[
+                    styles.deleteNameHelp,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Escribe exactamente:{' '}
+                  {normalizeDeleteName(deleteDialog.targetName)}
+                </Text>
+                <TextInput
+                  accessibilityLabel="Confirmar nombre para eliminar"
+                  autoCapitalize="none"
+                  onChangeText={(value) =>
+                    setDeleteConfirmationText(
+                      value.replace(/[^a-zA-Z0-9ÁÉÍÓÚÜÑáéíóúüñ]/g, ''),
+                    )
+                  }
+                  placeholder={normalizeDeleteName(deleteDialog.targetName)}
+                  placeholderTextColor={colors.textMuted}
+                  style={[
+                    styles.deleteNameInput,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor:
+                        deleteConfirmationText.length > 0 &&
+                        normalizeDeleteName(deleteConfirmationText) !==
+                          normalizeDeleteName(deleteDialog.targetName)
+                          ? colors.danger
+                          : colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                  value={deleteConfirmationText}
+                />
+              </View>
+            )}
             <View style={styles.deleteModalActions}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -939,7 +1285,12 @@ export default function InventoryScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 activeOpacity={0.8}
-                disabled={deleteIsProcessing}
+                disabled={
+                  deleteIsProcessing ||
+                  (deleteDialog?.requiresName &&
+                    normalizeDeleteName(deleteConfirmationText) !==
+                      normalizeDeleteName(deleteDialog.targetName))
+                }
                 onPress={confirmDeleteDialog}
                 style={[
                   styles.primaryButton,
@@ -947,7 +1298,11 @@ export default function InventoryScreen() {
                   {
                     backgroundColor: deleteIsProcessing
                       ? colors.surfaceMuted
-                      : colors.danger,
+                      : deleteDialog?.requiresName &&
+                          normalizeDeleteName(deleteConfirmationText) !==
+                            normalizeDeleteName(deleteDialog.targetName)
+                        ? colors.surfaceMuted
+                        : colors.danger,
                   },
                 ]}
               >
@@ -958,7 +1313,11 @@ export default function InventoryScreen() {
                     {
                       color: deleteIsProcessing
                         ? colors.inactiveText
-                        : colors.textInverse,
+                        : deleteDialog?.requiresName &&
+                            normalizeDeleteName(deleteConfirmationText) !==
+                              normalizeDeleteName(deleteDialog.targetName)
+                          ? colors.inactiveText
+                          : colors.textInverse,
                     },
                   ]}
                 >
@@ -1261,6 +1620,7 @@ const InventoryDetailModal = ({
   }
 
   const summary = getIngredientSummary(item);
+  const lotCostSummary = getLotCostSummary(lotForm);
 
   const scrollToLotFormStart = () => {
     const scrollToTitle = (animated = true) => {
@@ -1283,6 +1643,80 @@ const InventoryDetailModal = ({
     }, 260);
   };
 
+  const renderLotFormActions = (containerStyle) => {
+    if (!editingLotId && !lotCreationIsActive) {
+      return null;
+    }
+
+    return (
+      <View style={[styles.lotFormActions, containerStyle]}>
+        <TouchableOpacity
+          accessibilityLabel={editingLotId ? 'Actualizar lote' : 'Guardar lote'}
+          accessibilityRole="button"
+          activeOpacity={0.8}
+          disabled={isSavingLot || !lotFormIsValid}
+          onPress={() => {
+            Keyboard.dismiss();
+            handleAddLot();
+          }}
+          style={[
+            styles.primaryButton,
+            styles.lotFormPrimaryAction,
+            {
+              backgroundColor:
+                isSavingLot || !lotFormIsValid
+                  ? colors.surfaceMuted
+                  : colors.primary,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.primaryButtonText,
+              {
+                color:
+                  isSavingLot || !lotFormIsValid
+                    ? colors.inactiveText
+                    : colors.textInverse,
+              },
+            ]}
+          >
+            {isSavingLot
+              ? 'Guardando...'
+              : editingLotId
+                ? 'Actualizar lote'
+                : 'Guardar lote'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityLabel={
+            editingLotId
+              ? 'Cancelar edición de lote'
+              : 'Cancelar captura de lote'
+          }
+          accessibilityRole="button"
+          activeOpacity={0.8}
+          onPress={() => {
+            if (editingLotId) {
+              Keyboard.dismiss();
+              cancelLotEdition();
+              return;
+            }
+
+            cancelLotCreation();
+          }}
+          style={[styles.secondaryButton, { borderColor: colors.border }]}
+        >
+          <Text
+            style={[styles.secondaryButtonText, { color: colors.textPrimary }]}
+          >
+            {editingLotId ? 'Cancelar edición' : 'Cancelar'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderLotsSection = () => (
     <>
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -1294,7 +1728,7 @@ const InventoryDetailModal = ({
             Sin inventario
           </Text>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Este ingrediente aun no tiene lotes registrados.
+            Este ingrediente aún no tiene lotes registrados.
           </Text>
         </View>
       )}
@@ -1308,16 +1742,10 @@ const InventoryDetailModal = ({
         ).toFixed(2)}`;
 
         return (
-          <TouchableOpacity
-            activeOpacity={0.82}
+          <View
             key={lot.id}
             onLayout={(event) => {
               lotCardPositions.current[lot.id] = event.nativeEvent.layout.y;
-            }}
-            onPress={() => {
-              if (!isEditingLot) {
-                editLot(lot);
-              }
             }}
             style={[
               styles.lotCard,
@@ -1363,7 +1791,7 @@ const InventoryDetailModal = ({
                 value={`${formatDate(lot.expiryDate)}${
                   daysUntilExpiry === null
                     ? ''
-                    : `\n${isExpired ? 'Caducado' : `${daysUntilExpiry} dias`}`
+                    : `\n${isExpired ? 'Caducado' : `${daysUntilExpiry} días`}`
                 }`}
               />
               <InfoBlock
@@ -1392,7 +1820,7 @@ const InventoryDetailModal = ({
                     { color: colors.primaryText },
                   ]}
                 >
-                  Actualmente en edicion
+                  Actualmente en edición
                 </Text>
               </View>
             ) : hasFeedback ? (
@@ -1415,6 +1843,30 @@ const InventoryDetailModal = ({
             ) : (
               <View style={styles.lotActionRow}>
                 <TouchableOpacity
+                  accessibilityLabel={`Editar lote ${lot.brand}`}
+                  accessibilityRole="button"
+                  activeOpacity={0.8}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    editLot(lot);
+                  }}
+                  style={[
+                    styles.inlineActionButton,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    Editar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityLabel={`Duplicar lote ${lot.brand}`}
+                  accessibilityRole="button"
                   activeOpacity={0.8}
                   onPress={(event) => {
                     event.stopPropagation();
@@ -1435,6 +1887,8 @@ const InventoryDetailModal = ({
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  accessibilityLabel={`Eliminar lote ${lot.brand}`}
+                  accessibilityRole="button"
                   activeOpacity={0.8}
                   onPress={(event) => {
                     event.stopPropagation();
@@ -1453,7 +1907,7 @@ const InventoryDetailModal = ({
                 </TouchableOpacity>
               </View>
             )}
-          </TouchableOpacity>
+          </View>
         );
       })}
     </>
@@ -1524,6 +1978,7 @@ const InventoryDetailModal = ({
                 </Text>
                 <TouchableOpacity
                   accessibilityLabel="Editar ingrediente"
+                  accessibilityRole="button"
                   activeOpacity={0.75}
                   onPress={() => {
                     Keyboard.dismiss();
@@ -1543,8 +1998,8 @@ const InventoryDetailModal = ({
               <Text
                 style={[styles.detailSubtitle, { color: colors.textMuted }]}
               >
-                {item.category || 'Sin categoria'} ·{' '}
-                {item.storage || 'Sin ubicacion'}
+                {item.category || 'Sin categoría'} ·{' '}
+                {item.storage || 'Sin ubicación'}
               </Text>
             </View>
           </View>
@@ -1603,6 +2058,11 @@ const InventoryDetailModal = ({
                 editingLotId && styles.formPanelEditing,
               ]}
             >
+              <Text
+                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+              >
+                Producto
+              </Text>
               <BrandInput
                 allInventoryItems={inventoryItems}
                 colors={colors}
@@ -1617,6 +2077,11 @@ const InventoryDetailModal = ({
                 }
                 value={lotForm.brand}
               />
+              <Text
+                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+              >
+                Cantidad y costo
+              </Text>
               <View style={styles.formRow}>
                 <FormInput
                   colors={colors}
@@ -1649,7 +2114,7 @@ const InventoryDetailModal = ({
                   colors={colors}
                   isFocused={focusedLotField === 'cost'}
                   keyboardType="decimal-pad"
-                  label="Costo"
+                  label="Costo total del lote"
                   onBlur={() => {
                     setFocusedLotField(null);
                     setLotForm((current) => ({
@@ -1676,6 +2141,46 @@ const InventoryDetailModal = ({
                   }
                 />
               </View>
+              {(lotCostSummary.cost > 0 || lotCostSummary.baseQuantity > 0) && (
+                <View
+                  style={[
+                    styles.costPreviewPanel,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <InfoBlock
+                    colors={colors}
+                    label={
+                      lotCostSummary.taxRate
+                        ? 'Costo con IVA'
+                        : 'Costo registrado'
+                    }
+                    value={formatMoney(lotCostSummary.totalWithTax)}
+                  />
+                  <InfoBlock
+                    colors={colors}
+                    label={`Costo por ${lotCostSummary.unitLabel}`}
+                    value={formatMoney(lotCostSummary.unitCost)}
+                  />
+                  <InfoBlock
+                    colors={colors}
+                    label="IVA"
+                    value={
+                      lotCostSummary.taxRate
+                        ? `${lotCostSummary.taxRate}% agregado`
+                        : 'No aplica'
+                    }
+                  />
+                </View>
+              )}
+              <Text
+                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+              >
+                Caducidad e impuestos
+              </Text>
               <View style={styles.formRow}>
                 <ExpirySelector
                   colors={colors}
@@ -1750,6 +2255,11 @@ const InventoryDetailModal = ({
                   rate={lotForm.taxRate}
                 />
               </View>
+              <Text
+                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+              >
+                Proveedor
+              </Text>
               <StoreSelector
                 colors={colors}
                 isFocused={focusedLotField === 'supplier'}
@@ -1760,86 +2270,11 @@ const InventoryDetailModal = ({
                 }}
                 value={lotForm.supplier}
               />
-              <View style={styles.lotFormActions}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={isSavingLot || !lotFormIsValid}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    handleAddLot();
-                  }}
-                  style={[
-                    styles.primaryButton,
-                    {
-                      backgroundColor:
-                        isSavingLot || !lotFormIsValid
-                          ? colors.surfaceMuted
-                          : colors.primary,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.primaryButtonText,
-                      {
-                        color:
-                          isSavingLot || !lotFormIsValid
-                            ? colors.inactiveText
-                            : colors.textInverse,
-                      },
-                    ]}
-                  >
-                    {isSavingLot
-                      ? 'Guardando...'
-                      : editingLotId
-                        ? 'Actualizar lote'
-                        : 'Guardar lote'}
-                  </Text>
-                </TouchableOpacity>
-                {editingLotId ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      cancelLotEdition();
-                    }}
-                    style={[
-                      styles.secondaryButton,
-                      { borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryButtonText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Cancelar edicion
-                    </Text>
-                  </TouchableOpacity>
-                ) : lotCreationIsActive ? (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={cancelLotCreation}
-                    style={[
-                      styles.secondaryButton,
-                      { borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryButtonText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Cancelar
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
             </View>
 
             <TouchableOpacity
+              accessibilityLabel={`Eliminar ingrediente ${item.name}`}
+              accessibilityRole="button"
               activeOpacity={0.8}
               onPress={() => {
                 Keyboard.dismiss();
@@ -1855,6 +2290,13 @@ const InventoryDetailModal = ({
               </Text>
             </TouchableOpacity>
           </ScrollView>
+          {renderLotFormActions([
+            styles.lotFormActionsFooter,
+            {
+              backgroundColor: colors.screenBackground,
+              borderTopColor: colors.border,
+            },
+          ])}
           <UnitPickerModal
             colors={colors}
             isVisible={unitPickerIsVisible}
@@ -1901,6 +2343,8 @@ const UnitSelector = ({ colors, isFocused, onPress, value }) => (
   <View style={styles.formField}>
     <Text style={[styles.formLabel, { color: colors.textMuted }]}>Unidad</Text>
     <TouchableOpacity
+      accessibilityLabel={`Seleccionar unidad. Actual: ${value}`}
+      accessibilityRole="button"
       activeOpacity={0.75}
       onPress={onPress}
       style={[
@@ -1931,6 +2375,8 @@ const StoreSelector = ({ colors, isFocused, onPress, value }) => (
       Proveedor
     </Text>
     <TouchableOpacity
+      accessibilityLabel="Seleccionar proveedor"
+      accessibilityRole="button"
       activeOpacity={0.75}
       onPress={onPress}
       style={[
@@ -1990,6 +2436,7 @@ const BrandInput = ({
         Marca del producto
       </Text>
       <TextInput
+        accessibilityLabel="Marca del producto"
         onChangeText={onChangeText}
         onBlur={onBlur}
         onFocus={onFocus}
@@ -2009,6 +2456,8 @@ const BrandInput = ({
         <View style={styles.brandSuggestions}>
           {brandSuggestions.map((brand) => (
             <TouchableOpacity
+              accessibilityLabel={`Usar marca sugerida ${brand}`}
+              accessibilityRole="button"
               activeOpacity={0.75}
               key={brand}
               onPress={() => {
@@ -2058,6 +2507,8 @@ const QualitySelector = ({ colors, isFocused, onChange, value }) => (
 
         return (
           <TouchableOpacity
+            accessibilityLabel={`Calidad ${quality}`}
+            accessibilityRole="button"
             activeOpacity={0.75}
             key={quality}
             onPress={() => {
@@ -2111,12 +2562,14 @@ const ExpirySelector = ({
     >
       {[
         { label: 'No', value: false },
-        { label: 'Si', value: true },
+        { label: 'Sí', value: true },
       ].map((option) => {
         const isSelected = expiryApplies === option.value;
 
         return (
           <TouchableOpacity
+            accessibilityLabel={`Caducidad ${option.label}`}
+            accessibilityRole="button"
             activeOpacity={0.75}
             key={option.label}
             onPress={() => {
@@ -2148,6 +2601,8 @@ const ExpirySelector = ({
     </View>
     {expiryApplies && (
       <TouchableOpacity
+        accessibilityLabel="Seleccionar fecha de caducidad"
+        accessibilityRole="button"
         activeOpacity={0.75}
         onPress={onShowPicker}
         style={[
@@ -2214,12 +2669,14 @@ const TaxSelector = ({
     >
       {[
         { label: 'No', value: false },
-        { label: 'Si', value: true },
+        { label: 'Sí', value: true },
       ].map((option) => {
         const isSelected = applies === option.value;
 
         return (
           <TouchableOpacity
+            accessibilityLabel={`IVA ${option.label}`}
+            accessibilityRole="button"
             activeOpacity={0.75}
             key={option.label}
             onPress={() => {
@@ -2251,6 +2708,7 @@ const TaxSelector = ({
     </View>
     {applies && (
       <TextInput
+        accessibilityLabel="Porcentaje de IVA"
         keyboardType="decimal-pad"
         onBlur={onRateBlur}
         onChangeText={onRateChange}
@@ -2323,6 +2781,8 @@ const UnitPickerModal = ({
 
       return (
         <TouchableOpacity
+          accessibilityLabel={`Seleccionar unidad ${unit.description}`}
+          accessibilityRole="button"
           activeOpacity={0.75}
           key={unit.key}
           onPress={() => {
@@ -2409,6 +2869,7 @@ const StorePickerModal = ({
         Seleccionar proveedor
       </Text>
       <TextInput
+        accessibilityLabel="Buscar proveedor"
         onChangeText={setStoreSearch}
         placeholder="Buscar tienda..."
         placeholderTextColor={colors.textMuted}
@@ -2452,6 +2913,8 @@ const StorePickerModal = ({
 
                 return (
                   <TouchableOpacity
+                    accessibilityLabel={`Seleccionar proveedor ${storeAlias || storeName}`}
+                    accessibilityRole="button"
                     activeOpacity={0.75}
                     key={store.storeId || `${storeAlias}-${storeAddress}`}
                     onPress={() => {
@@ -2491,7 +2954,7 @@ const StorePickerModal = ({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      {storeAddress || 'Sin direccion registrada'}
+                      {storeAddress || 'Sin dirección registrada'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -2499,6 +2962,8 @@ const StorePickerModal = ({
             </ScrollView>
           )}
           <TouchableOpacity
+            accessibilityLabel="Abrir administrador de tiendas"
+            accessibilityRole="button"
             activeOpacity={0.8}
             onPress={() => {
               Keyboard.dismiss();
@@ -2606,13 +3071,13 @@ const InventoryFormModal = ({
               <View style={styles.formRow}>
                 <FormInput
                   colors={colors}
-                  label="Categoria"
+                  label="Categoría"
                   onChangeText={(value) => updateField('category', value)}
                   value={form.category}
                 />
                 <FormInput
                   colors={colors}
-                  label="Almacen"
+                  label="Almacén"
                   onChangeText={(value) => updateField('storage', value)}
                   value={form.storage}
                 />
@@ -2620,10 +3085,16 @@ const InventoryFormModal = ({
               <FormInput
                 colors={colors}
                 keyboardType="numeric"
-                label="Stock minimo"
+                label="Stock mínimo (unidad base)"
                 onChangeText={(value) => updateField('minimumStock', value)}
                 value={form.minimumStock}
               />
+              <Text
+                style={[styles.formHelperText, { color: colors.textMuted }]}
+              >
+                Se compara en g, ml o pza cuando los lotes usan una misma unidad
+                base.
+              </Text>
               <FormInput
                 colors={colors}
                 label="Notas"
@@ -2634,6 +3105,8 @@ const InventoryFormModal = ({
             </ScrollView>
             <View style={styles.formModalActions}>
               <TouchableOpacity
+                accessibilityLabel="Cancelar edición de ingrediente"
+                accessibilityRole="button"
                 activeOpacity={0.8}
                 onPress={() => {
                   Keyboard.dismiss();
@@ -2651,6 +3124,8 @@ const InventoryFormModal = ({
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityLabel="Guardar ingrediente"
+                accessibilityRole="button"
                 activeOpacity={0.8}
                 onPress={() => {
                   Keyboard.dismiss();
@@ -2703,6 +3178,7 @@ const FormInput = ({
         </Text>
       )}
       <TextInput
+        accessibilityLabel={label}
         keyboardType={keyboardType}
         multiline={multiline}
         onBlur={onBlur}
@@ -2820,6 +3296,15 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
+  costPreviewPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+    padding: 10,
+  },
   dangerButton: {
     alignItems: 'center',
     borderRadius: 8,
@@ -2926,6 +3411,21 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
   },
+  deleteNameBlock: {
+    marginTop: 12,
+  },
+  deleteNameHelp: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginBottom: 8,
+  },
+  deleteNameInput: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: typography.sizes.body,
+    minHeight: 44,
+    paddingHorizontal: 12,
+  },
   editIngredientIconButton: {
     alignItems: 'center',
     borderRadius: 8,
@@ -2988,6 +3488,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     padding: 16,
+  },
+  emptyActionButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 14,
+    minHeight: 40,
+    paddingHorizontal: 14,
+  },
+  emptyActionText: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
   },
   emptyText: {
     fontSize: typography.sizes.label,
@@ -3075,6 +3587,18 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.medium,
     marginBottom: 6,
+  },
+  formHelperText: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  formGroupTitle: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+    marginBottom: 10,
+    marginTop: 4,
   },
   hiddenDatePickerInput: {
     height: 0,
@@ -3176,14 +3700,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   inventoryCard: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: 'row',
     marginBottom: 10,
-    minHeight: 82,
+    minHeight: 90,
     paddingHorizontal: 12,
     paddingVertical: 12,
+  },
+  inventoryCardHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  inventoryBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  inventoryFilterScroll: {
+    marginBottom: 1,
   },
   inventoryQuantity: {
     flexShrink: 0,
@@ -3192,6 +3728,20 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     maxWidth: 118,
     textAlign: 'right',
+  },
+  inventoryStockHint: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginLeft: 60,
+    marginTop: 6,
+  },
+  inventoryStatusBadge: {
+    borderRadius: 999,
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+    overflow: 'hidden',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   inventoryList: {
     paddingBottom: 92,
@@ -3247,8 +3797,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   lotFormActions: {
+    flexDirection: 'row',
     gap: 10,
     marginTop: 2,
+  },
+  lotFormActionsFooter: {
+    borderTopWidth: 1,
+    marginHorizontal: -18,
+    marginTop: 0,
+    paddingBottom: 4,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  lotFormPrimaryAction: {
+    flex: 1,
   },
   lotHeader: {
     alignItems: 'flex-start',

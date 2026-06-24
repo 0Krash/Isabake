@@ -9,6 +9,7 @@ import {
   Alert,
   Animated,
   BackHandler,
+  FlatList,
   InteractionManager,
   Keyboard,
   LayoutAnimation,
@@ -29,6 +30,7 @@ import {
 import TransactionMenu, {
   TransactionMenuButton,
 } from '../../components/TransactionBalance/TransactionMenu';
+import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
@@ -44,6 +46,7 @@ import useRecipeTypesData, {
 } from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import recipeService from '../../services/TransactionBalance/API/recipeService';
+import { calculateRecipeCost } from '../../utils/recipeCost';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -58,6 +61,16 @@ const ingredientUnits = [
 const STEP_DESCRIPTION_PREVIEW_LIMIT = 95;
 const STEP_DRAG_SLOT_HEIGHT = 76;
 const INGREDIENT_FEEDBACK_SCROLL_OFFSET = 86;
+const LIST_INITIAL_RENDER_COUNT = 8;
+const LIST_RENDER_BATCH_SIZE = 6;
+const LIST_UPDATE_BATCHING_PERIOD = 50;
+const LIST_WINDOW_SIZE = 7;
+
+const money = (value) =>
+  new Intl.NumberFormat('es-MX', {
+    currency: 'MXN',
+    style: 'currency',
+  }).format(value);
 
 const parseRecipeQuantity = (quantity) =>
   Number(String(quantity ?? '').replace(',', '.'));
@@ -218,7 +231,7 @@ export default function RecipeBookScreen({
   onOpenRecipeSale,
 }) {
   const { colors } = useTransactionBalanceTheme();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { isLoadingRecipes, recipes, refreshRecipes, setRecipes } =
     useRecipeBookData();
   const { inventoryItems, isLoadingInventory } = useInventoryData();
@@ -273,7 +286,12 @@ export default function RecipeBookScreen({
   const [isSavingStep, setIsSavingStep] = useState(false);
   const [stepDescription, setStepDescription] = useState('');
   const [recipeNameDraft, setRecipeNameDraft] = useState('');
+  const [recipeNameFeedback, setRecipeNameFeedback] = useState('');
   const [servingsDraft, setServingsDraft] = useState('');
+  const recipeSearchQuery = searchText.trim();
+  const recipeSearchIsActive = recipeSearchQuery.length > 0;
+  const recipeGridIsCompact = windowWidth < 430 || recipeSearchIsActive;
+  const recipeGridColumns = recipeGridIsCompact ? 1 : 2;
   const ingredientCardPositions = useRef({});
   const ingredientFeedbackAnimationId = useRef(0);
   const ingredientFeedbackOpacity = useRef(new Animated.Value(0)).current;
@@ -284,6 +302,7 @@ export default function RecipeBookScreen({
   const keyboardIsVisibleRef = useRef(false);
   const newRecipeNameInputRef = useRef(null);
   const recipeDetailScrollRef = useRef(null);
+  const recipeNameFeedbackTimeoutRef = useRef(null);
   const stepFormOffsetY = useRef(0);
 
   const selectedRecipe = useMemo(
@@ -545,28 +564,57 @@ export default function RecipeBookScreen({
     selectedRecipe?.ingredients,
   ]);
 
+  const recipesWithCost = useMemo(
+    () =>
+      recipes.map((recipe) => {
+        const recipeCost = calculateRecipeCost(recipe, inventoryItems);
+
+        return {
+          ...recipe,
+          recipeCost,
+        };
+      }),
+    [inventoryItems, recipes],
+  );
+
+  const recipesMatchingSearch = useMemo(() => {
+    const normalizedSearch = recipeSearchQuery.toLowerCase();
+
+    return recipesWithCost.filter((recipe) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return `${recipe.name} ${recipe.type || ''}`
+        .toLowerCase()
+        .includes(normalizedSearch);
+    });
+  }, [recipeSearchQuery, recipesWithCost]);
+
   const filteredRecipes = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLowerCase();
     const normalizedTypeFilter = selectedRecipeTypeFilter.trim();
 
-    return recipes.filter((recipe) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        `${recipe.name} ${recipe.type || ''}`
-          .toLowerCase()
-          .includes(normalizedSearch);
+    return recipesMatchingSearch.filter((recipe) => {
       const matchesType =
         !normalizedTypeFilter ||
         (recipe.type || 'Sin tipo') === normalizedTypeFilter;
 
-      return matchesSearch && matchesType;
+      return matchesType;
     });
-  }, [recipes, searchText, selectedRecipeTypeFilter]);
+  }, [recipesMatchingSearch, selectedRecipeTypeFilter]);
   const recipeTypeFilters = useMemo(() => {
     const types = new Set(['']);
+    const countsByType = {
+      '': recipesMatchingSearch.length,
+    };
 
     recipes.forEach((recipe) => {
       types.add(recipe.type || 'Sin tipo');
+    });
+
+    recipesMatchingSearch.forEach((recipe) => {
+      const type = recipe.type || 'Sin tipo';
+      countsByType[type] = (countsByType[type] || 0) + 1;
     });
 
     recipeTypes.forEach((type) => {
@@ -575,37 +623,20 @@ export default function RecipeBookScreen({
       }
     });
 
-    return [...types].sort((typeA, typeB) => {
-      if (!typeA) return -1;
-      if (!typeB) return 1;
+    return [...types]
+      .sort((typeA, typeB) => {
+        if (!typeA) return -1;
+        if (!typeB) return 1;
 
-      return typeA.localeCompare(typeB, 'es', {
-        sensitivity: 'base',
-      });
-    });
-  }, [recipeTypes, recipes]);
-  const recipeGroups = useMemo(() => {
-    const groups = filteredRecipes.reduce((currentGroups, recipe) => {
-      const type = recipe.type || 'Sin tipo';
-
-      return {
-        ...currentGroups,
-        [type]: [...(currentGroups[type] || []), recipe],
-      };
-    }, {});
-
-    return Object.keys(groups)
-      .sort((typeA, typeB) =>
-        typeA.localeCompare(typeB, 'es', {
+        return typeA.localeCompare(typeB, 'es', {
           sensitivity: 'base',
-        }),
-      )
+        });
+      })
       .map((type) => ({
-        recipes: groups[type],
+        count: countsByType[type] || 0,
         type,
       }));
-  }, [filteredRecipes]);
-
+  }, [recipeTypes, recipes, recipesMatchingSearch]);
   const scrollToIngredientForm = useCallback((animated = true) => {
     const targetY = Math.max(ingredientFormOffsetY.current - 12, 0);
 
@@ -891,6 +922,8 @@ export default function RecipeBookScreen({
     setEditingStepId(null);
     setStepDescription('');
     setRecipeNameDraft('');
+    setRecipeNameFeedback('');
+    clearTimeout(recipeNameFeedbackTimeoutRef.current);
     setServingsDraft('');
   }, [ingredientFeedbackOpacity]);
 
@@ -1029,6 +1062,11 @@ export default function RecipeBookScreen({
       ...recipe,
       name,
     }));
+    setRecipeNameFeedback('Nombre actualizado');
+    clearTimeout(recipeNameFeedbackTimeoutRef.current);
+    recipeNameFeedbackTimeoutRef.current = setTimeout(() => {
+      setRecipeNameFeedback('');
+    }, 1800);
   };
 
   const addIngredientSection = async () => {
@@ -1490,6 +1528,23 @@ export default function RecipeBookScreen({
     });
   };
 
+  const hasActiveRecipeFilters = Boolean(
+    recipeSearchIsActive || selectedRecipeTypeFilter,
+  );
+  const hasRecipes = recipes.length > 0;
+  const activeFilterSummary = [
+    `${filteredRecipes.length} resultado${filteredRecipes.length === 1 ? '' : 's'}`,
+    recipeSearchIsActive ? `para "${recipeSearchQuery}"` : '',
+    selectedRecipeTypeFilter ? `· ${selectedRecipeTypeFilter}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const emptyRecipeMessage = recipeSearchIsActive
+    ? `No hay recetas para "${recipeSearchQuery}".`
+    : selectedRecipeTypeFilter
+      ? `No hay recetas en ${selectedRecipeTypeFilter}.`
+      : 'Prueba con otro nombre o limpia los filtros activos.';
+
   return (
     <View
       style={[
@@ -1512,8 +1567,9 @@ export default function RecipeBookScreen({
 
       <View style={styles.searchContainer}>
         <TextInput
+          accessibilityLabel="Buscar receta o tipo"
           onChangeText={setSearchText}
-          placeholder="Buscar receta..."
+          placeholder="Buscar receta o tipo..."
           placeholderTextColor={colors.textMuted}
           style={[
             styles.searchInput,
@@ -1527,6 +1583,8 @@ export default function RecipeBookScreen({
         />
         {searchText.length > 0 && (
           <Pressable
+            accessibilityLabel="Limpiar búsqueda"
+            accessibilityRole="button"
             onPress={() => {
               Keyboard.dismiss();
               setSearchText('');
@@ -1544,158 +1602,207 @@ export default function RecipeBookScreen({
           </Pressable>
         )}
       </View>
-      <ScrollView
-        contentContainerStyle={styles.recipeFilterList}
-        horizontal
-        keyboardShouldPersistTaps="handled"
-        showsHorizontalScrollIndicator={false}
-        style={styles.recipeFilterScroll}
-      >
-        {recipeTypeFilters.map((type) => {
-          const isSelected = selectedRecipeTypeFilter === type;
+      <QuickFilterChips
+        colors={colors}
+        filters={recipeTypeFilters}
+        getAccessibilityLabel={({ count, type }) =>
+          `Filtrar por ${type || 'todas las recetas'}: ${count} recetas`
+        }
+        getKey={({ type }) => type}
+        getLabel={({ type }) => type || 'Todos'}
+        getValue={({ count }) => count}
+        onSelect={({ type }) => setSelectedRecipeTypeFilter(type)}
+        selectedKey={selectedRecipeTypeFilter}
+      />
+      {hasActiveRecipeFilters && (
+        <View style={styles.activeFilterBar}>
+          <Text style={[styles.activeFilterText, { color: colors.textMuted }]}>
+            {activeFilterSummary}
+          </Text>
+          <TouchableOpacity
+            accessibilityLabel="Limpiar búsqueda y filtros"
+            accessibilityRole="button"
+            activeOpacity={0.75}
+            onPress={() => {
+              Keyboard.dismiss();
+              setSearchText('');
+              setSelectedRecipeTypeFilter('');
+            }}
+          >
+            <Text style={[styles.resetText, { color: colors.primaryText }]}>
+              Limpiar filtros
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-          return (
-            <TouchableOpacity
-              activeOpacity={0.75}
-              key={type || 'all-recipes'}
-              onPress={() => {
-                Keyboard.dismiss();
-                setSelectedRecipeTypeFilter(type);
-              }}
-              style={[
-                styles.recipeFilterChip,
-                {
-                  backgroundColor: isSelected
-                    ? colors.primaryMuted
-                    : colors.surface,
-                  borderColor: isSelected ? colors.primary : colors.border,
-                },
-              ]}
-            >
+      <FlatList
+        columnWrapperStyle={
+          recipeGridColumns > 1 ? styles.recipeGridRow : undefined
+        }
+        contentContainerStyle={styles.recipeList}
+        data={filteredRecipes}
+        initialNumToRender={LIST_INITIAL_RENDER_COUNT}
+        key={recipeGridColumns}
+        keyExtractor={(item) => String(item.id)}
+        keyboardShouldPersistTaps="handled"
+        maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+        numColumns={recipeGridColumns}
+        removeClippedSubviews={Platform.OS === 'android'}
+        renderItem={({ item }) => (
+          <View
+            style={[
+              styles.recipeCard,
+              recipeGridIsCompact && styles.recipeCardFull,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.recipeCardHeader}>
+              <Text
+                numberOfLines={2}
+                style={[styles.recipeName, { color: colors.textPrimary }]}
+              >
+                {item.name}
+              </Text>
               <Text
                 numberOfLines={1}
                 style={[
-                  styles.recipeFilterText,
+                  styles.recipeTypeBadge,
                   {
-                    color: isSelected
-                      ? colors.primaryText
-                      : colors.textSecondary,
+                    backgroundColor: colors.primaryMuted,
+                    color: colors.primaryText,
                   },
                 ]}
               >
-                {type || 'Todos'}
+                {item.type || 'Sin tipo'}
               </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      <ScrollView
-        contentContainerStyle={styles.recipeList}
-        keyboardShouldPersistTaps="handled"
+            </View>
+            <Text style={[styles.recipeMeta, { color: colors.textMuted }]}>
+              {item.ingredients.length} ing. · {item.servings} porciones
+            </Text>
+            <View style={styles.recipeCostContainer}>
+              <Text
+                style={[styles.recipeCostLabel, { color: colors.textMuted }]}
+              >
+                Costo de elavoración
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.recipeCost, { color: colors.textPrimary }]}
+              >
+                {isLoadingInventory
+                  ? 'Calculando costo'
+                  : money(item.recipeCost.total)}
+              </Text>
+            </View>
+            <View style={styles.recipeActionsRow}>
+              <TouchableOpacity
+                accessibilityLabel={`Ver detalle de ${item.name}`}
+                accessibilityRole="button"
+                activeOpacity={0.75}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setSelectedRecipeId(item.id);
+                }}
+                style={[
+                  styles.recipeDetailButton,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.recipeDetailButtonText,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Detalle
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityLabel={`Vender ${item.name}`}
+                accessibilityRole="button"
+                activeOpacity={0.75}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onOpenRecipeSale?.(item);
+                }}
+                style={[
+                  styles.recipeSaleButton,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.recipeSaleButtonText,
+                    { color: colors.textInverse },
+                  ]}
+                >
+                  Vender
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         showsVerticalScrollIndicator={false}
-      >
-        {recipeGroups.length === 0 ? (
+        updateCellsBatchingPeriod={LIST_UPDATE_BATCHING_PERIOD}
+        windowSize={LIST_WINDOW_SIZE}
+        ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              {isLoadingRecipes ? 'Cargando recetas' : 'No encontramos recetas'}
+              {isLoadingRecipes
+                ? 'Cargando recetas'
+                : hasRecipes
+                  ? 'No encontramos recetas'
+                  : 'Crea tu primera receta'}
             </Text>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               {isLoadingRecipes
                 ? 'Estamos consultando tu recetario.'
-                : 'Prueba con otro nombre o agrega una nueva receta.'}
+                : hasRecipes
+                  ? emptyRecipeMessage
+                  : 'Agrega una receta para calcular costos y venderla después.'}
             </Text>
-          </View>
-        ) : (
-          recipeGroups.map((group) => (
-            <View key={group.type} style={styles.recipeGroup}>
-              <Text
-                style={[styles.recipeGroupTitle, { color: colors.textPrimary }]}
+            {!isLoadingRecipes && (
+              <TouchableOpacity
+                accessibilityLabel={
+                  hasRecipes ? 'Limpiar filtros' : 'Agregar primera receta'
+                }
+                accessibilityRole="button"
+                activeOpacity={0.75}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  if (hasRecipes) {
+                    setSearchText('');
+                    setSelectedRecipeTypeFilter('');
+                  } else {
+                    setModalIsVisible(true);
+                  }
+                }}
+                style={[
+                  styles.emptyActionButton,
+                  { backgroundColor: colors.primaryMuted },
+                ]}
               >
-                {group.type}
-              </Text>
-              <View style={styles.recipeGroupGrid}>
-                {group.recipes.map((item) => (
-                  <TouchableOpacity
-                    activeOpacity={0.82}
-                    key={item.id}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setSelectedRecipeId(item.id);
-                    }}
-                    style={[
-                      styles.recipeCard,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.recipeInfo}>
-                      <Text
-                        numberOfLines={2}
-                        style={[
-                          styles.recipeName,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      <Text
-                        style={[styles.recipeMeta, { color: colors.textMuted }]}
-                      >
-                        {item.ingredients.length} ing. · {item.servings}{' '}
-                        porciones
-                      </Text>
-                    </View>
-                    <View style={styles.recipeCostContainer}>
-                      <Text
-                        style={[
-                          styles.recipeCostLabel,
-                          { color: colors.textMuted },
-                        ]}
-                      >
-                        {' '}
-                      </Text>
-                      {/* <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.recipeCost,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        {item.cost}
-                      </Text> */}
-                    </View>
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={(event) => {
-                        event.stopPropagation();
-                        onOpenRecipeSale?.(item);
-                      }}
-                      style={[
-                        styles.recipeSaleButton,
-                        { backgroundColor: colors.primary },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.recipeSaleButtonText,
-                          { color: colors.textInverse },
-                        ]}
-                      >
-                        Vender
-                      </Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+                <Text
+                  style={[
+                    styles.emptyActionText,
+                    { color: colors.primaryText },
+                  ]}
+                >
+                  {hasRecipes ? 'Limpiar filtros' : 'Crear receta'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        }
+      />
 
       <TouchableOpacity
+        accessibilityLabel="Agregar receta"
+        accessibilityRole="button"
         activeOpacity={0.75}
         onPress={() => {
           Keyboard.dismiss();
@@ -2090,6 +2197,16 @@ export default function RecipeBookScreen({
                     >
                       Define porciones e ingredientes de elaboracion.
                     </Text>
+                    {!!recipeNameFeedback && (
+                      <Text
+                        style={[
+                          styles.detailFeedbackText,
+                          { color: colors.primaryText },
+                        ]}
+                      >
+                        {recipeNameFeedback}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -2153,7 +2270,7 @@ export default function RecipeBookScreen({
                       },
                     ]}
                   >
-                    <View style={styles.servingsCenteredCopy}>
+                    <View style={styles.servingsCopy}>
                       <Text
                         style={[
                           styles.sectionLabel,
@@ -2165,12 +2282,10 @@ export default function RecipeBookScreen({
                       <Text
                         style={[
                           styles.servingsHint,
-                          styles.servingsCenteredHint,
                           { color: colors.textMuted },
                         ]}
                       >
-                        Usa una cantidad realista para calcular costos por
-                        pieza.
+                        Base para costos por pieza.
                       </Text>
                     </View>
                     <View style={styles.servingsStepper}>
@@ -2701,6 +2816,17 @@ export default function RecipeBookScreen({
                     ]
                   ) : (
                     <>
+                      {(selectedRecipe.steps || []).length > 1 && (
+                        <Text
+                          style={[
+                            styles.stepHelpText,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Arrastra el control de la derecha para reordenar los
+                          pasos.
+                        </Text>
+                      )}
                       {(() => {
                         const sortedSteps = [
                           ...(selectedRecipe.steps || []),
@@ -3902,6 +4028,16 @@ const DraggablePreparationStep = ({
 };
 
 const styles = StyleSheet.create({
+  activeFilterBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    marginHorizontal: 15,
+  },
+  activeFilterText: {
+    fontSize: typography.sizes.caption,
+  },
   addButton: {
     alignItems: 'center',
     borderRadius: 25,
@@ -3954,6 +4090,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     padding: 16,
+  },
+  emptyActionButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginTop: 14,
+    minHeight: 40,
+    paddingHorizontal: 14,
+  },
+  emptyActionText: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
   },
   emptyText: {
     fontSize: typography.sizes.label,
@@ -4049,6 +4197,12 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     lineHeight: 17,
     marginTop: 4,
+  },
+  detailFeedbackText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+    lineHeight: 17,
+    marginTop: 6,
   },
   detailTitle: {
     fontSize: typography.sizes.title,
@@ -4397,10 +4551,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     borderRadius: 8,
     borderWidth: 1,
-    minHeight: 152,
+    marginBottom: 10,
+    minHeight: 150,
     paddingHorizontal: 12,
     paddingVertical: 12,
     width: '48%',
+  },
+  recipeCardFull: {
+    width: '100%',
+  },
+  recipeActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+    width: '100%',
+  },
+  recipeCardHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+    width: '100%',
   },
   recipeCost: {
     fontSize: typography.sizes.body,
@@ -4416,68 +4587,31 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.medium,
   },
-  recipeFilterChip: {
+  recipeDetailButton: {
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
-    height: 30,
+    flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    width: 85,
+    minHeight: 38,
   },
-  recipeFilterList: {
-    alignItems: 'center',
-    gap: 8,
-    height: 30,
-    paddingHorizontal: 15,
-  },
-  recipeFilterScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-    height: 40,
-    marginBottom: 5,
-    maxHeight: 40,
-    minHeight: 40,
-  },
-  recipeFilterText: {
+  recipeDetailButtonText: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
-    textAlign: 'center',
-    width: '100%',
-  },
-  recipeInfo: {
-    minWidth: 0,
-    width: '100%',
   },
   recipeList: {
     paddingBottom: 92,
     paddingHorizontal: 15,
   },
   recipeGridRow: {
-    gap: 10,
-    marginBottom: 10,
-  },
-  recipeGroup: {
-    marginBottom: 18,
-  },
-  recipeGroupGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
     justifyContent: 'space-between',
-  },
-  recipeGroupTitle: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.bold,
-    marginBottom: 10,
   },
   recipeSaleButton: {
     alignItems: 'center',
     borderRadius: 8,
+    flex: 1,
     justifyContent: 'center',
-    marginTop: 12,
     minHeight: 38,
-    width: '100%',
   },
   recipeSaleButtonText: {
     fontSize: typography.sizes.label,
@@ -4496,6 +4630,7 @@ const styles = StyleSheet.create({
   recipeMeta: {
     fontSize: typography.sizes.caption,
     lineHeight: 17,
+    marginBottom: 14,
     marginTop: 4,
   },
   recipeNameEditInput: {
@@ -4521,8 +4656,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   recipeName: {
+    flex: 1,
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+    minWidth: 0,
+  },
+  recipeTypeBadge: {
+    borderRadius: 999,
+    flexShrink: 0,
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+    maxWidth: '48%',
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   searchContainer: {
     marginHorizontal: 15,
@@ -4607,6 +4754,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 8,
   },
+  stepHelpText: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
   stepContentRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -4685,21 +4837,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingRight: 12,
   },
-  servingsCenteredCopy: {
-    alignItems: 'center',
-    minWidth: 0,
-    width: '100%',
-  },
-  servingsCenteredHint: {
-    textAlign: 'center',
-  },
   servingsPanel: {
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
     gap: 12,
-    justifyContent: 'center',
-    minHeight: 96,
+    justifyContent: 'space-between',
+    minHeight: 76,
     padding: 12,
   },
   servingsStepper: {
