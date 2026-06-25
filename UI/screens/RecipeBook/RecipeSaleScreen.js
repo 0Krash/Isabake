@@ -21,6 +21,7 @@ import {
   calculateRecipeCost,
   calculateSaleMetrics,
 } from '../../utils/recipeCost';
+import { idsMatch } from '../../utils/idUtils';
 
 const money = (value) =>
   new Intl.NumberFormat('es-MX', {
@@ -304,9 +305,7 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
     () =>
       selectedIngredient
         ? inventoryItems.find(
-            (item) =>
-              Number(item.inventoryId) ===
-              Number(selectedIngredient.inventoryId),
+            (item) => idsMatch(item.inventoryId, selectedIngredient.inventoryId),
           )
         : null,
     [inventoryItems, selectedIngredient],

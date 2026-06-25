@@ -1,3 +1,5 @@
+import { idsMatch } from './idUtils';
+
 const units = {
   cda: ['spoon', 3],
   cdta: ['spoon', 1],
@@ -14,7 +16,7 @@ const number = (value) =>
 export const calculateRecipeCost = (recipe, inventoryItems) => {
   const ingredients = (recipe.ingredients || []).map((ingredient) => {
     const inventoryItem = inventoryItems.find(
-      (item) => Number(item.inventoryId) === Number(ingredient.inventoryId),
+      (item) => idsMatch(item.inventoryId, ingredient.inventoryId),
     );
     const [group, factor] = units[ingredient.unit] || [];
     const lots = (inventoryItem?.lots || []).filter(

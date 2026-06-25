@@ -33,12 +33,9 @@ import AddStoreModal from '../../components/TransactionBalance/modals/addStoreMo
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import useInventoryData, {
-  normalizeInventoryItem,
-  toApiInventoryItem,
-} from '../../hooks/Inventory/useInventoryData';
+import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import useStoresLocal from '../../hooks/Stores/useStoresLocal';
-import inventoryService from '../../services/TransactionBalance/API/inventoryService';
+import { idsMatch } from '../../utils/idUtils';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -473,10 +470,12 @@ function useBottomSheet(isVisible, onClose) {
 export default function InventoryScreen() {
   const { colors } = useTransactionBalanceTheme();
   const {
+    createInventoryItem: createInventoryItemLocal,
+    deleteInventoryItem: deleteInventoryItemLocal,
     inventoryItems,
     isLoadingInventory,
-    refreshInventory,
     setInventoryItems,
+    updateInventoryItem: updateInventoryItemLocal,
   } = useInventoryData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -679,47 +678,39 @@ export default function InventoryScreen() {
 
     try {
       if (currentItem) {
-        const response = await inventoryService.updateInventoryItemById(
-          currentItem.inventoryId,
-          toApiInventoryItem(payload),
+        const updatedItem = await updateInventoryItemLocal(
+          currentItem.id,
+          payload,
         );
-        const updatedItem = normalizeInventoryItem(response.data.inventoryItem);
         setInventoryItems((items) =>
           items.map((item) =>
             item.id === updatedItem.id ? updatedItem : item,
           ),
         );
       } else {
-        const response = await inventoryService.postInventoryItem(
-          toApiInventoryItem(payload),
-        );
-        const createdItem = normalizeInventoryItem(response.data.inventoryItem);
-        setInventoryItems((items) => [createdItem, ...items]);
+        const createdItem = await createInventoryItemLocal(payload);
         setSelectedItemId(createdItem.id);
       }
 
-      refreshInventory();
       closeForm();
     } catch (error) {
       console.warn('Error al guardar ingrediente:', error);
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexión con el backend e intenta nuevamente.',
+        'No se pudo guardar el ingrediente localmente. Intenta nuevamente.',
       );
     }
   };
 
   const persistInventoryItem = async (itemToUpdate) => {
-    const response = await inventoryService.updateInventoryItemById(
-      itemToUpdate.inventoryId,
-      toApiInventoryItem(itemToUpdate),
+    const updatedItem = await updateInventoryItemLocal(
+      itemToUpdate.id,
+      itemToUpdate,
     );
-    const updatedItem = normalizeInventoryItem(response.data.inventoryItem);
     setInventoryItems((items) =>
       items.map((item) => (item.id === updatedItem.id ? updatedItem : item)),
     );
     setSelectedItemId(updatedItem.id);
-    refreshInventory();
   };
 
   const addLotToSelectedItem = async (lotForm, lotIdToUpdate = null) => {
@@ -773,7 +764,7 @@ export default function InventoryScreen() {
       console.warn('Error al guardar lote:', error);
       Alert.alert(
         'No se pudo guardar el lote',
-        'Revisa la conexión con el backend e intenta nuevamente.',
+        'No se pudo guardar el lote localmente. Intenta nuevamente.',
       );
       return false;
     }
@@ -793,7 +784,7 @@ export default function InventoryScreen() {
       console.warn('Error al eliminar lote:', error);
       Alert.alert(
         'No se pudo eliminar el lote',
-        'Revisa la conexión con el backend e intenta nuevamente.',
+        'No se pudo eliminar el lote localmente. Intenta nuevamente.',
       );
     }
   };
@@ -841,17 +832,16 @@ export default function InventoryScreen() {
       message: `Se eliminará ${item.name} y todos sus lotes del inventario.`,
       onConfirm: async () => {
         try {
-          await inventoryService.deleteInventoryItemById(item.inventoryId);
+          await deleteInventoryItemLocal(item.id);
           setInventoryItems((items) =>
             items.filter((currentItem) => currentItem.id !== item.id),
           );
           setSelectedItemId(null);
-          refreshInventory();
         } catch (error) {
           console.warn('Error al eliminar ingrediente:', error);
           Alert.alert(
             'No se pudo eliminar',
-            'Revisa la conexión con el backend e intenta nuevamente.',
+            'No se pudo eliminar el ingrediente localmente. Intenta nuevamente.',
           );
         }
       },
@@ -1440,7 +1430,7 @@ const InventoryDetailModal = ({
     }
 
     const selectedStore = stores.find(
-      (store) => String(store.storeId) === String(lotForm.supplierId),
+      (store) => idsMatch(store.storeId, lotForm.supplierId),
     );
 
     if (!selectedStore) {
@@ -2908,8 +2898,7 @@ const StorePickerModal = ({
                 const storeAddress = getStoreValue(store, 'Address');
                 const storeName = getStoreValue(store, 'Name');
                 const storeAlias = getStoreValue(store, 'Alias');
-                const storeId = String(store.storeId);
-                const isSelected = storeId === String(selectedStoreId);
+                const isSelected = idsMatch(store.storeId, selectedStoreId);
 
                 return (
                   <TouchableOpacity

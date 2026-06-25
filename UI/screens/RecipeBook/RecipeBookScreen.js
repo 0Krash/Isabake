@@ -39,6 +39,7 @@ import useRecipeSectionsData from '../../hooks/RecipeBook/useRecipeSectionsData'
 import useRecipeTypesData from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import { calculateRecipeCost } from '../../utils/recipeCost';
+import { idsMatch } from '../../utils/idUtils';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -561,8 +562,10 @@ export default function RecipeBookScreen({
 
       return (
         !isIngredientBeingEdited &&
-        Number(ingredient.inventoryId) ===
-          Number(selectedInventoryIngredient.inventoryId) &&
+        idsMatch(
+          ingredient.inventoryId,
+          selectedInventoryIngredient.inventoryId,
+        ) &&
         String(ingredient.section || '').trim() === currentSection
       );
     });
@@ -1313,7 +1316,7 @@ export default function RecipeBookScreen({
 
   const editIngredient = (ingredient) => {
     const inventoryIngredient = inventoryItems.find(
-      (item) => item.inventoryId === ingredient.inventoryId,
+      (item) => idsMatch(item.inventoryId, ingredient.inventoryId),
     );
 
     ingredientFeedbackAnimationId.current += 1;
@@ -3150,8 +3153,10 @@ export default function RecipeBookScreen({
                   >
                     {filteredInventoryIngredientOptions.map((inventoryItem) => {
                       const isSelected =
-                        selectedInventoryIngredient?.inventoryId ===
-                        inventoryItem.inventoryId;
+                        idsMatch(
+                          selectedInventoryIngredient?.inventoryId,
+                          inventoryItem.inventoryId,
+                        );
 
                       return (
                         <TouchableOpacity

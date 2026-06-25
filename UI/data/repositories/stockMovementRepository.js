@@ -1,4 +1,5 @@
 import { createRepository } from './repositoryUtils';
+import { idsMatch } from '../../utils/idUtils';
 
 export const STOCK_MOVEMENT_COLLECTION = 'stockMovements';
 
@@ -33,8 +34,8 @@ const repository = createRepository({
 const getByInventoryId = async (inventoryId, options = {}) => {
   const movements = await repository.getAll(options);
 
-  return movements.filter(
-    (movement) => String(movement.inventoryId) === String(inventoryId),
+  return movements.filter((movement) =>
+    idsMatch(movement.inventoryId, inventoryId),
   );
 };
 
@@ -42,8 +43,7 @@ const getByRelatedTransactionId = async (transactionId, options = {}) => {
   const movements = await repository.getAll(options);
 
   return movements.filter(
-    (movement) =>
-      String(movement.relatedTransactionId) === String(transactionId),
+    (movement) => idsMatch(movement.relatedTransactionId, transactionId),
   );
 };
 
