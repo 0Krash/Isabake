@@ -555,7 +555,7 @@ export const runRecipeSaleServiceSmokeTest = async () => {
     }
 
     const mismatchCase = await createSmokeInventoryAndRecipe({
-      inventoryUnit: 'g',
+      inventoryUnit: 'ml',
       quantity: 10,
       runId: `${runId}_unit_mismatch`,
     });

@@ -9,6 +9,16 @@ import { applyInventoryLotAdjustment } from './inventoryStockService';
 const number = (value) =>
   Number(String(value ?? '0').replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
 
+const units = {
+  cda: ['spoon', 3],
+  cdta: ['spoon', 1],
+  g: ['weight', 1],
+  kg: ['weight', 1000],
+  l: ['volume', 1000],
+  ml: ['volume', 1],
+  pza: ['piece', 1],
+};
+
 const getEntityId = (entity, idField) => {
   if (!entity || typeof entity !== 'object') {
     return '';
@@ -18,6 +28,14 @@ const getEntityId = (entity, idField) => {
 };
 
 const getLotId = (lot = {}) => lot.lotId || lot.id || lot.localId || '';
+
+const unitsAreCompatible = (leftUnit, rightUnit) =>
+  Boolean(units[leftUnit]) && units[leftUnit]?.[0] === units[rightUnit]?.[0];
+
+const toBaseQuantity = (quantity, unit) => number(quantity) * (units[unit]?.[1] || 1);
+
+const fromBaseQuantity = (quantity, unit) =>
+  number(quantity) / (units[unit]?.[1] || 1);
 
 const runWithOptionalTransaction = async (options, callback) => {
   if (options.db) {
@@ -190,36 +208,48 @@ export const createLocalRecipeSale = async (
 
       const lots = Array.isArray(inventoryItem.lots) ? inventoryItem.lots : [];
       const compatibleLots = sortLotsForDeduction(lots).filter(
-        (lot) => lot.unit === unit && number(lot.quantity) > 0,
+        (lot) => unitsAreCompatible(lot.unit, unit) && number(lot.quantity) > 0,
       );
-      const hasSameUnitLot = lots.some((lot) => lot.unit === unit);
+      const hasCompatibleUnitLot = compatibleLots.length > 0;
 
-      if (!hasSameUnitLot) {
+      if (!hasCompatibleUnitLot) {
         throw new Error(
-          `No hay lotes en ${unit} para "${ingredient.name || inventoryItem.name}".`,
+          `No hay lotes compatibles con ${unit} para "${ingredient.name || inventoryItem.name}".`,
         );
       }
 
+      const requiredBaseQuantity = toBaseQuantity(requiredQuantity, unit);
       const availableQuantity = compatibleLots.reduce(
-        (sum, lot) => sum + number(lot.quantity),
+        (sum, lot) => sum + toBaseQuantity(lot.quantity, lot.unit),
         0,
       );
 
-      if (availableQuantity < requiredQuantity) {
+      if (availableQuantity < requiredBaseQuantity) {
         throw new Error(
-          `Stock insuficiente para "${ingredient.name || inventoryItem.name}". Disponible: ${availableQuantity} ${unit}. Requerido: ${requiredQuantity} ${unit}.`,
+          `Stock insuficiente para "${ingredient.name || inventoryItem.name}". Disponible: ${fromBaseQuantity(availableQuantity, unit)} ${unit}. Requerido: ${requiredQuantity} ${unit}.`,
         );
       }
 
-      let remainingQuantity = requiredQuantity;
+      let remainingBaseQuantity = requiredBaseQuantity;
 
       for (const lot of compatibleLots) {
-        if (remainingQuantity <= 0) {
+        if (remainingBaseQuantity <= 0) {
           break;
         }
 
-        const lotQuantity = number(lot.quantity);
-        const quantityToDeduct = Math.min(lotQuantity, remainingQuantity);
+        const lotBaseQuantity = toBaseQuantity(lot.quantity, lot.unit);
+        const baseQuantityToDeduct = Math.min(
+          lotBaseQuantity,
+          remainingBaseQuantity,
+        );
+        const lotQuantityToDeduct = fromBaseQuantity(
+          baseQuantityToDeduct,
+          lot.unit,
+        );
+        const ingredientQuantityToDeduct = fromBaseQuantity(
+          baseQuantityToDeduct,
+          unit,
+        );
         const lotId = getLotId(lot);
 
         const adjustmentResult = await applyInventoryLotAdjustment(
@@ -227,12 +257,12 @@ export const createLocalRecipeSale = async (
             inventoryId,
             lotId,
             notes: stockMovementNotes || `Venta de ${recipe.name || localRecipe.name}`,
-            quantityDelta: -quantityToDeduct,
+            quantityDelta: -lotQuantityToDeduct,
             reason: 'recipe_sale',
             relatedRecipeId,
             relatedTransactionId: transactionId,
             type: 'sale_usage',
-            unit,
+            unit: lot.unit,
           },
           { ...options, db },
         );
@@ -251,10 +281,12 @@ export const createLocalRecipeSale = async (
         deductions.push({
           inventoryId,
           lotId,
-          quantity: quantityToDeduct,
+          quantity: ingredientQuantityToDeduct,
+          sourceQuantity: lotQuantityToDeduct,
+          sourceUnit: lot.unit,
           unit,
         });
-        remainingQuantity -= quantityToDeduct;
+        remainingBaseQuantity -= baseQuantityToDeduct;
       }
     }
 

@@ -44,6 +44,7 @@ export default function TransactionDetailModal({
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const scrollOffsetY = useRef(0);
   const [storePopupIsVisible, setStorePopupIsVisible] = useState(false);
+  const safeTransactionDetail = transactionDetail || {};
   const {
     amount = '',
     category = {},
@@ -55,13 +56,15 @@ export default function TransactionDetailModal({
     store = {},
     transactionId = '',
     transactionType = '',
-  } = transactionDetail;
-  const categoryColor = getCategoryColor(category.categoryId);
-  const itemCount = category.categoryId === '1' ? itemQuantity : quantity;
+  } = safeTransactionDetail;
+  const safeCategory = category || {};
+  const safeStore = store || {};
+  const categoryColor = getCategoryColor(safeCategory.categoryId);
+  const itemCount = safeCategory.categoryId === '1' ? itemQuantity : quantity;
   const closeModal = () => setTransactionDetailModalIsVisible(false);
-  const storeName = store.Name || store.name || 'Sin nombre';
-  const storeAlias = store.alias || store.Alias || 'Sin alias';
-  const storeAddress = store.Address || store.address || 'Sin direccion';
+  const storeName = safeStore.Name || safeStore.name || 'Sin nombre';
+  const storeAlias = safeStore.alias || safeStore.Alias || 'Sin alias';
+  const storeAddress = safeStore.Address || safeStore.address || 'Sin direccion';
 
   const resetSwipePosition = useCallback(() => {
     Animated.spring(sheetTranslateY, {
@@ -219,7 +222,7 @@ export default function TransactionDetailModal({
                 {description || 'Movimiento'}
               </Text>
               <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                {transactionType || category.description || 'Movimiento'}
+                {transactionType || safeCategory.description || 'Movimiento'}
               </Text>
             </View>
             <View style={styles.amountContainer}>
@@ -307,7 +310,7 @@ export default function TransactionDetailModal({
                 ))}
               </>
             )}
-            {(category.categoryId === '1' || category.categoryId === '2') && (
+            {(safeCategory.categoryId === '1' || safeCategory.categoryId === '2') && (
               <>
                 <DetailRow
                   colors={colors}
