@@ -19,7 +19,7 @@ import {
 
 import typography from '../../../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
-import storeService from '../../../../services/TransactionBalance/API/storeService';
+import useStoresLocal from '../../../../hooks/Stores/useStoresLocal';
 
 const emptyForm = {
   Address: '',
@@ -30,14 +30,6 @@ const emptyForm = {
 const getStoreValue = (store, key) =>
   store?.[key] || store?.[key.toLowerCase()] || '';
 const SCREEN_HEIGHT = Dimensions.get('screen').height;
-
-const sortStoresAlphabetically = (stores) =>
-  [...stores].sort((storeA, storeB) => {
-    const nameA = getStoreValue(storeA, 'Alias') || getStoreValue(storeA, 'Name');
-    const nameB = getStoreValue(storeB, 'Alias') || getStoreValue(storeB, 'Name');
-
-    return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
-  });
 
 const StoreFormField = ({
   autoCapitalize,
@@ -87,7 +79,14 @@ export default function AddStoreModal({
   const keyboardTranslateY = useRef(new Animated.Value(0)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const scrollOffsetY = useRef(0);
-  const [stores, setStores] = useState([]);
+  const {
+    createStore,
+    deleteStore,
+    loading: storesAreLoading,
+    refreshStores,
+    stores,
+    updateStore,
+  } = useStoresLocal({ autoLoad: false });
   const [form, setForm] = useState(emptyForm);
   const [editingStore, setEditingStore] = useState(null);
   const [mode, setMode] = useState('list');
@@ -98,7 +97,6 @@ export default function AddStoreModal({
   const [isDeletingStore, setIsDeletingStore] = useState(false);
   const [discardDialogIsVisible, setDiscardDialogIsVisible] = useState(false);
   const [discardAction, setDiscardAction] = useState('list');
-  const [isLoadingStores, setIsLoadingStores] = useState(false);
   const [isSavingStore, setIsSavingStore] = useState(false);
   const sheetHeight = SCREEN_HEIGHT * 0.82;
   const isFormValid =
@@ -144,18 +142,15 @@ export default function AddStoreModal({
   };
 
   const fetchStores = useCallback(async () => {
-    setIsLoadingStores(true);
     setErrorMessage('');
 
     try {
-      setStores(sortStoresAlphabetically(await storeService.getAllStores()));
+      await refreshStores();
     } catch (error) {
       console.error('Error al obtener tiendas desde StoreManagerModal:', error);
       setErrorMessage('No se pudieron cargar las tiendas. Intenta de nuevo.');
-    } finally {
-      setIsLoadingStores(false);
     }
-  }, []);
+  }, [refreshStores]);
 
   const handleModalOnClose = useCallback(() => {
     setAddStoreModalIsVisible(false);
@@ -353,12 +348,11 @@ export default function AddStoreModal({
 
     try {
       if (isEditing) {
-        await storeService.updateStoreById(editingStore.storeId, payload);
+        await updateStore(editingStore.storeId, payload);
       } else {
-        await storeService.postStore(payload);
+        await createStore(payload);
       }
 
-      await fetchStores();
       onStoresChanged?.();
       resetForm();
       setSuccessMessage(isEditing ? 'Tienda actualizada' : 'Tienda creada');
@@ -386,8 +380,7 @@ export default function AddStoreModal({
     setSuccessMessage('');
 
     try {
-      await storeService.deleteStoreById(storeToDelete.storeId);
-      await fetchStores();
+      await deleteStore(storeToDelete.storeId);
       onStoresChanged?.();
       setSuccessMessage('Tienda eliminada');
       setStoreToDelete(null);
@@ -421,7 +414,7 @@ export default function AddStoreModal({
   };
 
   const renderStoreList = () => {
-    if (isLoadingStores) {
+    if (storesAreLoading) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={colors.primary} size="small" />

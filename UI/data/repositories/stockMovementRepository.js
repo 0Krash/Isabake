@@ -1,0 +1,54 @@
+import { createRepository } from './repositoryUtils';
+
+export const STOCK_MOVEMENT_COLLECTION = 'stockMovements';
+
+const normalizeStockMovement = (movement = {}) => ({
+  inventoryId: movement.inventoryId ?? null,
+  lotId: movement.lotId ?? null,
+  notes: movement.notes || '',
+  quantityDelta: Number(movement.quantityDelta || 0),
+  reason: movement.reason || '',
+  relatedRecipeId: movement.relatedRecipeId ?? null,
+  relatedTransactionId: movement.relatedTransactionId ?? null,
+  type: movement.type || 'adjustment',
+  unit: movement.unit || '',
+});
+
+const repository = createRepository({
+  collection: STOCK_MOVEMENT_COLLECTION,
+  idField: 'movementId',
+  idPrefix: 'stock_movement',
+  prepareCreate: (movement, id) => ({
+    ...normalizeStockMovement(movement),
+    createdAt: movement.createdAt || new Date().toISOString(),
+    movementId: movement.movementId || id,
+  }),
+  prepareUpdate: (movement, id) => ({
+    ...movement,
+    ...normalizeStockMovement(movement),
+    movementId: movement.movementId || id,
+  }),
+});
+
+const getByInventoryId = async (inventoryId, options = {}) => {
+  const movements = await repository.getAll(options);
+
+  return movements.filter(
+    (movement) => String(movement.inventoryId) === String(inventoryId),
+  );
+};
+
+const getByRelatedTransactionId = async (transactionId, options = {}) => {
+  const movements = await repository.getAll(options);
+
+  return movements.filter(
+    (movement) =>
+      String(movement.relatedTransactionId) === String(transactionId),
+  );
+};
+
+export default {
+  ...repository,
+  getByInventoryId,
+  getByRelatedTransactionId,
+};

@@ -38,12 +38,8 @@ import useRecipeBookData, {
   normalizeRecipe,
   toApiRecipe,
 } from '../../hooks/RecipeBook/useRecipeBookData';
-import useRecipeSectionsData, {
-  normalizeRecipeSection,
-} from '../../hooks/RecipeBook/useRecipeSectionsData';
-import useRecipeTypesData, {
-  normalizeRecipeType,
-} from '../../hooks/RecipeBook/useRecipeTypesData';
+import useRecipeSectionsData from '../../hooks/RecipeBook/useRecipeSectionsData';
+import useRecipeTypesData from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import recipeService from '../../services/TransactionBalance/API/recipeService';
 import { calculateRecipeCost } from '../../utils/recipeCost';
@@ -235,10 +231,20 @@ export default function RecipeBookScreen({
   const { isLoadingRecipes, recipes, refreshRecipes, setRecipes } =
     useRecipeBookData();
   const { inventoryItems, isLoadingInventory } = useInventoryData();
-  const { recipeSections, refreshRecipeSections, setRecipeSections } =
-    useRecipeSectionsData();
-  const { recipeTypes, refreshRecipeTypes, setRecipeTypes } =
-    useRecipeTypesData();
+  const {
+    createRecipeSection,
+    deleteRecipeSection: deleteRecipeSectionLocal,
+    recipeSections,
+    refreshRecipeSections,
+    setRecipeSections,
+  } = useRecipeSectionsData();
+  const {
+    createRecipeType,
+    deleteRecipeType: deleteRecipeTypeLocal,
+    recipeTypes,
+    refreshRecipeTypes,
+    setRecipeTypes,
+  } = useRecipeTypesData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
@@ -1077,8 +1083,7 @@ export default function RecipeBookScreen({
     }
 
     try {
-      const response = await recipeService.postRecipeSection({ name: section });
-      const recipeSection = normalizeRecipeSection(response.data.recipeSection);
+      const recipeSection = await createRecipeSection({ name: section });
 
       setRecipeSections((currentSections) => {
         const nextSections = currentSections.filter(
@@ -1098,7 +1103,7 @@ export default function RecipeBookScreen({
     } catch (error) {
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexion con el backend e intenta agregar la sección nuevamente.',
+        'No se pudo guardar la sección localmente. Intenta nuevamente.',
       );
     }
   };
@@ -1112,14 +1117,12 @@ export default function RecipeBookScreen({
 
     try {
       if (sectionToDelete.recipeSectionId) {
-        await recipeService.deleteRecipeSectionById(
-          sectionToDelete.recipeSectionId,
-        );
+        await deleteRecipeSectionLocal(sectionToDelete.recipeSectionId);
       }
     } catch (error) {
       Alert.alert(
         'No se pudo eliminar',
-        'Revisa la conexion con el backend e intenta eliminar la sección nuevamente.',
+        'No se pudo eliminar la sección localmente. Intenta nuevamente.',
       );
       return;
     }
@@ -1179,8 +1182,7 @@ export default function RecipeBookScreen({
     }
 
     try {
-      const response = await recipeService.postRecipeType({ name: type });
-      const createdType = normalizeRecipeType(response.data.recipeType);
+      const createdType = await createRecipeType({ name: type });
 
       setRecipeTypes((currentTypes) => {
         const nextTypes = currentTypes.filter(
@@ -1199,7 +1201,7 @@ export default function RecipeBookScreen({
     } catch (error) {
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexion con el backend e intenta agregar el tipo nuevamente.',
+        'No se pudo guardar el tipo localmente. Intenta nuevamente.',
       );
     }
   };
@@ -1213,12 +1215,12 @@ export default function RecipeBookScreen({
 
     try {
       if (typeToDelete.recipeTypeId) {
-        await recipeService.deleteRecipeTypeById(typeToDelete.recipeTypeId);
+        await deleteRecipeTypeLocal(typeToDelete.recipeTypeId);
       }
     } catch (error) {
       Alert.alert(
         'No se pudo eliminar',
-        'Revisa la conexion con el backend e intenta eliminar el tipo nuevamente.',
+        'No se pudo eliminar el tipo localmente. Intenta nuevamente.',
       );
       return;
     }

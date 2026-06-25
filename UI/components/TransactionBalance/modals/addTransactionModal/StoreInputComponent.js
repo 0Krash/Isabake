@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Keyboard, StyleSheet, View, Text } from 'react-native';
 import { SelectList } from 'react-native-dropdown-select-list';
 
 import { createStylesBase } from '../../../../constants/TransactionBalance/Styles';
 import typography from '../../../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
-import storeService from '../../../../services/TransactionBalance/API/storeService';
+import useStoresLocal from '../../../../hooks/Stores/useStoresLocal';
 
 const convertArray = (array) => {
   return array.reduce((result, obj) => {
@@ -26,16 +26,17 @@ export default function StoreInputComponent({
 }) {
   const { colors } = useTransactionBalanceTheme();
   const stylesBase = createStylesBase(colors);
-  const [data, setData] = useState([]);
+  const { refreshStores, stores } = useStoresLocal({ autoLoad: false });
+  const data = useMemo(() => convertArray(stores), [stores]);
   const [hasLoadedStores, setHasLoadedStores] = useState(false);
 
   useEffect(() => {
     async function fetchDataStores() {
       try {
-        setData(convertArray(await storeService.getAllStores()));
+        await refreshStores();
       } catch (error) {
         console.error(
-          'Error al obtener transacciones desde StoreInputComponent: ',
+          'Error al obtener tiendas desde StoreInputComponent: ',
           error
         );
       } finally {
@@ -46,7 +47,7 @@ export default function StoreInputComponent({
     if (transactionType === 'Gastos' && !hasLoadedStores) {
       fetchDataStores();
     }
-  }, [transactionType, hasLoadedStores]);
+  }, [refreshStores, transactionType, hasLoadedStores]);
 
   const onSelectHandler = () => {
     setValidationErrorStore(true);

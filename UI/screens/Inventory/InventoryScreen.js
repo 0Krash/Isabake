@@ -37,8 +37,8 @@ import useInventoryData, {
   normalizeInventoryItem,
   toApiInventoryItem,
 } from '../../hooks/Inventory/useInventoryData';
+import useStoresLocal from '../../hooks/Stores/useStoresLocal';
 import inventoryService from '../../services/TransactionBalance/API/inventoryService';
-import storeService from '../../services/TransactionBalance/API/storeService';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -1351,9 +1351,12 @@ const InventoryDetailModal = ({
   const lotFormY = useRef(0);
   const lotFormTitleY = useRef(0);
   const lotFormScrollTimer = useRef(null);
-  const [stores, setStores] = useState([]);
   const [storesHaveLoaded, setStoresHaveLoaded] = useState(false);
-  const [storesAreLoading, setStoresAreLoading] = useState(false);
+  const {
+    loading: storesAreLoading,
+    refreshStores,
+    stores,
+  } = useStoresLocal({ autoLoad: false });
   const [unitPickerIsVisible, setUnitPickerIsVisible] = useState(false);
   const [storePickerIsVisible, setStorePickerIsVisible] = useState(false);
   const [datePickerIsVisible, setDatePickerIsVisible] = useState(false);
@@ -1406,17 +1409,14 @@ const InventoryDetailModal = ({
   );
 
   const loadStores = useCallback(async () => {
-    setStoresAreLoading(true);
-
     try {
-      setStores(await storeService.getAllStores());
+      await refreshStores();
     } catch (error) {
       console.warn('Error al cargar tiendas para inventario:', error);
     } finally {
       setStoresHaveLoaded(true);
-      setStoresAreLoading(false);
     }
-  }, []);
+  }, [refreshStores]);
 
   useEffect(() => {
     if (!isVisible || storesHaveLoaded || storesAreLoading) {
@@ -1440,7 +1440,7 @@ const InventoryDetailModal = ({
     }
 
     const selectedStore = stores.find(
-      (store) => Number(store.storeId) === Number(lotForm.supplierId),
+      (store) => String(store.storeId) === String(lotForm.supplierId),
     );
 
     if (!selectedStore) {
@@ -2326,7 +2326,7 @@ const InventoryDetailModal = ({
                 ...current,
                 supplier:
                   getStoreValue(store, 'Alias') || getStoreValue(store, 'Name'),
-                supplierId: Number(store.storeId),
+                supplierId: store.storeId,
               }));
               setStorePickerIsVisible(false);
             }}
@@ -2908,8 +2908,8 @@ const StorePickerModal = ({
                 const storeAddress = getStoreValue(store, 'Address');
                 const storeName = getStoreValue(store, 'Name');
                 const storeAlias = getStoreValue(store, 'Alias');
-                const storeId = Number(store.storeId);
-                const isSelected = storeId === Number(selectedStoreId);
+                const storeId = String(store.storeId);
+                const isSelected = storeId === String(selectedStoreId);
 
                 return (
                   <TouchableOpacity
