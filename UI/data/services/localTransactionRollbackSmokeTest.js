@@ -15,10 +15,31 @@ const getLot = (inventoryItem, lotId) =>
 const countMovementsByReason = (movements, reason) =>
   movements.filter((movement) => movement.reason === reason).length;
 
+const eventIncludesRunId = (event, runId) =>
+  JSON.stringify(event?.payload || {}).includes(runId);
+
+const countOutboxEventsForRunId = async (runId) => {
+  const events = await getPendingOutboxEvents();
+
+  return events.filter((event) => eventIncludesRunId(event, runId)).length;
+};
+
+let rollbackSmokeTestIsRunning = false;
+
 export const runLocalTransactionRollbackSmokeTest = async () => {
+  if (rollbackSmokeTestIsRunning) {
+    return {
+      details: ['rollback_smoke_test_already_running'],
+      skipped: true,
+      success: false,
+    };
+  }
+
+  rollbackSmokeTestIsRunning = true;
   const details = [];
-  const rollbackReason = `rollback_smoke_test_forced_${Date.now()}`;
-  const negativeReason = `rollback_smoke_test_negative_${Date.now()}`;
+  const runId = createLocalId('rollback_smoke_test_run');
+  const rollbackReason = `${runId}_forced`;
+  const negativeReason = `${runId}_negative`;
 
   try {
     await initDatabase();
@@ -39,13 +60,13 @@ export const runLocalTransactionRollbackSmokeTest = async () => {
         },
       ],
       minimumStock: 0,
-      name: `rollback_smoke_test_stock_${Date.now()}`,
-      notes: 'Created by runLocalTransactionRollbackSmokeTest',
+      name: `rollback_smoke_test_stock_${runId}`,
+      notes: `Created by runLocalTransactionRollbackSmokeTest ${runId}`,
       storage: 'rollback_smoke_test_storage',
     });
     details.push('inventory_created');
 
-    const outboxBeforeRollback = await getPendingOutboxEvents();
+    const outboxBeforeRollback = await countOutboxEventsForRunId(runId);
     const movementsBeforeRollback =
       await stockMovementRepository.getByInventoryId(inventoryItem.inventoryId);
     let rollbackError = null;
@@ -77,15 +98,15 @@ export const runLocalTransactionRollbackSmokeTest = async () => {
     const lotAfterRollback = getLot(inventoryAfterRollback, lotId);
     const movementsAfterRollback =
       await stockMovementRepository.getByInventoryId(inventoryItem.inventoryId);
-    const outboxAfterRollback = await getPendingOutboxEvents();
+    const outboxAfterRollback = await countOutboxEventsForRunId(runId);
     const forcedRollbackPassed =
       rollbackError &&
       Number(lotAfterRollback?.quantity) === 10 &&
       movementsAfterRollback.length === movementsBeforeRollback.length &&
       countMovementsByReason(movementsAfterRollback, rollbackReason) === 0 &&
-      outboxAfterRollback.length === outboxBeforeRollback.length;
+      outboxAfterRollback === outboxBeforeRollback;
 
-    const outboxBeforeNegative = await getPendingOutboxEvents();
+    const outboxBeforeNegative = await countOutboxEventsForRunId(runId);
     const movementsBeforeNegative =
       await stockMovementRepository.getByInventoryId(inventoryItem.inventoryId);
     let negativeError = null;
@@ -110,13 +131,13 @@ export const runLocalTransactionRollbackSmokeTest = async () => {
     const lotAfterNegative = getLot(inventoryAfterNegative, lotId);
     const movementsAfterNegative =
       await stockMovementRepository.getByInventoryId(inventoryItem.inventoryId);
-    const outboxAfterNegative = await getPendingOutboxEvents();
+    const outboxAfterNegative = await countOutboxEventsForRunId(runId);
     const negativeRollbackPassed =
       negativeError &&
       Number(lotAfterNegative?.quantity) === 10 &&
       movementsAfterNegative.length === movementsBeforeNegative.length &&
       countMovementsByReason(movementsAfterNegative, negativeReason) === 0 &&
-      outboxAfterNegative.length === outboxBeforeNegative.length;
+      outboxAfterNegative === outboxBeforeNegative;
 
     return {
       details,
@@ -124,8 +145,8 @@ export const runLocalTransactionRollbackSmokeTest = async () => {
         error: String(rollbackError?.message || rollbackError || ''),
         movementCountAfter: movementsAfterRollback.length,
         movementCountBefore: movementsBeforeRollback.length,
-        outboxCountAfter: outboxAfterRollback.length,
-        outboxCountBefore: outboxBeforeRollback.length,
+        outboxRunCountAfter: outboxAfterRollback,
+        outboxRunCountBefore: outboxBeforeRollback,
         passed: forcedRollbackPassed,
         quantityAfter: Number(lotAfterRollback?.quantity),
       },
@@ -135,19 +156,23 @@ export const runLocalTransactionRollbackSmokeTest = async () => {
         error: String(negativeError?.message || negativeError || ''),
         movementCountAfter: movementsAfterNegative.length,
         movementCountBefore: movementsBeforeNegative.length,
-        outboxCountAfter: outboxAfterNegative.length,
-        outboxCountBefore: outboxBeforeNegative.length,
+        outboxRunCountAfter: outboxAfterNegative,
+        outboxRunCountBefore: outboxBeforeNegative,
         passed: negativeRollbackPassed,
         quantityAfter: Number(lotAfterNegative?.quantity),
       },
+      runId,
       success: Boolean(forcedRollbackPassed && negativeRollbackPassed),
     };
   } catch (error) {
     return {
       details,
       error: String(error?.message || error),
+      runId,
       success: false,
     };
+  } finally {
+    rollbackSmokeTestIsRunning = false;
   }
 };
 
