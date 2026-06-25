@@ -1,60 +1,135 @@
-import axios from 'axios';
-import { StyleSheet, Alert, View, Button } from 'react-native';
-import { API_URL } from '@env';
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from 'react-native';
+import { useEffect, useState } from 'react';
+import TransactionBalanceScreen from './screens/TransactionBalance/TransactionBalanceScreen';
+import RecipeBookScreen from './screens/RecipeBook/RecipeBookScreen';
+import RecipeSaleScreen from './screens/RecipeBook/RecipeSaleScreen';
+import InventoryScreen from './screens/Inventory/InventoryScreen';
+import AppBottomNavigation from './components/AppBottomNavigation';
+import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
+import themes from './constants/TransactionBalance/Theme';
+import { initDatabase } from './data/db/database';
 
 export default function App() {
-  const fetchDataFromBackend = () => {
-    axios
-      .get(`${API_URL}`)
-      .then((response) => {
-        console.log(response.data);
-        // Aquí puedes manejar la respuesta del servidor
-        Alert.alert('Respuesta del servidor', JSON.stringify(response.data));
+  const colorScheme = useColorScheme();
+  const theme = colorScheme === 'dark' ? themes.dark : themes.light;
+  const [activeTab, setActiveTab] = useState('home');
+  const [dbError, setDbError] = useState(null);
+  const [dbReady, setDbReady] = useState(false);
+  const [saleRecipe, setSaleRecipe] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    initDatabase()
+      .then(() => {
+        if (isMounted) {
+          setDbReady(true);
+        }
       })
       .catch((error) => {
-        console.error('Error al hacer la petición:', error);
-        // Aquí puedes manejar cualquier error que ocurra durante la petición
-        Alert.alert('Error', 'Hubo un error al obtener los datos del servidor');
-      });
-  };
+        console.error('Error al inicializar la base de datos local:', error);
 
-  const postDataToBackend = () => {
-    const data = {
-      name: `name${Math.random()}`,
-      duration: 5,
-      price: 200,
+        if (isMounted) {
+          setDbError(error);
+        }
+      });
+
+    return () => {
+      isMounted = false;
     };
+  }, []);
 
-    axios
-      .post(`${API_URL}`, data)
-      .then((response) => {
-        console.log(response.data);
-        // Aquí puedes manejar la respuesta del servidor
-        Alert.alert('Respuesta del servidor', JSON.stringify(response.data));
-      })
-      .catch((error) => {
-        console.error('Error al hacer la petición:', error);
-        // Aquí puedes manejar cualquier error que ocurra durante la petición
-        Alert.alert('Error', 'Hubo un error al obtener los datos del servidor');
-      });
+  const renderScreen = () => {
+    if (saleRecipe) {
+      return (
+        <RecipeSaleScreen
+          onClose={() => setSaleRecipe(null)}
+          recipe={saleRecipe}
+        />
+      );
+    }
+
+    if (activeTab === 'recipes') {
+      return (
+        <RecipeBookScreen
+          onOpenInventory={() => setActiveTab('inventory')}
+          onOpenRecipeSale={setSaleRecipe}
+        />
+      );
+    }
+
+    if (activeTab === 'inventory') {
+      return <InventoryScreen />;
+    }
+
+    return <TransactionBalanceScreen />;
   };
+
+  if (!dbReady || dbError) {
+    return (
+      <TransactionBalanceThemeContext.Provider value={theme}>
+        <SafeAreaView
+          style={[
+            styles.container,
+            styles.dbStateContainer,
+            { backgroundColor: theme.colors.appBackground },
+          ]}
+        >
+          <Text
+            style={[
+              styles.dbStateText,
+              { color: dbError ? theme.colors.danger : theme.colors.textMuted },
+            ]}
+          >
+            {dbError
+              ? 'No se pudo inicializar la base local.'
+              : 'Preparando datos locales...'}
+          </Text>
+        </SafeAreaView>
+      </TransactionBalanceThemeContext.Provider>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Button
-        title="Obtener datos del servidor"
-        onPress={fetchDataFromBackend}
-      />
-      <Button title="Postear datos al servidor" onPress={postDataToBackend} />
-    </View>
+    <TransactionBalanceThemeContext.Provider value={theme}>
+      <SafeAreaView
+        style={[
+          styles.container,
+          { backgroundColor: theme.colors.appBackground },
+        ]}
+      >
+        <View style={styles.screenContainer}>{renderScreen()}</View>
+        {!saleRecipe && (
+          <AppBottomNavigation
+            activeTab={activeTab}
+            onTabPress={setActiveTab}
+          />
+        )}
+      </SafeAreaView>
+    </TransactionBalanceThemeContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+  },
+  screenContainer: {
+    flex: 1,
+  },
+  dbStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
+  },
+  dbStateText: {
+    fontSize: 16,
+    textAlign: 'center',
   },
 });

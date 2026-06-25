@@ -1,9 +1,887 @@
-const app = require('../app');
 const request = require('supertest');
 
-describe('GET /transactions', () => {
-  test('should respond with 200 status code', async () => {
-    const response = await request(app).get('/api/v1/transactions').send();
-    expect(response);
+jest.mock('../models/transactionModel', () => ({
+  aggregate: jest.fn(),
+  countDocuments: jest.fn(),
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+}));
+
+jest.mock('../models/categoryModel', () => ({
+  create: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+}));
+
+jest.mock('../models/storeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
+
+jest.mock('../models/recipeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+  updateMany: jest.fn(),
+}));
+
+jest.mock('../models/recipeSectionModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+}));
+
+jest.mock('../models/recipeTypeModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+}));
+
+jest.mock('../models/inventoryModel', () => ({
+  create: jest.fn(),
+  deleteOne: jest.fn(),
+  find: jest.fn(),
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+}));
+
+const app = require('../app');
+const Category = require('../models/categoryModel');
+const Inventory = require('../models/inventoryModel');
+const Recipe = require('../models/recipeModel');
+const RecipeSection = require('../models/recipeSectionModel');
+const RecipeType = require('../models/recipeTypeModel');
+const Store = require('../models/storeModel');
+const Transaction = require('../models/transactionModel');
+
+describe('TransBalance API', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('GET /api/v1/transactions', () => {
+    test('responds with paginated transactions', async () => {
+      const transactions = [
+        {
+          transactionId: 'tx-1',
+          transactionType: 'Ventas',
+          description: 'Pastel',
+          amount: 15000,
+        },
+      ];
+      const limit = jest.fn().mockResolvedValue(transactions);
+      const skip = jest.fn().mockReturnValue({ limit });
+      const sort = jest.fn().mockReturnValue({ skip });
+      Transaction.find.mockReturnValue({ sort });
+      Transaction.countDocuments.mockResolvedValue(21);
+
+      const response = await request(app).get(
+        '/api/v1/transactions?page=2&limit=20&transactionType=Ventas',
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        pagination: {
+          hasMore: false,
+          limit: 20,
+          page: 2,
+          total: 21,
+          totalPages: 2,
+        },
+        data: transactions,
+      });
+      expect(Transaction.find).toHaveBeenCalledWith({
+        transactionType: 'Ventas',
+      });
+      expect(sort).toHaveBeenCalledWith({
+        _id: -1,
+        selectedDate: -1,
+        transactionId: -1,
+      });
+      expect(skip).toHaveBeenCalledWith(20);
+      expect(limit).toHaveBeenCalledWith(20);
+      expect(Transaction.countDocuments).toHaveBeenCalledWith({
+        transactionType: 'Ventas',
+      });
+    });
+  });
+
+  describe('POST /api/v1/transactions', () => {
+    test('creates a transaction', async () => {
+      const payload = {
+        transactionType: 'Gastos',
+        description: 'Harina',
+        financials: {
+          grossMargin: 40,
+          grossProfit: 1000,
+          netMargin: 32,
+          netProfit: 800,
+          productionCost: 1500,
+          recipeId: 1,
+          recipeName: 'Pastel',
+          saleTotal: 2500,
+        },
+        amount: 2500,
+        quantity: '1',
+      };
+      const createdTransaction = {
+        transactionId: 'tx-2',
+        ...payload,
+      };
+      Transaction.create.mockResolvedValue(createdTransaction);
+
+      const response = await request(app)
+        .post('/api/v1/transactions')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          transaction: createdTransaction,
+        },
+      });
+      expect(Transaction.create).toHaveBeenCalledWith(payload);
+    });
+
+    test('returns failed response when creation throws', async () => {
+      Transaction.create.mockRejectedValue(new Error('invalid payload'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const response = await request(app).post('/api/v1/transactions').send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'invalid payload',
+      });
+
+      console.error.mockRestore();
+    });
+  });
+
+  describe('DELETE /api/v1/transactions/:transactionId', () => {
+    test('deletes a transaction by transactionId', async () => {
+      Transaction.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/transactions/tx-1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Transaction.deleteOne).toHaveBeenCalledWith({
+        transactionId: 'tx-1',
+      });
+    });
+
+    test('returns 404 when transaction does not exist', async () => {
+      Transaction.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/transactions/tx-404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'No se encontró la transacción',
+      });
+    });
+  });
+
+  describe('transaction summaries', () => {
+    test('returns total amount by category', async () => {
+      const summary = [
+        {
+          transactionType: 'Ventas',
+          categories: [{ category: 'Ventas', totalAmount: 12000 }],
+          total: 12000,
+        },
+      ];
+      Transaction.aggregate.mockResolvedValue(summary);
+
+      const response = await request(app).get(
+        '/api/v1/transactions/totalAmountByCategory',
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(summary);
+      expect(Transaction.aggregate).toHaveBeenCalledTimes(1);
+    });
+
+    test('returns total amount by date and category', async () => {
+      const summary = [
+        {
+          transactionType: 'Gastos',
+          months: [{ year: 2026, month: 6, monthTotalAmount: 5000 }],
+          transactionTotalAmount: 5000,
+        },
+      ];
+      Transaction.aggregate.mockResolvedValue(summary);
+
+      const response = await request(app).get(
+        '/api/v1/transactions/totalAmountByDateCategory',
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(summary);
+      expect(Transaction.aggregate).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('categories', () => {
+    test('returns all categories', async () => {
+      const categories = [
+        {
+          categoryId: '1',
+          description: 'Materia prima',
+          shortDescription: 'MP',
+        },
+      ];
+      Category.find.mockResolvedValue(categories);
+
+      const response = await request(app).get('/api/v1/categories');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: categories,
+      });
+    });
+
+    test('returns 404 when category is not found', async () => {
+      Category.findOne.mockResolvedValue(null);
+
+      const response = await request(app).get('/api/v1/categories/missing');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Categoría no encontrada',
+      });
+    });
+  });
+
+  describe('stores', () => {
+    test('returns all stores', async () => {
+      const stores = [
+        {
+          storeId: 1,
+          Name: 'Central',
+          Alias: 'CENT',
+          Address: 'Calle 1',
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(stores);
+      Store.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/stores');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: stores,
+      });
+      expect(sort).toHaveBeenCalledWith({ storeId: 1 });
+    });
+
+    test('creates a store with next storeId', async () => {
+      const payload = {
+        Name: 'Norte',
+        Alias: 'NTE',
+        Address: 'Calle 2',
+      };
+      const createdStore = {
+        storeId: 2,
+        ...payload,
+      };
+      const sort = jest.fn().mockResolvedValue({ storeId: 1 });
+      Store.findOne.mockReturnValue({ sort });
+      Store.create.mockResolvedValue(createdStore);
+
+      const response = await request(app).post('/api/v1/stores').send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          store: createdStore,
+        },
+      });
+      expect(Store.create).toHaveBeenCalledWith({
+        ...payload,
+        storeId: 2,
+      });
+    });
+
+    test('updates a store by storeId', async () => {
+      const payload = {
+        Name: 'Sur',
+        Alias: 'SUR',
+        Address: 'Calle 3',
+      };
+      const updatedStore = {
+        storeId: 3,
+        ...payload,
+      };
+      Store.findOneAndUpdate.mockResolvedValue(updatedStore);
+
+      const response = await request(app)
+        .patch('/api/v1/stores/3')
+        .send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          store: updatedStore,
+        },
+      });
+      expect(Store.findOneAndUpdate).toHaveBeenCalledWith(
+        { storeId: 3 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+    });
+
+    test('returns 404 when updating a missing store', async () => {
+      Store.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/stores/404').send({
+        Name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tienda no encontrada',
+      });
+    });
+
+    test('deletes a store by storeId', async () => {
+      Store.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/stores/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Store.deleteOne).toHaveBeenCalledWith({ storeId: 3 });
+    });
+
+    test('returns 404 when deleting a missing store', async () => {
+      Store.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/stores/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tienda no encontrada',
+      });
+    });
+  });
+
+  describe('recipes', () => {
+    test('returns all recipes', async () => {
+      const recipes = [
+        {
+          recipeId: 1,
+          name: 'Cheesecake',
+          servings: 10,
+          cost: 128.4,
+          ingredients: [],
+          steps: [],
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipes);
+      Recipe.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipes');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipes,
+      });
+      expect(sort).toHaveBeenCalledWith({ recipeId: 1 });
+    });
+
+    test('creates a recipe with next recipeId', async () => {
+      const payload = {
+        name: 'Brownies',
+        servings: 12,
+        cost: 90,
+        ingredients: [
+          {
+            ingredientId: 'ing-1',
+            inventoryId: 1,
+            name: 'Chocolate',
+            quantity: '250',
+            unit: 'g',
+          },
+        ],
+        steps: [
+          {
+            description: 'Mezclar ingredientes secos.',
+            order: 1,
+            stepId: 'step-1',
+          },
+        ],
+        type: 'Pastel',
+      };
+      const createdRecipe = {
+        recipeId: 2,
+        ...payload,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeId: 1 });
+      Recipe.findOne.mockReturnValue({ sort });
+      Recipe.create.mockResolvedValue(createdRecipe);
+
+      const response = await request(app).post('/api/v1/recipes').send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipe: createdRecipe,
+        },
+      });
+      expect(Recipe.create).toHaveBeenCalledWith({
+        ...payload,
+        recipeId: 2,
+      });
+    });
+
+    test('updates a recipe by recipeId', async () => {
+      const payload = {
+        name: 'Cheesecake',
+        servings: 8,
+        cost: 120,
+        ingredients: [],
+        steps: [],
+        type: 'Pastel',
+      };
+      const updatedRecipe = {
+        recipeId: 1,
+        ...payload,
+      };
+      Recipe.findOneAndUpdate.mockResolvedValue(updatedRecipe);
+
+      const response = await request(app)
+        .patch('/api/v1/recipes/1')
+        .send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipe: updatedRecipe,
+        },
+      });
+      expect(Recipe.findOneAndUpdate).toHaveBeenCalledWith(
+        { recipeId: 1 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+    });
+
+    test('returns 404 when updating a missing recipe', async () => {
+      Recipe.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/recipes/404').send({
+        name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Receta no encontrada',
+      });
+    });
+
+    test('deletes a recipe by recipeId', async () => {
+      Recipe.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipes/1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.deleteOne).toHaveBeenCalledWith({ recipeId: 1 });
+    });
+
+    test('returns 404 when deleting a missing recipe', async () => {
+      Recipe.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/recipes/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Receta no encontrada',
+      });
+    });
+  });
+
+  describe('recipe sections', () => {
+    test('returns all recipe sections', async () => {
+      const recipeSections = [
+        {
+          name: 'Masa',
+          normalizedName: 'masa',
+          recipeSectionId: 1,
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipeSections);
+      RecipeSection.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipe-sections');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipeSections,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, recipeSectionId: 1 });
+    });
+
+    test('creates a recipe section with next recipeSectionId', async () => {
+      const payload = { name: 'Betun' };
+      const createdRecipeSection = {
+        name: 'Betun',
+        normalizedName: 'betun',
+        recipeSectionId: 2,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeSectionId: 1 });
+      RecipeSection.findOne.mockImplementation((query) => {
+        if (query?.normalizedName) {
+          return Promise.resolve(null);
+        }
+
+        return { sort };
+      });
+      RecipeSection.create.mockResolvedValue(createdRecipeSection);
+
+      const response = await request(app)
+        .post('/api/v1/recipe-sections')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipeSection: createdRecipeSection,
+        },
+      });
+      expect(RecipeSection.create).toHaveBeenCalledWith({
+        name: 'Betun',
+        normalizedName: 'betun',
+        recipeSectionId: 2,
+      });
+    });
+
+    test('deletes a recipe section and clears it from recipe ingredients', async () => {
+      const recipeSection = {
+        name: 'Relleno',
+        normalizedName: 'relleno',
+        recipeSectionId: 3,
+      };
+      RecipeSection.findOne.mockResolvedValue(recipeSection);
+      Recipe.updateMany.mockResolvedValue({ modifiedCount: 2 });
+      RecipeSection.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipe-sections/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.updateMany).toHaveBeenCalledWith(
+        { 'ingredients.section': 'Relleno' },
+        { $set: { 'ingredients.$[ingredient].section': '' } },
+        { arrayFilters: [{ 'ingredient.section': 'Relleno' }] },
+      );
+      expect(RecipeSection.deleteOne).toHaveBeenCalledWith({
+        recipeSectionId: 3,
+      });
+    });
+
+    test('returns 404 when deleting a missing recipe section', async () => {
+      RecipeSection.findOne.mockResolvedValue(null);
+
+      const response = await request(app).delete('/api/v1/recipe-sections/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Sección no encontrada',
+      });
+    });
+  });
+
+  describe('recipe types', () => {
+    test('returns all recipe types', async () => {
+      const recipeTypes = [
+        {
+          name: 'Pastel',
+          normalizedName: 'pastel',
+          recipeTypeId: 1,
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(recipeTypes);
+      RecipeType.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/recipe-types');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: recipeTypes,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, recipeTypeId: 1 });
+    });
+
+    test('creates a recipe type with next recipeTypeId', async () => {
+      const payload = { name: 'Cupcake' };
+      const createdRecipeType = {
+        name: 'Cupcake',
+        normalizedName: 'cupcake',
+        recipeTypeId: 2,
+      };
+      const sort = jest.fn().mockResolvedValue({ recipeTypeId: 1 });
+      RecipeType.findOne.mockImplementation((query) => {
+        if (query?.normalizedName) {
+          return Promise.resolve(null);
+        }
+
+        return { sort };
+      });
+      RecipeType.create.mockResolvedValue(createdRecipeType);
+
+      const response = await request(app)
+        .post('/api/v1/recipe-types')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          recipeType: createdRecipeType,
+        },
+      });
+      expect(RecipeType.create).toHaveBeenCalledWith({
+        name: 'Cupcake',
+        normalizedName: 'cupcake',
+        recipeTypeId: 2,
+      });
+    });
+
+    test('deletes a recipe type and clears it from recipes', async () => {
+      const recipeType = {
+        name: 'Pan',
+        normalizedName: 'pan',
+        recipeTypeId: 3,
+      };
+      RecipeType.findOne.mockResolvedValue(recipeType);
+      Recipe.updateMany.mockResolvedValue({ modifiedCount: 2 });
+      RecipeType.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/recipe-types/3');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Recipe.updateMany).toHaveBeenCalledWith(
+        { type: 'Pan' },
+        { $set: { type: '' } },
+      );
+      expect(RecipeType.deleteOne).toHaveBeenCalledWith({
+        recipeTypeId: 3,
+      });
+    });
+
+    test('returns 404 when deleting a missing recipe type', async () => {
+      RecipeType.findOne.mockResolvedValue(null);
+
+      const response = await request(app).delete('/api/v1/recipe-types/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Tipo de receta no encontrado',
+      });
+    });
+  });
+
+  describe('inventory', () => {
+    test('returns all inventory items', async () => {
+      const inventoryItems = [
+        {
+          category: 'Lacteos',
+          inventoryId: 1,
+          lots: [],
+          name: 'Queso crema',
+          storage: 'Refrigerado',
+        },
+      ];
+      const sort = jest.fn().mockResolvedValue(inventoryItems);
+      Inventory.find.mockReturnValue({ sort });
+
+      const response = await request(app).get('/api/v1/inventory');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        result: 1,
+        data: inventoryItems,
+      });
+      expect(sort).toHaveBeenCalledWith({ name: 1, inventoryId: 1 });
+    });
+
+    test('creates an inventory item with next inventoryId', async () => {
+      const payload = {
+        category: 'Secos',
+        lots: [
+          {
+            brand: 'Selecta',
+            cost: 320,
+            expiryDate: '2026-11-20',
+            location: 'Anaquel 2',
+            lotId: 'lot-1',
+            purchaseDate: '2026-06-04',
+            quality: 4,
+            quantity: 10,
+            supplier: 'Mayoreo Dulce',
+            supplierId: 1,
+            unit: 'kg',
+          },
+        ],
+        name: 'Harina',
+        storage: 'Seco',
+      };
+      const createdInventoryItem = {
+        inventoryId: 2,
+        ...payload,
+        minimumStock: 0,
+        notes: '',
+      };
+      const sort = jest.fn().mockResolvedValue({ inventoryId: 1 });
+      Inventory.findOne.mockReturnValue({ sort });
+      Inventory.create.mockResolvedValue(createdInventoryItem);
+
+      const response = await request(app)
+        .post('/api/v1/inventory')
+        .send(payload);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          inventoryItem: createdInventoryItem,
+        },
+      });
+      expect(Inventory.create).toHaveBeenCalledWith({
+        category: payload.category,
+        lots: [
+          {
+            ...payload.lots[0],
+            notes: '',
+            taxApplies: false,
+            taxRate: 0,
+          },
+        ],
+        minimumStock: 0,
+        notes: '',
+        inventoryId: 2,
+        name: payload.name,
+        storage: payload.storage,
+      });
+    });
+
+    test('updates an inventory item by inventoryId', async () => {
+      const payload = {
+        category: 'Chocolate',
+        lots: [],
+        minimumStock: 1,
+        name: 'Chocolate semi amargo',
+        notes: 'Mantener fresco',
+        storage: 'Fresco y seco',
+      };
+      const updatedInventoryItem = {
+        inventoryId: 3,
+        ...payload,
+      };
+      Inventory.findOneAndUpdate.mockResolvedValue(updatedInventoryItem);
+
+      const response = await request(app)
+        .patch('/api/v1/inventory/3')
+        .send(payload);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        status: 'success',
+        data: {
+          inventoryItem: updatedInventoryItem,
+        },
+      });
+      expect(Inventory.findOneAndUpdate).toHaveBeenCalledWith(
+        { inventoryId: 3 },
+        payload,
+        {
+          new: true,
+          runValidators: true,
+        },
+      );
+    });
+
+    test('returns 404 when updating a missing inventory item', async () => {
+      Inventory.findOneAndUpdate.mockResolvedValue(null);
+
+      const response = await request(app).patch('/api/v1/inventory/404').send({
+        name: 'Missing',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Ingrediente no encontrado',
+      });
+    });
+
+    test('deletes an inventory item by inventoryId', async () => {
+      Inventory.deleteOne.mockResolvedValue({ deletedCount: 1 });
+
+      const response = await request(app).delete('/api/v1/inventory/1');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'success' });
+      expect(Inventory.deleteOne).toHaveBeenCalledWith({ inventoryId: 1 });
+    });
+
+    test('returns 404 when deleting a missing inventory item', async () => {
+      Inventory.deleteOne.mockResolvedValue({ deletedCount: 0 });
+
+      const response = await request(app).delete('/api/v1/inventory/404');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        status: 'failed',
+        message: 'Ingrediente no encontrado',
+      });
+    });
   });
 });

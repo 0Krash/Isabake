@@ -64,6 +64,9 @@ yarn-error.log
 # Temporary files created by Metro to check the health of the file watcher
 .metro-health-check*
 
+# Local prototypes / scratch files
+_toUse/
+
 # testing
 /coverage
 
@@ -239,3 +242,11 @@ __pycache__
 
 # === Rules for C++ development ===
 compile_commands.json
+
+UI/android
+UI/ios
+UI/android/local.properties
+UI/android/.gradle/
+UI/android/build/
+UI/android/app/build/
+UI/.expo/
