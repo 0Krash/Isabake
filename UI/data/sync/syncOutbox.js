@@ -21,8 +21,9 @@ export const addOutboxEvent = async (
   documentId,
   operation,
   payload,
+  options = {},
 ) => {
-  const db = await initDatabase();
+  const db = options.db || (await initDatabase());
   const id = createLocalId('outbox');
 
   await db.runAsync(
@@ -46,8 +47,8 @@ export const addOutboxEvent = async (
   return id;
 };
 
-export const getPendingOutboxEvents = async () => {
-  const db = await initDatabase();
+export const getPendingOutboxEvents = async (options = {}) => {
+  const db = options.db || (await initDatabase());
   const events = await db.getAllAsync(
     `
       SELECT *
@@ -60,8 +61,8 @@ export const getPendingOutboxEvents = async () => {
   return events.map(parseOutboxEvent);
 };
 
-export const markOutboxEventAsDone = async (id) => {
-  const db = await initDatabase();
+export const markOutboxEventAsDone = async (id, options = {}) => {
+  const db = options.db || (await initDatabase());
 
   await db.runAsync(
     `
@@ -74,8 +75,8 @@ export const markOutboxEventAsDone = async (id) => {
   );
 };
 
-export const markOutboxEventAsFailed = async (id, error) => {
-  const db = await initDatabase();
+export const markOutboxEventAsFailed = async (id, error, options = {}) => {
+  const db = options.db || (await initDatabase());
 
   await db.runAsync(
     `
@@ -88,8 +89,8 @@ export const markOutboxEventAsFailed = async (id, error) => {
   );
 };
 
-export const incrementOutboxAttempt = async (id, error) => {
-  const db = await initDatabase();
+export const incrementOutboxAttempt = async (id, error, options = {}) => {
+  const db = options.db || (await initDatabase());
 
   await db.runAsync(
     `

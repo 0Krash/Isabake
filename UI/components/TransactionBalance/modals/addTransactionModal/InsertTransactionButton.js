@@ -2,14 +2,24 @@ import { useState } from 'react';
 import { Keyboard, TouchableOpacity, StyleSheet, Text } from 'react-native';
 
 import TransactionAlertModal from '../TransactionAlertModal';
-import transactionService from '../../../../services/TransactionBalance/API/transactionService';
 import CurrencyFormatter from '../../../../utils/CurrencyFormatter';
 import DateFormatter from '../../../../utils/DateFormatter';
 import typography from '../../../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
+import useTransactionBalanceData from '../../../../hooks/TransactionBalance/useTransactionBalanceData';
+
+const categoryLabels = {
+  1: 'Materia prima',
+  2: 'Insumos',
+  3: 'Formación',
+  4: 'Operativo',
+};
 
 export default function InsertTransactionButton(props) {
   const { colors } = useTransactionBalanceTheme();
+  const { createTransaction } = useTransactionBalanceData(undefined, {
+    autoLoad: false,
+  });
   const [transactionAlertVisible, setTransactionAlertVisibility] =
     useState(false);
 
@@ -26,11 +36,15 @@ export default function InsertTransactionButton(props) {
     onTransactionCreated,
   } = props;
 
-  const postTransaction = async () => {
+  const createLocalTransaction = async () => {
     const data = {
       amount: CurrencyFormatter.convertCurrencyToCents(amount),
       store: { storeId: selected },
-      category: { categoryId: category },
+      category: {
+        categoryId: category,
+        description: categoryLabels[category] || 'Movimiento',
+        shortDescription: categoryLabels[category] || 'Movimiento',
+      },
       quantity: quantity,
       uomId: unitValue,
       description: description,
@@ -40,12 +54,12 @@ export default function InsertTransactionButton(props) {
     };
 
     try {
-      await transactionService.postTransaction(data);
+      await createTransaction(data);
       onTransactionCreated?.();
       setTransactionAlertVisibility(true);
     } catch (error) {
       console.error(
-        'Error al obtener transacciones desde TransactionBalanceScreen: ',
+        'Error al guardar transacción local desde TransactionBalanceScreen: ',
         error
       );
     }
@@ -72,7 +86,7 @@ export default function InsertTransactionButton(props) {
         ]}
         onPress={() => {
           Keyboard.dismiss();
-          postTransaction();
+          createLocalTransaction();
         }}
         disabled={!props.validationError}
       >

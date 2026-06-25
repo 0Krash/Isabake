@@ -81,6 +81,7 @@ export const createRepository = ({
     const entity = withIdentity(prepareCreate(data, id), id);
     const documentData = stripDocumentMetadata(entity);
     const document = await saveDocument(collection, id, documentData, {
+      db: options.db,
       groupId: options.groupId ?? data.groupId ?? null,
       remoteId: options.remoteId ?? data.remoteId ?? null,
       serverVersion: options.serverVersion ?? data.serverVersion ?? null,
@@ -92,7 +93,10 @@ export const createRepository = ({
   };
 
   const update = async (id, updates, options = {}) => {
-    const current = await getById(id, { includeDeleted: true });
+    const current = await getById(id, {
+      db: options.db,
+      includeDeleted: true,
+    });
 
     if (!current) {
       return null;
@@ -110,6 +114,7 @@ export const createRepository = ({
     );
     const documentData = stripDocumentMetadata(entity);
     const document = await saveDocument(collection, String(id), documentData, {
+      db: options.db,
       groupId: options.groupId ?? entity.groupId ?? null,
       remoteId: options.remoteId ?? entity.remoteId ?? null,
       serverVersion: options.serverVersion ?? entity.serverVersion ?? null,

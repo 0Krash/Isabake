@@ -3,6 +3,17 @@ import { idsMatch } from '../../utils/idUtils';
 
 export const STOCK_MOVEMENT_COLLECTION = 'stockMovements';
 
+export const STOCK_MOVEMENT_TYPES = [
+  'purchase',
+  'sale_usage',
+  'adjustment',
+  'waste',
+  'return',
+];
+
+const normalizeMovementType = (type) =>
+  STOCK_MOVEMENT_TYPES.includes(type) ? type : 'adjustment';
+
 const normalizeStockMovement = (movement = {}) => ({
   inventoryId: movement.inventoryId ?? null,
   lotId: movement.lotId ?? null,
@@ -11,7 +22,7 @@ const normalizeStockMovement = (movement = {}) => ({
   reason: movement.reason || '',
   relatedRecipeId: movement.relatedRecipeId ?? null,
   relatedTransactionId: movement.relatedTransactionId ?? null,
-  type: movement.type || 'adjustment',
+  type: normalizeMovementType(movement.type),
   unit: movement.unit || '',
 });
 

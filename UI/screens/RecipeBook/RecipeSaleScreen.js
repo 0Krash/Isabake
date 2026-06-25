@@ -988,9 +988,9 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
                 No hay lotes compatibles con existencia.
               </Text>
             ) : (
-              selectedIngredientLots.map((lot) => (
+              selectedIngredientLots.map((lot, lotIndex) => (
                 <View
-                  key={lot.id}
+                  key={`${lot.id || lot.lotId || 'lot'}-${lotIndex}`}
                   style={[styles.lotRow, { borderColor: colors.border }]}
                 >
                   <View style={styles.rowCopy}>

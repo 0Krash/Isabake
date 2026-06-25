@@ -6,9 +6,9 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
-import transactionService from '../../../services/TransactionBalance/API/transactionService';
 import typography from '../../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../../context/TransactionBalanceThemeContext';
+import useTransactionBalanceData from '../../../hooks/TransactionBalance/useTransactionBalanceData';
 
 export default function DeleteTransactionModal({
   transactionDetail,
@@ -17,16 +17,17 @@ export default function DeleteTransactionModal({
   setDeleteTransactionModalIsVisible,
 }) {
   const { colors } = useTransactionBalanceTheme();
-  const handleDeleteTransaction = (transactionId) => {
-    transactionService
-      .deleteTransactionById(transactionId)
-      .then((data) => {
-        setDeleteTransactionModalIsVisible(false);
-        onTransactionDeleted?.();
-      })
-      .catch((error) => {
-        console.error('Error al eliminar la transacción:', error);
-      });
+  const { deleteTransaction } = useTransactionBalanceData(undefined, {
+    autoLoad: false,
+  });
+  const handleDeleteTransaction = async (transactionId) => {
+    try {
+      await deleteTransaction(transactionId);
+      setDeleteTransactionModalIsVisible(false);
+      onTransactionDeleted?.();
+    } catch (error) {
+      console.error('Error al eliminar la transacción local:', error);
+    }
   };
 
   return (

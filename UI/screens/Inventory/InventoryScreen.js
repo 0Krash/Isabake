@@ -35,6 +35,7 @@ import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import useStoresLocal from '../../hooks/Stores/useStoresLocal';
+import { createLocalId } from '../../data/db/localIds';
 import { idsMatch } from '../../utils/idUtils';
 
 const ingredientUnits = [
@@ -737,11 +738,13 @@ export default function InventoryScreen() {
       return false;
     }
 
+    const nextLotId = lotIdToUpdate || createLocalId('lot');
     const nextLot = {
       ...lotForm,
       cost: lotForm.cost || '0',
       expiryDate: lotForm.expiryApplies ? lotForm.expiryDate : '',
-      id: lotIdToUpdate || `lot-${Date.now()}`,
+      id: nextLotId,
+      lotId: nextLotId,
       quality: normalizeQuality(lotForm.quality),
       quantity,
       taxRate: lotForm.taxApplies ? lotForm.taxRate : '',
@@ -770,7 +773,7 @@ export default function InventoryScreen() {
     }
   };
 
-  const removeLotFromSelectedItem = async (lotId) => {
+  const removeLotFromSelectedItem = async (lotId, lotIndexToRemove = null) => {
     if (!selectedItem) {
       return;
     }
@@ -778,7 +781,13 @@ export default function InventoryScreen() {
     try {
       await persistInventoryItem({
         ...selectedItem,
-        lots: selectedItem.lots.filter((lot) => lot.id !== lotId),
+        lots: selectedItem.lots.filter((lot, lotIndex) => {
+          if (lotIndexToRemove !== null && lotIndexToRemove !== undefined) {
+            return lotIndex !== lotIndexToRemove;
+          }
+
+          return lot.id !== lotId;
+        }),
       });
     } catch (error) {
       console.warn('Error al eliminar lote:', error);
@@ -1150,15 +1159,15 @@ export default function InventoryScreen() {
           setSelectedItemId(null);
         }}
         onDeleteItem={confirmDeleteInventoryItem}
-        onDeleteLot={(lotId) => {
-          const lot = selectedItem?.lots.find(
-            (currentLot) => currentLot.id === lotId,
-          );
+        onDeleteLot={(lotId, lotIndex) => {
+          const lot =
+            selectedItem?.lots[lotIndex] ||
+            selectedItem?.lots.find((currentLot) => currentLot.id === lotId);
 
           requestDeleteConfirmation({
             confirmLabel: 'Eliminar lote',
             message: `Se eliminará el lote "${lot?.brand || 'sin marca'}" de ${selectedItem?.name}. Cantidad: ${lot?.quantity || 0} ${lot?.unit || ''}. Costo: ${formatMoney(parseNumericInput(lot?.cost))}. Proveedor: ${lot?.supplier || 'Sin proveedor'}.`,
-            onConfirm: () => removeLotFromSelectedItem(lotId),
+            onConfirm: () => removeLotFromSelectedItem(lotId, lotIndex),
             title: 'Eliminar lote',
           });
         }}
@@ -1572,6 +1581,7 @@ const InventoryDetailModal = ({
       cost: String(lot.cost || '').replace('$', ''),
       expiryApplies: Boolean(lot.expiryDate),
       id: undefined,
+      lotId: undefined,
       quantity: `${lot.quantity || ''}`,
       taxRate: `${lot.taxRate || ''}`,
     });
@@ -1722,18 +1732,19 @@ const InventoryDetailModal = ({
           </Text>
         </View>
       )}
-      {item.lots.map((lot) => {
+      {item.lots.map((lot, lotIndex) => {
         const daysUntilExpiry = getDaysUntilExpiry(lot.expiryDate);
         const isExpired = daysUntilExpiry !== null && daysUntilExpiry <= 0;
         const isEditingLot = editingLotId === lot.id;
         const hasFeedback = feedbackLotId === lot.id;
+        const lotRenderKey = `${lot.id || lot.lotId || 'lot'}-${lotIndex}`;
         const lotCostText = `$${Number(
           String(lot.cost || '0').replace(/[^0-9.]/g, '') || 0,
         ).toFixed(2)}`;
 
         return (
           <View
-            key={lot.id}
+            key={lotRenderKey}
             onLayout={(event) => {
               lotCardPositions.current[lot.id] = event.nativeEvent.layout.y;
             }}
@@ -1882,7 +1893,7 @@ const InventoryDetailModal = ({
                   activeOpacity={0.8}
                   onPress={(event) => {
                     event.stopPropagation();
-                    onDeleteLot(lot.id);
+                    onDeleteLot(lot.id, lotIndex);
                   }}
                   style={[
                     styles.inlineActionButton,

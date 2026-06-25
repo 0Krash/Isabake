@@ -49,7 +49,7 @@ const getExistingDocument = async (db, collection, id) =>
 export { initDatabase };
 
 export const saveDocument = async (collection, id, data, options = {}) => {
-  const db = await initDatabase();
+  const db = options.db || (await initDatabase());
   const existingDocument = await getExistingDocument(db, collection, id);
   const createdAt = existingDocument?.createdAt || options.createdAt || nowIso();
   const updatedAt = options.updatedAt || nowIso();
@@ -69,7 +69,7 @@ export const saveDocument = async (collection, id, data, options = {}) => {
   const deviceId =
     options.deviceId !== undefined
       ? options.deviceId
-      : existingDocument?.deviceId || (await getLocalDeviceId());
+      : existingDocument?.deviceId || (await getLocalDeviceId({ db }));
 
   await db.runAsync(
     `
@@ -123,14 +123,15 @@ export const saveDocument = async (collection, id, data, options = {}) => {
         id,
         remoteId,
       },
+      { db },
     );
   }
 
-  return getDocument(collection, id, { includeDeleted: true });
+  return getDocument(collection, id, { db, includeDeleted: true });
 };
 
 export const getDocument = async (collection, id, options = {}) => {
-  const db = await initDatabase();
+  const db = options.db || (await initDatabase());
   const includeDeleted = Boolean(options.includeDeleted);
   const row = await db.getFirstAsync(
     `
@@ -147,7 +148,7 @@ export const getDocument = async (collection, id, options = {}) => {
 };
 
 export const getCollection = async (collection, options = {}) => {
-  const db = await initDatabase();
+  const db = options.db || (await initDatabase());
   const where = ['collection = ?'];
   const params = [collection];
 
@@ -193,7 +194,7 @@ export const getCollection = async (collection, options = {}) => {
 };
 
 export const softDeleteDocument = async (collection, id, options = {}) => {
-  const db = await initDatabase();
+  const db = options.db || (await initDatabase());
   const deletedAt = options.deletedAt || nowIso();
 
   await db.runAsync(
@@ -210,14 +211,14 @@ export const softDeleteDocument = async (collection, id, options = {}) => {
   );
 
   if (!options.skipOutbox) {
-    await addOutboxEvent(collection, id, 'delete', { id });
+    await addOutboxEvent(collection, id, 'delete', { id }, { db });
   }
 
-  return getDocument(collection, id, { includeDeleted: true });
+  return getDocument(collection, id, { db, includeDeleted: true });
 };
 
-export const hardDeleteDocument = async (collection, id) => {
-  const db = await initDatabase();
+export const hardDeleteDocument = async (collection, id, options = {}) => {
+  const db = options.db || (await initDatabase());
 
   await db.runAsync(
     `
@@ -229,8 +230,8 @@ export const hardDeleteDocument = async (collection, id) => {
   );
 };
 
-export const updateSyncStatus = async (collection, id, syncStatus) => {
-  const db = await initDatabase();
+export const updateSyncStatus = async (collection, id, syncStatus, options = {}) => {
+  const db = options.db || (await initDatabase());
 
   await db.runAsync(
     `
@@ -243,11 +244,11 @@ export const updateSyncStatus = async (collection, id, syncStatus) => {
     [syncStatus, nowIso(), collection, id],
   );
 
-  return getDocument(collection, id, { includeDeleted: true });
+  return getDocument(collection, id, { db, includeDeleted: true });
 };
 
-export const getPendingDocuments = async () => {
-  const db = await initDatabase();
+export const getPendingDocuments = async (options = {}) => {
+  const db = options.db || (await initDatabase());
   const rows = await db.getAllAsync(
     `
       SELECT *

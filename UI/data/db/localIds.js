@@ -41,8 +41,8 @@ export const createLocalUuid = () => {
 export const createLocalId = (prefix = 'local') =>
   `${prefix}_${createLocalUuid()}`;
 
-export const getLocalDeviceId = async () => {
-  const db = await initDatabase();
+export const getLocalDeviceId = async (options = {}) => {
+  const db = options.db || (await initDatabase());
   const existingDevice = await db.getFirstAsync(
     `
       SELECT data
