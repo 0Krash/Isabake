@@ -61,6 +61,27 @@ export const getPendingOutboxEvents = async (options = {}) => {
   return events.map(parseOutboxEvent);
 };
 
+export const getPendingOutboxCountsByCollection = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const rows = await db.getAllAsync(
+    `
+      SELECT collection, COUNT(*) AS count
+      FROM sync_outbox
+      WHERE status = 'pending'
+      GROUP BY collection
+      ORDER BY collection ASC;
+    `,
+  );
+
+  return rows.reduce(
+    (summary, row) => ({
+      ...summary,
+      [row.collection || 'unknown']: Number(row.count || 0),
+    }),
+    {},
+  );
+};
+
 export const markOutboxEventAsDone = async (id, options = {}) => {
   const db = options.db || (await initDatabase());
 
