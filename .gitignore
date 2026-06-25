@@ -242,3 +242,11 @@ __pycache__
 
 # === Rules for C++ development ===
 compile_commands.json
+
+UI/android
+UI/ios
+UI/android/local.properties
+UI/android/.gradle/
+UI/android/build/
+UI/android/app/build/
+UI/.expo/
