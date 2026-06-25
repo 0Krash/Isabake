@@ -34,14 +34,10 @@ import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChi
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import useRecipeBookData, {
-  normalizeRecipe,
-  toApiRecipe,
-} from '../../hooks/RecipeBook/useRecipeBookData';
+import useRecipeBookData from '../../hooks/RecipeBook/useRecipeBookData';
 import useRecipeSectionsData from '../../hooks/RecipeBook/useRecipeSectionsData';
 import useRecipeTypesData from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
-import recipeService from '../../services/TransactionBalance/API/recipeService';
 import { calculateRecipeCost } from '../../utils/recipeCost';
 
 const ingredientUnits = [
@@ -228,8 +224,15 @@ export default function RecipeBookScreen({
 }) {
   const { colors } = useTransactionBalanceTheme();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const { isLoadingRecipes, recipes, refreshRecipes, setRecipes } =
-    useRecipeBookData();
+  const {
+    createRecipe: createRecipeLocal,
+    deleteRecipe: deleteRecipeLocal,
+    isLoadingRecipes,
+    recipes,
+    refreshRecipes,
+    setRecipes,
+    updateRecipe: updateRecipeLocal,
+  } = useRecipeBookData();
   const { inventoryItems, isLoadingInventory } = useInventoryData();
   const {
     createRecipeSection,
@@ -805,7 +808,7 @@ export default function RecipeBookScreen({
     }
 
     try {
-      const response = await recipeService.postRecipe({
+      const createdRecipe = await createRecipeLocal({
         cost: 0,
         ingredients: [],
         name,
@@ -813,9 +816,6 @@ export default function RecipeBookScreen({
         steps: [],
         type: recipeType,
       });
-      const createdRecipe = normalizeRecipe(response.data.recipe);
-      setRecipes((currentRecipes) => [createdRecipe, ...currentRecipes]);
-      refreshRecipes();
       setRecipeName('');
       setRecipeNameIsFocused(false);
       setRecipeType('');
@@ -829,7 +829,7 @@ export default function RecipeBookScreen({
       console.warn('Error al crear receta:', error);
       Alert.alert(
         'No se pudo guardar',
-        'Revisa la conexion con el backend e intenta crear la receta nuevamente.',
+        'No se pudo guardar la receta localmente. Intenta nuevamente.',
       );
     }
   };
@@ -840,17 +840,13 @@ export default function RecipeBookScreen({
     }
 
     try {
-      await recipeService.deleteRecipeById(selectedRecipe.recipeId);
-      setRecipes((currentRecipes) =>
-        currentRecipes.filter((recipe) => recipe.id !== selectedRecipe.id),
-      );
+      await deleteRecipeLocal(selectedRecipe.id);
       recipeDetailSheet.closeBottomSheet();
-      refreshRecipes();
     } catch (error) {
       console.warn('Error al eliminar receta:', error);
       Alert.alert(
         'No se pudo eliminar',
-        'Revisa la conexion con el backend e intenta eliminar la receta nuevamente.',
+        'No se pudo eliminar la receta localmente. Intenta nuevamente.',
       );
     }
   };
@@ -975,31 +971,9 @@ export default function RecipeBookScreen({
   };
 
   const persistRecipe = (recipe) => {
-    recipeService
-      .updateRecipeById(recipe.recipeId, toApiRecipe(recipe))
-      .then(refreshRecipes)
-      .catch(async (error) => {
-        const status = error?.response?.status;
-
-        if (status === 404) {
-          try {
-            await recipeService.postRecipe({
-              ...toApiRecipe(recipe),
-              recipeId: recipe.recipeId,
-            });
-            refreshRecipes();
-            return;
-          } catch (createError) {
-            console.warn(
-              'Error al crear receta local en backend:',
-              createError,
-            );
-            return;
-          }
-        }
-
-        console.warn('Error al actualizar receta:', error);
-      });
+    updateRecipeLocal(recipe.id, recipe).catch((error) => {
+      console.warn('Error al actualizar receta local:', error);
+    });
   };
 
   const updateSelectedRecipe = (updater) => {
