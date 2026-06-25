@@ -69,6 +69,17 @@ export const runLocalTransactionConsistencyCheck = async () => {
     }
 
     if (
+      transaction.transactionType === 'Ventas' &&
+      String(transaction.category?.description || '').trim() === 'Recetas' &&
+      !transaction.financials
+    ) {
+      warnings.push({
+        code: 'recipe_sale_transaction_missing_financials',
+        transactionId,
+      });
+    }
+
+    if (
       storeId &&
       storeIds.length > 0 &&
       !storeIds.some((localStoreId) => idsMatch(localStoreId, storeId))

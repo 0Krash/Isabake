@@ -1,6 +1,7 @@
 import {
   inventoryRepository,
   stockMovementRepository,
+  transactionRepository,
 } from '../repositories';
 import { STOCK_MOVEMENT_TYPES } from '../repositories/stockMovementRepository';
 import { idsMatch, normalizeId } from '../../utils/idUtils';
@@ -20,9 +21,10 @@ const getMovementId = (movement = {}) =>
 
 export const runLocalStockConsistencyCheck = async () => {
   const warnings = [];
-  const [inventoryItems, stockMovements] = await Promise.all([
+  const [inventoryItems, stockMovements, transactions] = await Promise.all([
     inventoryRepository.getAll(),
     stockMovementRepository.getAll(),
+    transactionRepository.getAll(),
   ]);
 
   inventoryItems.forEach((item) => {
@@ -114,6 +116,37 @@ export const runLocalStockConsistencyCheck = async () => {
         type: movement.type,
       });
     }
+
+    if (movement.type === 'sale_usage') {
+      const relatedTransactionId = normalizeId(movement.relatedTransactionId);
+      const relatedRecipeId = normalizeId(movement.relatedRecipeId);
+      const transactionExists = transactions.some((transaction) =>
+        idsMatch(
+          transaction.transactionId || transaction.id || transaction.localId,
+          relatedTransactionId,
+        ),
+      );
+
+      if (!relatedTransactionId) {
+        warnings.push({
+          code: 'sale_usage_missing_related_transaction_id',
+          movementId,
+        });
+      } else if (!transactionExists) {
+        warnings.push({
+          code: 'sale_usage_transaction_not_found',
+          movementId,
+          relatedTransactionId,
+        });
+      }
+
+      if (!relatedRecipeId) {
+        warnings.push({
+          code: 'sale_usage_missing_related_recipe_id',
+          movementId,
+        });
+      }
+    }
   });
 
   return {
@@ -121,6 +154,7 @@ export const runLocalStockConsistencyCheck = async () => {
     inventoryItemsChecked: inventoryItems.length,
     ok: warnings.length === 0,
     stockMovementsChecked: stockMovements.length,
+    transactionsChecked: transactions.length,
     warningCount: warnings.length,
     warnings,
   };

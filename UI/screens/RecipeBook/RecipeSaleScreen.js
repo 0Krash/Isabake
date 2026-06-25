@@ -16,7 +16,7 @@ import {
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
-import transactionService from '../../services/TransactionBalance/API/transactionService';
+import { createLocalRecipeSale } from '../../data/services/recipeSaleService';
 import {
   calculateRecipeCost,
   calculateSaleMetrics,
@@ -157,7 +157,8 @@ const scaleIngredientQuantity = (ingredient, scale, roundingMode) => {
 
 export default function RecipeSaleScreen({ onClose, recipe }) {
   const { colors } = useTransactionBalanceTheme();
-  const { inventoryItems, isLoadingInventory } = useInventoryData();
+  const { inventoryItems, isLoadingInventory, refreshInventory } =
+    useInventoryData();
   const recipeServings = Math.max(Number(recipe.servings) || 1, 1);
   const [quantity, setQuantity] = useState(`${recipeServings}`);
   const [targetMargin, setTargetMargin] = useState('60');
@@ -465,41 +466,42 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
     setIsSaving(true);
 
     try {
-      await transactionService.postTransaction({
-        amount: Math.round(amount * 100),
+      const financials = {
+        costPerPortion: Math.round(roundedPortionCost * 100),
+        extraExpenses: Math.round(normalizedExtraExpenses * 100),
+        grossMargin,
+        grossProfit: Math.round(grossProfit * 100),
+        ingredientRoundingMode,
+        ingredients: sortedIngredients.map((ingredient) => ({
+          cost: Math.round(ingredient.cost * 100),
+          inventoryId: ingredient.inventoryId,
+          name: ingredient.name,
+          quantity: ingredient.quantity,
+          unit: ingredient.unit,
+        })),
+        netMargin,
+        netProfit: Math.round(netProfit * 100),
+        productionCost: Math.round(productionCost * 100),
+        recipeId: recipe.recipeId,
+        recipeName: recipe.name,
+        recipeServings,
+        saleQuantity,
+        saleTotal: Math.round(amount * 100),
+        suggestedTotal: Math.round(suggestedTotal * 100),
+        suggestedUnitPrice: Math.round(suggestedUnitPrice * 100),
+        targetMargin: normalizedTargetMargin,
+      };
+
+      await createLocalRecipeSale({
         category: { description: 'Recetas', shortDescription: 'Recetas' },
         description: `Venta de ${recipe.name}`,
-        financials: {
-          costPerPortion: Math.round(roundedPortionCost * 100),
-          extraExpenses: Math.round(normalizedExtraExpenses * 100),
-          grossMargin,
-          grossProfit: Math.round(grossProfit * 100),
-          ingredientRoundingMode,
-          ingredients: sortedIngredients.map((ingredient) => ({
-            cost: Math.round(ingredient.cost * 100),
-            inventoryId: ingredient.inventoryId,
-            name: ingredient.name,
-            quantity: ingredient.quantity,
-            unit: ingredient.unit,
-          })),
-          netMargin,
-          netProfit: Math.round(netProfit * 100),
-          productionCost: Math.round(productionCost * 100),
-          recipeId: recipe.recipeId,
-          recipeName: recipe.name,
-          recipeServings,
-          saleQuantity,
-          saleTotal: Math.round(amount * 100),
-          suggestedTotal: Math.round(suggestedTotal * 100),
-          suggestedUnitPrice: Math.round(suggestedUnitPrice * 100),
-          targetMargin: normalizedTargetMargin,
-        },
-        itemQuantity: `${saleQuantity}`,
-        quantity: `${saleQuantity}`,
+        financials,
+        recipe,
+        saleQuantity,
+        saleTotal: Math.round(amount * 100),
         selectedDate: new Date().toISOString(),
-        transactionType: 'Ventas',
-        uomId: 'pza',
       });
+      await refreshInventory();
       Alert.alert('Venta registrada', `${saleQuantity} × ${recipe.name}`, [
         { onPress: onClose, text: 'Aceptar' },
       ]);
@@ -507,7 +509,7 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
       console.warn('Error al registrar venta de receta:', error);
       Alert.alert(
         'No se pudo registrar',
-        'Revisa la conexión e intenta nuevamente.',
+        error?.message || 'No se pudo registrar la venta localmente.',
       );
     } finally {
       setIsSaving(false);

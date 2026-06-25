@@ -4,13 +4,23 @@ export const runLocalTransaction = async (callback) => {
   const db = await initDatabase();
 
   if (typeof db.withExclusiveTransactionAsync === 'function') {
-    return db.withExclusiveTransactionAsync((transactionDb) =>
-      callback(transactionDb),
-    );
+    let result;
+
+    await db.withExclusiveTransactionAsync(async (transactionDb) => {
+      result = await callback(transactionDb);
+    });
+
+    return result;
   }
 
   if (typeof db.withTransactionAsync === 'function') {
-    return db.withTransactionAsync(() => callback(db));
+    let result;
+
+    await db.withTransactionAsync(async () => {
+      result = await callback(db);
+    });
+
+    return result;
   }
 
   await db.execAsync('BEGIN TRANSACTION;');
