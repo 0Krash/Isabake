@@ -1,5 +1,5 @@
 export const DATABASE_NAME = 'isabake_local.db';
-export const DATABASE_SCHEMA_VERSION = 1;
+export const DATABASE_SCHEMA_VERSION = 2;
 
 export const CREATE_SCHEMA_VERSION_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -38,6 +38,15 @@ export const CREATE_SYNC_OUTBOX_TABLE_SQL = `
     attempts INTEGER NOT NULL DEFAULT 0,
     lastError TEXT NULL,
     status TEXT NOT NULL DEFAULT 'pending'
+  );
+`;
+
+export const CREATE_SYNC_STATE_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS sync_state (
+    groupId TEXT PRIMARY KEY,
+    lastSyncCursor TEXT NULL,
+    lastSyncedAt TEXT NULL,
+    updatedAt TEXT NOT NULL
   );
 `;
 

@@ -1,6 +1,7 @@
 import { initDatabase } from './database';
 import { getLocalDeviceId } from './localIds';
 import { addOutboxEvent } from '../sync/syncOutbox';
+import { SHARED_SYNC_COLLECTIONS } from '../sync/syncTypes';
 
 const DEFAULT_COLLECTION_ORDER_BY = 'updatedAt';
 const ORDERABLE_DOCUMENT_FIELDS = new Set([
@@ -245,6 +246,227 @@ export const updateSyncStatus = async (collection, id, syncStatus, options = {})
   );
 
   return getDocument(collection, id, { db, includeDeleted: true });
+};
+
+export const markDocumentSynced = async (
+  collection,
+  id,
+  { remoteId, serverVersion, syncedAt } = {},
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+
+  await db.runAsync(
+    `
+      UPDATE documents
+      SET remoteId = COALESCE(?, remoteId),
+          serverVersion = COALESCE(?, serverVersion),
+          syncStatus = 'synced',
+          updatedAt = COALESCE(?, updatedAt)
+      WHERE collection = ?
+        AND id = ?;
+    `,
+    [remoteId ?? null, serverVersion ?? null, syncedAt ?? null, collection, id],
+  );
+
+  return getDocument(collection, id, { db, includeDeleted: true });
+};
+
+export const markDocumentConflict = async (
+  collection,
+  id,
+  { serverVersion } = {},
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+
+  await db.runAsync(
+    `
+      UPDATE documents
+      SET serverVersion = COALESCE(?, serverVersion),
+          syncStatus = 'conflict',
+          updatedAt = ?
+      WHERE collection = ?
+        AND id = ?;
+    `,
+    [serverVersion ?? null, nowIso(), collection, id],
+  );
+
+  return getDocument(collection, id, { db, includeDeleted: true });
+};
+
+export const saveRemoteDocument = async (
+  collection,
+  localId,
+  { data, deletedAt, deviceId, groupId, remoteId, serverVersion, updatedAt } = {},
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+  const id = String(localId || remoteId);
+  const existingDocument = await getExistingDocument(db, collection, id);
+  const createdAt = existingDocument?.createdAt || updatedAt || nowIso();
+  const nextUpdatedAt = updatedAt || nowIso();
+
+  await db.runAsync(
+    `
+      INSERT INTO documents (
+        collection,
+        id,
+        remoteId,
+        groupId,
+        data,
+        createdAt,
+        updatedAt,
+        deletedAt,
+        localVersion,
+        serverVersion,
+        syncStatus,
+        deviceId
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'synced', ?)
+      ON CONFLICT(collection, id) DO UPDATE SET
+        remoteId = excluded.remoteId,
+        groupId = excluded.groupId,
+        data = excluded.data,
+        updatedAt = excluded.updatedAt,
+        deletedAt = excluded.deletedAt,
+        serverVersion = excluded.serverVersion,
+        syncStatus = excluded.syncStatus,
+        deviceId = excluded.deviceId;
+    `,
+    [
+      collection,
+      id,
+      remoteId || existingDocument?.remoteId || null,
+      groupId ?? existingDocument?.groupId ?? null,
+      serializeData(data),
+      createdAt,
+      nextUpdatedAt,
+      deletedAt || null,
+      serverVersion ?? null,
+      deviceId ?? existingDocument?.deviceId ?? null,
+    ],
+  );
+
+  return getDocument(collection, id, { db, includeDeleted: true });
+};
+
+export const getDocumentsMissingGroupId = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const sharedCollections = options.sharedCollections || SHARED_SYNC_COLLECTIONS;
+  const placeholders = sharedCollections.map(() => '?').join(', ');
+  const rows = await db.getAllAsync(
+    `
+      SELECT *
+      FROM documents
+      WHERE deletedAt IS NULL
+        AND collection IN (${placeholders})
+        AND (groupId IS NULL OR groupId = '')
+      ORDER BY collection ASC, updatedAt ASC;
+    `,
+    sharedCollections,
+  );
+
+  return rows.map(parseDocument);
+};
+
+export const getDocumentsReadyToSync = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const sharedCollections = options.sharedCollections || SHARED_SYNC_COLLECTIONS;
+  const placeholders = sharedCollections.map(() => '?').join(', ');
+  const rows = await db.getAllAsync(
+    `
+      SELECT *
+      FROM documents
+      WHERE collection IN (${placeholders})
+        AND groupId IS NOT NULL
+        AND groupId != ''
+      ORDER BY collection ASC, updatedAt ASC;
+    `,
+    sharedCollections,
+  );
+
+  return rows.map(parseDocument);
+};
+
+export const getLocalPrivateDocuments = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const sharedCollections = options.sharedCollections || SHARED_SYNC_COLLECTIONS;
+  const placeholders = sharedCollections.map(() => '?').join(', ');
+  const rows = await db.getAllAsync(
+    `
+      SELECT *
+      FROM documents
+      WHERE collection NOT IN (${placeholders})
+      ORDER BY collection ASC, updatedAt ASC;
+    `,
+    sharedCollections,
+  );
+
+  return rows.map(parseDocument);
+};
+
+export const assignDocumentGroupId = async (
+  collection,
+  id,
+  groupId,
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+  const updatedAt = options.updatedAt || nowIso();
+
+  await db.runAsync(
+    `
+      UPDATE documents
+      SET groupId = ?,
+          syncStatus = 'pending',
+          updatedAt = ?,
+          localVersion = localVersion + 1
+      WHERE collection = ?
+        AND id = ?;
+    `,
+    [groupId, updatedAt, collection, id],
+  );
+
+  if (!options.skipOutbox) {
+    await addOutboxEvent(
+      collection,
+      id,
+      'update',
+      {
+        groupId,
+        id,
+      },
+      { db },
+    );
+  }
+
+  return getDocument(collection, id, { db, includeDeleted: true });
+};
+
+export const getDocumentsBySyncStatuses = async (
+  syncStatuses,
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+  const statuses = Array.isArray(syncStatuses) ? syncStatuses : [syncStatuses];
+  const placeholders = statuses.map(() => '?').join(', ');
+
+  if (!statuses.length) {
+    return [];
+  }
+
+  const rows = await db.getAllAsync(
+    `
+      SELECT *
+      FROM documents
+      WHERE syncStatus IN (${placeholders})
+      ORDER BY collection ASC, updatedAt ASC;
+    `,
+    statuses,
+  );
+
+  return rows.map(parseDocument);
 };
 
 export const getPendingDocuments = async (options = {}) => {
