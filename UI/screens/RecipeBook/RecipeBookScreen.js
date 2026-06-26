@@ -12,6 +12,7 @@ import {
   FlatList,
   InteractionManager,
   Keyboard,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Modal,
   PanResponder,
@@ -31,6 +32,7 @@ import TransactionMenu, {
   TransactionMenuButton,
 } from '../../components/TransactionBalance/TransactionMenu';
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
+import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
@@ -93,6 +95,16 @@ if (
 
 const getIngredientUnitLabel = (unitKey) =>
   ingredientUnits.find((unit) => unit.key === unitKey)?.description || 'Unidad';
+
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
 
 const getStepPreview = (description) => {
   if (description.length <= STEP_DESCRIPTION_PREVIEW_LIMIT) {
@@ -295,6 +307,8 @@ export default function RecipeBookScreen({
   const [editingStepId, setEditingStepId] = useState(null);
   const [isSavingStep, setIsSavingStep] = useState(false);
   const [stepDescription, setStepDescription] = useState('');
+  const [feedbackStepId, setFeedbackStepId] = useState(null);
+  const [stepFeedbackMessage, setStepFeedbackMessage] = useState('');
   const [recipeNameDraft, setRecipeNameDraft] = useState('');
   const [recipeNameFeedback, setRecipeNameFeedback] = useState('');
   const [servingsDraft, setServingsDraft] = useState('');
@@ -313,6 +327,9 @@ export default function RecipeBookScreen({
   const newRecipeNameInputRef = useRef(null);
   const recipeDetailScrollRef = useRef(null);
   const recipeNameFeedbackTimeoutRef = useRef(null);
+  const stepCardPositions = useRef({});
+  const stepFeedbackAnimationId = useRef(0);
+  const stepFeedbackOpacity = useRef(new Animated.Value(0)).current;
   const stepFormOffsetY = useRef(0);
 
   const selectedRecipe = useMemo(
@@ -722,6 +739,51 @@ export default function RecipeBookScreen({
     [ingredientFeedbackOpacity],
   );
 
+  const showStepFeedback = useCallback(
+    (stepId, message) => {
+      const animationId = stepFeedbackAnimationId.current + 1;
+      stepFeedbackAnimationId.current = animationId;
+      setFeedbackStepId(stepId);
+      setStepFeedbackMessage(message);
+      stepFeedbackOpacity.stopAnimation();
+      stepFeedbackOpacity.setValue(1);
+
+      const scrollToStep = () => {
+        recipeDetailScrollRef.current?.scrollTo({
+          animated: true,
+          y: Math.max(
+            (stepCardPositions.current[stepId] || 0) -
+              INGREDIENT_FEEDBACK_SCROLL_OFFSET,
+            0,
+          ),
+        });
+      };
+
+      requestAnimationFrame(scrollToStep);
+      setTimeout(scrollToStep, 120);
+      setTimeout(scrollToStep, 280);
+
+      Animated.sequence([
+        Animated.delay(650),
+        Animated.timing(stepFeedbackOpacity, {
+          duration: 420,
+          toValue: 0,
+          useNativeDriver: false,
+        }),
+      ]).start(() => {
+        if (stepFeedbackAnimationId.current !== animationId) {
+          return;
+        }
+
+        setFeedbackStepId((currentStepId) =>
+          currentStepId === stepId ? null : currentStepId,
+        );
+        setStepFeedbackMessage('');
+      });
+    },
+    [stepFeedbackOpacity],
+  );
+
   useEffect(
     () => () => {
       ingredientFeedbackOpacity.stopAnimation();
@@ -804,7 +866,7 @@ export default function RecipeBookScreen({
   }, []);
 
   const createRecipe = async () => {
-    const name = recipeName.trim();
+    const name = capitalizeFirstLetter(recipeName);
 
     if (!name) {
       return;
@@ -924,13 +986,18 @@ export default function RecipeBookScreen({
     ingredientFeedbackAnimationId.current += 1;
     ingredientFeedbackOpacity.setValue(0);
     ingredientCardPositions.current = {};
+    stepFeedbackAnimationId.current += 1;
+    stepFeedbackOpacity.setValue(0);
+    stepCardPositions.current = {};
+    setFeedbackStepId(null);
+    setStepFeedbackMessage('');
     setEditingStepId(null);
     setStepDescription('');
     setRecipeNameDraft('');
     setRecipeNameFeedback('');
     clearTimeout(recipeNameFeedbackTimeoutRef.current);
     setServingsDraft('');
-  }, [ingredientFeedbackOpacity]);
+  }, [ingredientFeedbackOpacity, stepFeedbackOpacity]);
 
   const createRecipeSheet = useBottomSheet(modalIsVisible, closeModal);
   const recipeDetailSheet = useBottomSheet(
@@ -1034,7 +1101,7 @@ export default function RecipeBookScreen({
       return;
     }
 
-    const name = recipeNameDraft.trim();
+    const name = capitalizeFirstLetter(recipeNameDraft);
 
     if (!name || name === selectedRecipe.name) {
       setRecipeNameDraft(selectedRecipe.name);
@@ -1053,7 +1120,7 @@ export default function RecipeBookScreen({
   };
 
   const addIngredientSection = async () => {
-    const section = newIngredientSection.trim();
+    const section = capitalizeFirstLetter(newIngredientSection);
 
     if (!section) {
       return;
@@ -1152,7 +1219,7 @@ export default function RecipeBookScreen({
   };
 
   const addRecipeType = async () => {
-    const type = newRecipeType.trim();
+    const type = capitalizeFirstLetter(newRecipeType);
 
     if (!type) {
       return;
@@ -1315,8 +1382,8 @@ export default function RecipeBookScreen({
   };
 
   const editIngredient = (ingredient) => {
-    const inventoryIngredient = inventoryItems.find(
-      (item) => idsMatch(item.inventoryId, ingredient.inventoryId),
+    const inventoryIngredient = inventoryItems.find((item) =>
+      idsMatch(item.inventoryId, ingredient.inventoryId),
     );
 
     ingredientFeedbackAnimationId.current += 1;
@@ -1391,6 +1458,8 @@ export default function RecipeBookScreen({
     isSavingStepRef.current = true;
     setIsSavingStep(true);
 
+    const stepIdBeingUpdated = editingStepId;
+
     if (editingStepId) {
       updateSelectedRecipe((recipe) => ({
         ...recipe,
@@ -1405,7 +1474,10 @@ export default function RecipeBookScreen({
       }));
       setEditingStepId(null);
       setStepDescription('');
+      showStepFeedback(stepIdBeingUpdated, 'Paso actualizado');
     } else {
+      const nextStepId = `${selectedRecipeId}-step-${Date.now()}`;
+
       updateSelectedRecipe((recipe) => {
         const nextOrder = (recipe.steps || []).length + 1;
 
@@ -1415,13 +1487,14 @@ export default function RecipeBookScreen({
             ...(recipe.steps || []),
             {
               description,
-              id: `${selectedRecipeId}-step-${Date.now()}`,
+              id: nextStepId,
               order: nextOrder,
             },
           ],
         };
       });
       setStepDescription('');
+      showStepFeedback(nextStepId, 'Paso agregado');
     }
 
     setTimeout(() => {
@@ -1431,16 +1504,26 @@ export default function RecipeBookScreen({
   };
 
   const editPreparationStep = (step) => {
+    stepFeedbackAnimationId.current += 1;
+    setFeedbackStepId(null);
+    setStepFeedbackMessage('');
+    stepFeedbackOpacity.stopAnimation();
+    stepFeedbackOpacity.setValue(0);
     setRecipeDetailTab('Preparacion');
     setEditingStepId(step.id);
     setStepDescription(step.description);
   };
 
   const cancelPreparationStepEdition = () => {
+    const stepIdBeingEdited = editingStepId;
     isSavingStepRef.current = false;
     setIsSavingStep(false);
     setEditingStepId(null);
     setStepDescription('');
+
+    if (stepIdBeingEdited) {
+      showStepFeedback(stepIdBeingEdited, 'Edicion cancelada');
+    }
   };
 
   const removePreparationStep = (stepId) => {
@@ -1592,6 +1675,7 @@ export default function RecipeBookScreen({
         getValue={({ count }) => count}
         onSelect={({ type }) => setSelectedRecipeTypeFilter(type)}
         selectedKey={selectedRecipeTypeFilter}
+        showValues={false}
       />
       {hasActiveRecipeFilters && (
         <View style={styles.activeFilterBar}>
@@ -1838,271 +1922,155 @@ export default function RecipeBookScreen({
             }}
             style={styles.sheetBackdrop}
           />
-          <Animated.View
-            {...createRecipeSheet.sheetPanHandlers}
-            style={[
-              styles.recipeModal,
-              { backgroundColor: colors.screenBackground },
-              createRecipeSheet.sheetStyle,
-            ]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            pointerEvents="box-none"
+            style={styles.keyboardSheetWrapper}
           >
-            <View
-              style={styles.dragHandleArea}
-              {...createRecipeSheet.handlePanHandlers}
-            >
-              <View
-                style={[styles.dragHandle, { backgroundColor: colors.border }]}
-              />
-            </View>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              Nueva receta
-            </Text>
-            <TextInput
-              ref={newRecipeNameInputRef}
-              onBlur={() => setRecipeNameIsFocused(false)}
-              onChangeText={setRecipeName}
-              onFocus={() => setRecipeNameIsFocused(true)}
-              placeholder="Nombre del producto"
-              placeholderTextColor={colors.textMuted}
+            <Animated.View
+              {...createRecipeSheet.sheetPanHandlers}
               style={[
-                styles.modalInput,
-                {
-                  backgroundColor: colors.fieldBackground,
-                  borderColor: recipeNameIsFocused
-                    ? colors.primary
-                    : colors.border,
-                  color: colors.textPrimary,
-                },
-              ]}
-              value={recipeName}
-            />
-            <Text style={[styles.modalFieldLabel, { color: colors.textMuted }]}>
-              Tipo de receta
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={() => {
-                Keyboard.dismiss();
-                setRecipeTypePickerIsVisible(true);
-              }}
-              style={[
-                styles.modalSelect,
-                {
-                  backgroundColor: colors.fieldBackground,
-                  borderColor: colors.border,
-                },
+                styles.recipeModal,
+                { backgroundColor: colors.screenBackground },
+                createRecipeSheet.sheetStyle,
               ]}
             >
-              <Text
-                style={[styles.modalSelectText, { color: colors.textPrimary }]}
-              >
-                {recipeType || 'Sin tipo'}
-              </Text>
-              <Text
-                style={[
-                  styles.sectionToggleText,
-                  { color: colors.primaryText },
-                ]}
-              >
-                Cambiar
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  createRecipeSheet.closeBottomSheet();
-                }}
-                style={[
-                  styles.modalSecondaryButton,
-                  { borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modalSecondaryText,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Cancelar
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  createRecipe();
-                }}
-                style={[
-                  styles.modalPrimaryButton,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modalPrimaryText,
-                    { color: colors.textInverse },
-                  ]}
-                >
-                  Crear
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-          {recipeTypePickerIsVisible && !selectedRecipe && (
-            <View style={styles.unitPickerOverlay}>
-              <Pressable
-                onPress={() => setRecipeTypePickerIsVisible(false)}
-                style={[
-                  styles.unitPickerBackdrop,
-                  { backgroundColor: colors.backdrop },
-                ]}
-              />
               <View
+                style={styles.dragHandleArea}
+                {...createRecipeSheet.handlePanHandlers}
+              >
+                <View
+                  style={[
+                    styles.dragHandle,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                Nueva receta
+              </Text>
+              <TextInput
+                ref={newRecipeNameInputRef}
+                onBlur={() => setRecipeNameIsFocused(false)}
+                onChangeText={setRecipeName}
+                onFocus={() => setRecipeNameIsFocused(true)}
+                placeholder="Nombre del producto"
+                placeholderTextColor={colors.textMuted}
                 style={[
-                  styles.unitPopupCard,
+                  styles.modalInput,
                   {
-                    backgroundColor: colors.screenBackground,
+                    backgroundColor: colors.fieldBackground,
+                    borderColor: recipeNameIsFocused
+                      ? colors.primary
+                      : colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+                value={recipeName}
+              />
+              <Text
+                style={[styles.modalFieldLabel, { color: colors.textMuted }]}
+              >
+                Tipo de receta
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setRecipeTypePickerIsVisible(true);
+                }}
+                style={[
+                  styles.modalSelect,
+                  {
+                    backgroundColor: colors.fieldBackground,
                     borderColor: colors.border,
                   },
                 ]}
               >
                 <Text
-                  style={[styles.unitPopupTitle, { color: colors.textPrimary }]}
+                  style={[
+                    styles.modalSelectText,
+                    { color: colors.textPrimary },
+                  ]}
                 >
-                  Tipo de receta
+                  {recipeType || 'Sin tipo'}
                 </Text>
-                <ScrollView
-                  contentContainerStyle={styles.sectionOptionsList}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  style={styles.sectionOptionsScroll}
+                <Text
+                  style={[
+                    styles.sectionToggleText,
+                    { color: colors.primaryText },
+                  ]}
                 >
-                  {[
-                    {
-                      id: 'empty-recipe-type',
-                      name: '',
-                      normalizedName: '',
-                      recipeTypeId: null,
-                    },
-                    ...recipeTypeOptions,
-                  ].map((type) => {
-                    const label = type.name || 'Sin tipo';
-                    const isSelected = recipeType === type.name;
-
-                    return (
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        key={type.id}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          selectRecipeType(type.name);
-                        }}
-                        style={[
-                          styles.unitOptionRow,
-                          styles.sectionOptionRow,
-                          {
-                            backgroundColor: isSelected
-                              ? colors.primaryMuted
-                              : colors.surface,
-                            borderColor: isSelected
-                              ? colors.primary
-                              : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.unitOptionDescription,
-                            styles.sectionOptionText,
-                            {
-                              color: isSelected
-                                ? colors.primaryText
-                                : colors.textPrimary,
-                            },
-                          ]}
-                        >
-                          {label}
-                        </Text>
-                        {!!type.name && (
-                          <TouchableOpacity
-                            accessibilityLabel={`Eliminar tipo ${type.name}`}
-                            activeOpacity={0.7}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              Keyboard.dismiss();
-                              requestDeleteConfirmation({
-                                confirmLabel: 'Eliminar',
-                                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
-                                onConfirm: () => deleteRecipeType(type),
-                                title: 'Eliminar tipo',
-                              });
-                            }}
-                            style={styles.sectionDeleteButton}
-                          >
-                            <Text
-                              style={[
-                                styles.deleteActionText,
-                                { color: colors.danger },
-                              ]}
-                            >
-                              Eliminar
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                <View style={styles.newSectionContainer}>
-                  <TextInput
-                    onChangeText={setNewRecipeType}
-                    placeholder="Nuevo tipo"
-                    placeholderTextColor={colors.textMuted}
+                  Cambiar
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    createRecipeSheet.closeBottomSheet();
+                  }}
+                  style={[
+                    styles.modalSecondaryButton,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.newSectionInput,
-                      {
-                        backgroundColor: colors.fieldBackground,
-                        color: colors.textPrimary,
-                      },
-                    ]}
-                    value={newRecipeType}
-                  />
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    disabled={!newRecipeType.trim()}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      addRecipeType();
-                    }}
-                    style={[
-                      styles.newSectionButton,
-                      {
-                        backgroundColor: newRecipeType.trim()
-                          ? colors.primary
-                          : colors.surfaceMuted,
-                      },
+                      styles.modalSecondaryText,
+                      { color: colors.textSecondary },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.newSectionButtonText,
-                        {
-                          color: newRecipeType.trim()
-                            ? colors.textInverse
-                            : colors.inactiveText,
-                        },
-                      ]}
-                    >
-                      Agregar
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    Cancelar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    createRecipe();
+                  }}
+                  style={[
+                    styles.modalPrimaryButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.modalPrimaryText,
+                      { color: colors.textInverse },
+                    ]}
+                  >
+                    Crear
+                  </Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          )}
+            </Animated.View>
+          </KeyboardAvoidingView>
+          <ManagedOptionPickerModal
+            colors={colors}
+            deleteAccessibilityLabel={(type) => `Eliminar tipo ${type.name}`}
+            emptyLabel="Sin tipo"
+            isVisible={recipeTypePickerIsVisible && !selectedRecipe}
+            newValue={newRecipeType}
+            newValuePlaceholder="Nuevo tipo"
+            onAdd={addRecipeType}
+            onChangeNewValue={setNewRecipeType}
+            onClose={() => setRecipeTypePickerIsVisible(false)}
+            onDelete={(type) =>
+              requestDeleteConfirmation({
+                confirmLabel: 'Eliminar',
+                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
+                onConfirm: () => deleteRecipeType(type),
+                title: 'Eliminar tipo',
+              })
+            }
+            onSelect={selectRecipeType}
+            options={recipeTypeOptions}
+            selectedValue={recipeType}
+            title="Tipo de receta"
+          />
         </View>
       </Modal>
 
@@ -2130,885 +2098,943 @@ export default function RecipeBookScreen({
             }}
             style={styles.sheetBackdrop}
           />
-          <Animated.View
-            {...recipeDetailSheet.sheetPanHandlers}
-            style={[
-              styles.recipeDetailModal,
-              { backgroundColor: colors.screenBackground },
-              recipeDetailSheet.sheetStyle,
-            ]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            pointerEvents="box-none"
+            style={styles.keyboardSheetWrapper}
           >
-            {selectedRecipe && (
-              <>
-                <View
-                  style={styles.dragHandleArea}
-                  {...recipeDetailSheet.handlePanHandlers}
-                >
+            <Animated.View
+              {...recipeDetailSheet.sheetPanHandlers}
+              style={[
+                styles.recipeDetailModal,
+                { backgroundColor: colors.screenBackground },
+                recipeDetailSheet.sheetStyle,
+              ]}
+            >
+              {selectedRecipe && (
+                <>
                   <View
-                    style={[
-                      styles.dragHandle,
-                      { backgroundColor: colors.border },
-                    ]}
-                  />
-                </View>
-                <View style={styles.detailHeader}>
-                  <View style={styles.detailTitleContainer}>
-                    <TextInput
-                      onChangeText={setRecipeNameDraft}
-                      onEndEditing={saveRecipeNameEdition}
-                      onFocus={() => setRecipeNameDraft(selectedRecipe.name)}
-                      placeholder="Nombre de la receta"
-                      placeholderTextColor={colors.textMuted}
+                    style={styles.dragHandleArea}
+                    {...recipeDetailSheet.handlePanHandlers}
+                  >
+                    <View
                       style={[
-                        styles.recipeNameEditInput,
-                        {
-                          backgroundColor: colors.fieldBackground,
-                          color: colors.textPrimary,
-                        },
+                        styles.dragHandle,
+                        { backgroundColor: colors.border },
                       ]}
-                      value={recipeNameDraft || selectedRecipe.name}
                     />
-                    <Text
-                      style={[
-                        styles.detailSubtitle,
-                        { color: colors.textMuted },
-                      ]}
-                    >
-                      Define porciones e ingredientes de elaboracion.
-                    </Text>
-                    {!!recipeNameFeedback && (
-                      <Text
-                        style={[
-                          styles.detailFeedbackText,
-                          { color: colors.primaryText },
-                        ]}
-                      >
-                        {recipeNameFeedback}
-                      </Text>
-                    )}
                   </View>
-                </View>
-
-                <ScrollView
-                  contentContainerStyle={styles.detailContent}
-                  keyboardShouldPersistTaps="handled"
-                  onScroll={recipeDetailSheet.onScroll}
-                  ref={recipeDetailScrollRef}
-                  scrollEventThrottle={16}
-                  scrollEnabled={!isReorderingStep}
-                  showsVerticalScrollIndicator={false}
-                  stickyHeaderIndices={ingredientStickyHeaderIndices}
-                >
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setRecipeTypePickerIsVisible(true);
-                    }}
-                    style={[
-                      styles.recipeTypePanel,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.servingsCopy}>
-                      <Text
+                  <View style={styles.detailHeader}>
+                    <View style={styles.detailTitleContainer}>
+                      <View
                         style={[
-                          styles.sectionLabel,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Tipo de receta
-                      </Text>
-                      <Text
-                        style={[
-                          styles.servingsHint,
-                          { color: colors.textMuted },
-                        ]}
-                      >
-                        {selectedRecipe.type || 'Sin tipo'}
-                      </Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.sectionToggleText,
-                        { color: colors.primaryText },
-                      ]}
-                    >
-                      Cambiar
-                    </Text>
-                  </TouchableOpacity>
-                  <View
-                    style={[
-                      styles.servingsPanel,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.servingsCopy}>
-                      <Text
-                        style={[
-                          styles.sectionLabel,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Porciones de esta receta
-                      </Text>
-                      <Text
-                        style={[
-                          styles.servingsHint,
-                          { color: colors.textMuted },
-                        ]}
-                      >
-                        Base para costos por pieza.
-                      </Text>
-                    </View>
-                    <View style={styles.servingsStepper}>
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          updateServings(selectedRecipe.servings - 1);
-                        }}
-                        style={[
-                          styles.stepperButton,
-                          { backgroundColor: colors.primaryMuted },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperText,
-                            { color: colors.primaryText },
-                          ]}
-                        >
-                          -
-                        </Text>
-                      </TouchableOpacity>
-                      <TextInput
-                        keyboardType="number-pad"
-                        onBlur={() => {
-                          const parsedValue = Number(servingsDraft);
-
-                          if (parsedValue > 0) {
-                            updateServings(parsedValue);
-                          } else {
-                            setServingsDraft(`${selectedRecipe.servings}`);
-                          }
-                        }}
-                        onChangeText={(value) =>
-                          setServingsDraft(value.replace(/[^0-9]/g, ''))
-                        }
-                        style={[
-                          styles.servingsValue,
+                          styles.recipeNameEditFrame,
                           {
                             backgroundColor: colors.fieldBackground,
-                            color: colors.textPrimary,
+                            borderColor:
+                              recipeNameDraft &&
+                              recipeNameDraft !== selectedRecipe.name
+                                ? colors.primary
+                                : colors.border,
                           },
                         ]}
-                        value={servingsDraft}
-                      />
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          updateServings(selectedRecipe.servings + 1);
-                        }}
-                        style={[
-                          styles.stepperButton,
-                          { backgroundColor: colors.primaryMuted },
-                        ]}
                       >
-                        <Text
+                        <TextInput
+                          onChangeText={setRecipeNameDraft}
+                          onEndEditing={saveRecipeNameEdition}
+                          onFocus={() =>
+                            setRecipeNameDraft(selectedRecipe.name)
+                          }
+                          placeholder="Nombre de la receta"
+                          placeholderTextColor={colors.textMuted}
                           style={[
-                            styles.stepperText,
-                            { color: colors.primaryText },
+                            styles.recipeNameEditInput,
+                            { color: colors.textPrimary },
                           ]}
-                        >
-                          +
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <Text
-                    style={[styles.sectionTitle, { color: colors.textPrimary }]}
-                  >
-                    Receta
-                  </Text>
-
-                  <View
-                    style={[
-                      styles.detailTabs,
-                      { backgroundColor: colors.surface },
-                    ]}
-                  >
-                    {['Ingredientes', 'Preparacion'].map((tab) => {
-                      const isSelected = recipeDetailTab === tab;
-
-                      return (
-                        <TouchableOpacity
-                          activeOpacity={0.75}
-                          key={tab}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setRecipeDetailTab(tab);
-                          }}
-                          style={[
-                            styles.detailTabButton,
-                            {
-                              backgroundColor: isSelected
-                                ? colors.primaryMuted
-                                : colors.surface,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.detailTabText,
-                              {
-                                color: isSelected
-                                  ? colors.primaryText
-                                  : colors.inactiveText,
-                              },
-                            ]}
-                          >
-                            {tab}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {recipeDetailTab === 'Ingredientes' ? (
-                    [
-                      shouldGroupRecipeIngredients
-                        ? groupedRecipeIngredients.flatMap(
-                            ({ ingredients, section }) => {
-                              const isExpanded =
-                                expandedIngredientSections[section] !== false;
-
-                              return [
-                                <View
-                                  key={`${section}-header`}
-                                  style={[
-                                    styles.ingredientSectionHeaderShell,
-                                    {
-                                      backgroundColor: colors.screenBackground,
-                                    },
-                                  ]}
-                                >
-                                  <TouchableOpacity
-                                    activeOpacity={0.75}
-                                    onPress={() => {
-                                      Keyboard.dismiss();
-                                      setExpandedIngredientSections(
-                                        (currentSections) => ({
-                                          ...currentSections,
-                                          [section]: !isExpanded,
-                                        }),
-                                      );
-                                    }}
-                                    style={[
-                                      styles.ingredientSectionHeader,
-                                      {
-                                        backgroundColor: colors.fieldBackground,
-                                        borderColor: colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <View
-                                      style={
-                                        styles.ingredientSectionHeaderContent
-                                      }
-                                    >
-                                      <Text
-                                        numberOfLines={1}
-                                        style={[
-                                          styles.ingredientSectionHeaderTitle,
-                                          { color: colors.textPrimary },
-                                        ]}
-                                      >
-                                        {section}
-                                      </Text>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={[
-                                          styles.ingredientSectionHeaderMeta,
-                                          { color: colors.textMuted },
-                                        ]}
-                                      >
-                                        {ingredients.length}{' '}
-                                        {ingredients.length === 1
-                                          ? 'ingrediente'
-                                          : 'ingredientes'}
-                                      </Text>
-                                      <View
-                                        style={[
-                                          styles.ingredientSectionToggle,
-                                          {
-                                            backgroundColor: colors.surface,
-                                            borderColor: colors.border,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={[
-                                            styles.ingredientSectionToggleText,
-                                            { color: colors.textSecondary },
-                                          ]}
-                                        >
-                                          {isExpanded ? '-' : '+'}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  </TouchableOpacity>
-                                </View>,
-                                ...(isExpanded
-                                  ? ingredients.map((ingredient) => {
-                                      const isEditingIngredient =
-                                        ingredient.id === editingIngredientId;
-
-                                      return (
-                                        <EditableIngredientRow
-                                          colors={colors}
-                                          feedbackMessage={
-                                            ingredientFeedbackMessage
-                                          }
-                                          feedbackOpacity={
-                                            ingredientFeedbackOpacity
-                                          }
-                                          hasFeedback={
-                                            feedbackIngredientId ===
-                                            ingredient.id
-                                          }
-                                          ingredient={ingredient}
-                                          isEditing={isEditingIngredient}
-                                          key={ingredient.id}
-                                          onEdit={editIngredient}
-                                          onLayout={(event) => {
-                                            ingredientCardPositions.current[
-                                              ingredient.id
-                                            ] = event.nativeEvent.layout.y;
-                                          }}
-                                          onRemove={removeIngredient}
-                                        />
-                                      );
-                                    })
-                                  : []),
-                              ];
-                            },
-                          )
-                        : sortedRecipeIngredients.map((ingredient) => {
-                            const isEditingIngredient =
-                              ingredient.id === editingIngredientId;
-
-                            return (
-                              <EditableIngredientRow
-                                colors={colors}
-                                feedbackMessage={ingredientFeedbackMessage}
-                                feedbackOpacity={ingredientFeedbackOpacity}
-                                hasFeedback={
-                                  feedbackIngredientId === ingredient.id
-                                }
-                                ingredient={ingredient}
-                                isEditing={isEditingIngredient}
-                                key={ingredient.id}
-                                onEdit={editIngredient}
-                                onLayout={(event) => {
-                                  ingredientCardPositions.current[
-                                    ingredient.id
-                                  ] = event.nativeEvent.layout.y;
-                                }}
-                                onRemove={removeIngredient}
-                              />
-                            );
-                          }),
-                      sortedRecipeIngredients.length === 0 && (
-                        <View
-                          key="empty-ingredients"
-                          style={[
-                            styles.detailEmptyState,
-                            { borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.emptyTitle,
-                              { color: colors.textPrimary },
-                            ]}
-                          >
-                            Sin ingredientes
-                          </Text>
-                          <Text
-                            style={[
-                              styles.emptyText,
-                              { color: colors.textMuted },
-                            ]}
-                          >
-                            Los ingredientes se veran reflejados cuando los
-                            agregues.
-                          </Text>
-                        </View>
-                      ),
-
-                      <View
-                        key="ingredient-form"
-                        onLayout={(event) => {
-                          ingredientFormOffsetY.current =
-                            event.nativeEvent.layout.y;
-                        }}
-                        style={[
-                          styles.ingredientForm,
-                          {
-                            backgroundColor: colors.surface,
-                            borderColor: editingIngredientId
-                              ? colors.primary
-                              : colors.border,
-                          },
-                          editingIngredientId && styles.ingredientFormEditing,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sectionLabel,
-                            { color: colors.textSecondary },
-                          ]}
-                        >
-                          {editingIngredientId
-                            ? 'Editar ingrediente'
-                            : 'Agregar ingrediente'}
-                        </Text>
-                        <TouchableOpacity
-                          activeOpacity={0.75}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setIngredientPickerIsVisible(true);
-                          }}
-                          style={[
-                            styles.inventoryIngredientSelect,
-                            {
-                              backgroundColor: colors.fieldBackground,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.inventoryIngredientSelectText,
-                              {
-                                color: selectedInventoryIngredient
-                                  ? colors.textPrimary
-                                  : colors.textMuted,
-                              },
-                            ]}
-                          >
-                            {selectedInventoryIngredient?.name ||
-                              'Seleccionar ingrediente del inventario'}
-                          </Text>
-                          {selectedInventoryIngredient && (
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.inventoryIngredientSelectMeta,
-                                { color: colors.textMuted },
-                              ]}
-                            >
-                              {selectedInventoryIngredient.category ||
-                                'Sin categoria'}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          activeOpacity={0.75}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setIngredientSectionPickerIsVisible(true);
-                          }}
-                          style={[
-                            styles.inventoryIngredientSelect,
-                            {
-                              backgroundColor: colors.fieldBackground,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                        >
-                          <View style={styles.inlineSelectRow}>
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.inventoryIngredientSelectText,
-                                styles.inlineSelectText,
-                                {
-                                  color: ingredientSection
-                                    ? colors.textPrimary
-                                    : colors.textMuted,
-                                },
-                              ]}
-                            >
-                              {ingredientSection || 'Seleccionar sección'}
-                            </Text>
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.inventoryIngredientSelectMeta,
-                                { color: colors.textMuted },
-                              ]}
-                            >
-                              Opcional
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                        <View style={styles.quantityRow}>
-                          <TextInput
-                            keyboardType="decimal-pad"
-                            onChangeText={setIngredientQuantity}
-                            placeholder="Cantidad"
-                            placeholderTextColor={colors.textMuted}
-                            style={[
-                              styles.quantityInput,
-                              {
-                                backgroundColor: colors.fieldBackground,
-                                color: colors.textPrimary,
-                              },
-                            ]}
-                            value={ingredientQuantity}
-                          />
-                          <View style={styles.unitListContainer}>
+                          value={recipeNameDraft || selectedRecipe.name}
+                        />
+                        {recipeNameDraft &&
+                          recipeNameDraft !== selectedRecipe.name && (
                             <TouchableOpacity
+                              accessibilityLabel="Guardar nombre de receta"
+                              accessibilityRole="button"
                               activeOpacity={0.75}
                               onPress={() => {
                                 Keyboard.dismiss();
-                                setUnitPickerIsVisible(true);
+                                saveRecipeNameEdition();
                               }}
                               style={[
-                                styles.unitSelectBox,
-                                {
-                                  backgroundColor: colors.fieldBackground,
-                                  borderColor: colors.border,
-                                },
+                                styles.recipeNameSaveButton,
+                                { backgroundColor: colors.primaryMuted },
                               ]}
                             >
                               <Text
                                 style={[
-                                  styles.unitSelectText,
-                                  { color: colors.textPrimary },
+                                  styles.recipeNameSaveText,
+                                  { color: colors.primaryText },
                                 ]}
                               >
-                                {ingredientUnit}
-                              </Text>
-                              <Text
-                                numberOfLines={1}
-                                style={[
-                                  styles.unitSelectDescription,
-                                  { color: colors.textMuted },
-                                ]}
-                              >
-                                {getIngredientUnitLabel(ingredientUnit)}
+                                Guardar
                               </Text>
                             </TouchableOpacity>
-                          </View>
-                        </View>
-                        {ingredientAlreadyExistsInSection && (
-                          <Text
-                            style={[
-                              styles.ingredientDuplicateWarning,
-                              { color: colors.danger },
-                            ]}
-                          >
-                            Este ingrediente ya fue agregado en esta sección.
-                          </Text>
-                        )}
-                        <TouchableOpacity
-                          activeOpacity={0.75}
-                          disabled={
-                            isSavingIngredient ||
-                            !selectedInventoryIngredient ||
-                            !ingredientQuantity.trim() ||
-                            ingredientAlreadyExistsInSection
-                          }
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            addIngredient();
-                          }}
-                          style={[
-                            styles.addIngredientButton,
-                            {
-                              backgroundColor:
-                                isSavingIngredient ||
-                                !selectedInventoryIngredient ||
-                                !ingredientQuantity.trim() ||
-                                ingredientAlreadyExistsInSection
-                                  ? colors.surfaceMuted
-                                  : colors.primary,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.addIngredientText,
-                              {
-                                color:
-                                  isSavingIngredient ||
-                                  !selectedInventoryIngredient ||
-                                  !ingredientQuantity.trim() ||
-                                  ingredientAlreadyExistsInSection
-                                    ? colors.inactiveText
-                                    : colors.textInverse,
-                              },
-                            ]}
-                          >
-                            {isSavingIngredient
-                              ? 'Guardando...'
-                              : editingIngredientId
-                                ? 'Actualizar ingrediente'
-                                : 'Agregar ingrediente'}
-                          </Text>
-                        </TouchableOpacity>
-                        {editingIngredientId && (
-                          <TouchableOpacity
-                            activeOpacity={0.75}
-                            onPress={() => {
-                              Keyboard.dismiss();
-                              cancelIngredientEdition();
-                            }}
-                            style={[
-                              styles.cancelIngredientButton,
-                              { borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.editIngredientText,
-                                { color: colors.textPrimary },
-                              ]}
-                            >
-                              Cancelar edicion
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>,
-                    ]
-                  ) : (
-                    <>
-                      {(selectedRecipe.steps || []).length > 1 && (
-                        <Text
-                          style={[
-                            styles.stepHelpText,
-                            { color: colors.textMuted },
-                          ]}
-                        >
-                          Arrastra el control de la derecha para reordenar los
-                          pasos.
-                        </Text>
-                      )}
-                      {(() => {
-                        const sortedSteps = [
-                          ...(selectedRecipe.steps || []),
-                        ].sort((stepA, stepB) => stepA.order - stepB.order);
-
-                        return sortedSteps.map((step) => {
-                          const previewFromOrder = stepDragPreview?.fromOrder;
-                          const previewTargetOrder =
-                            stepDragPreview?.targetOrder;
-                          let displacement = 0;
-
-                          if (
-                            stepDragPreview?.stepId !== step.id &&
-                            previewFromOrder &&
-                            previewTargetOrder
-                          ) {
-                            if (
-                              previewTargetOrder > previewFromOrder &&
-                              step.order > previewFromOrder &&
-                              step.order <= previewTargetOrder
-                            ) {
-                              displacement = -STEP_DRAG_SLOT_HEIGHT;
-                            }
-
-                            if (
-                              previewTargetOrder < previewFromOrder &&
-                              step.order < previewFromOrder &&
-                              step.order >= previewTargetOrder
-                            ) {
-                              displacement = STEP_DRAG_SLOT_HEIGHT;
-                            }
-                          }
-
-                          return (
-                            <DraggablePreparationStep
-                              colors={colors}
-                              displacement={displacement}
-                              isEditing={editingStepId === step.id}
-                              key={step.id}
-                              onDragPreview={setStepDragPreview}
-                              onDragStateChange={handleStepDragStateChange}
-                              onEdit={editPreparationStep}
-                              onMove={movePreparationStep}
-                              onRemove={removePreparationStep}
-                              step={step}
-                              stepsCount={sortedSteps.length}
-                            />
-                          );
-                        });
-                      })()}
-
-                      {(selectedRecipe.steps || []).length === 0 && (
-                        <View
-                          style={[
-                            styles.detailEmptyState,
-                            { borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.emptyTitle,
-                              { color: colors.textPrimary },
-                            ]}
-                          >
-                            Sin pasos de preparacion
-                          </Text>
-                          <Text
-                            style={[
-                              styles.emptyText,
-                              { color: colors.textMuted },
-                            ]}
-                          >
-                            Los pasos de preparacion se veran reflejados cuando
-                            los agregues.
-                          </Text>
-                        </View>
-                      )}
-
-                      <View
-                        onLayout={(event) => {
-                          stepFormOffsetY.current = event.nativeEvent.layout.y;
-                        }}
+                          )}
+                      </View>
+                      <Text
                         style={[
-                          styles.ingredientForm,
-                          {
-                            backgroundColor: colors.surface,
-                            borderColor: editingStepId
-                              ? colors.primary
-                              : colors.border,
-                          },
-                          editingStepId && styles.ingredientFormEditing,
+                          styles.detailSubtitle,
+                          { color: colors.textMuted },
                         ]}
                       >
+                        Define porciones e ingredientes de elaboracion.
+                      </Text>
+                      {!!recipeNameFeedback && (
+                        <Text
+                          style={[
+                            styles.detailFeedbackText,
+                            { color: colors.primaryText },
+                          ]}
+                        >
+                          {recipeNameFeedback}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+
+                  <ScrollView
+                    contentContainerStyle={styles.detailContent}
+                    keyboardShouldPersistTaps="handled"
+                    onScroll={recipeDetailSheet.onScroll}
+                    ref={recipeDetailScrollRef}
+                    scrollEventThrottle={16}
+                    scrollEnabled={!isReorderingStep}
+                    showsVerticalScrollIndicator={false}
+                    stickyHeaderIndices={ingredientStickyHeaderIndices}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setRecipeTypePickerIsVisible(true);
+                      }}
+                      style={[
+                        styles.recipeTypePanel,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.servingsCopy}>
                         <Text
                           style={[
                             styles.sectionLabel,
                             { color: colors.textSecondary },
                           ]}
                         >
-                          {editingStepId ? 'Editar paso' : 'Agregar paso'}
+                          {selectedRecipe.type || 'Sin tipo'}
                         </Text>
-                        <TextInput
-                          multiline
-                          onChangeText={setStepDescription}
-                          placeholder="Ej. Batir queso crema con azucar hasta suavizar."
-                          placeholderTextColor={colors.textMuted}
+                        <Text
                           style={[
-                            styles.stepInput,
+                            styles.servingsHint,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Tipo de receta
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.sectionToggleText,
+                          { color: colors.primaryText },
+                        ]}
+                      >
+                        Cambiar
+                      </Text>
+                    </TouchableOpacity>
+                    <View
+                      style={[
+                        styles.servingsPanel,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.servingsCopy}>
+                        <Text
+                          style={[
+                            styles.sectionLabel,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Porciones de esta receta
+                        </Text>
+                        <Text
+                          style={[
+                            styles.servingsHint,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          Base para costos por pieza.
+                        </Text>
+                      </View>
+                      <View style={styles.servingsStepper}>
+                        <TouchableOpacity
+                          activeOpacity={0.75}
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            updateServings(selectedRecipe.servings - 1);
+                          }}
+                          style={[
+                            styles.stepperButton,
+                            { backgroundColor: colors.primaryMuted },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepperText,
+                              { color: colors.primaryText },
+                            ]}
+                          >
+                            -
+                          </Text>
+                        </TouchableOpacity>
+                        <TextInput
+                          keyboardType="number-pad"
+                          onBlur={() => {
+                            const parsedValue = Number(servingsDraft);
+
+                            if (parsedValue > 0) {
+                              updateServings(parsedValue);
+                            } else {
+                              setServingsDraft(`${selectedRecipe.servings}`);
+                            }
+                          }}
+                          onChangeText={(value) =>
+                            setServingsDraft(value.replace(/[^0-9]/g, ''))
+                          }
+                          style={[
+                            styles.servingsValue,
                             {
                               backgroundColor: colors.fieldBackground,
                               color: colors.textPrimary,
                             },
                           ]}
-                          textAlignVertical="top"
-                          value={stepDescription}
+                          value={servingsDraft}
                         />
                         <TouchableOpacity
                           activeOpacity={0.75}
-                          disabled={isSavingStep || !stepDescription.trim()}
                           onPress={() => {
                             Keyboard.dismiss();
-                            savePreparationStep();
+                            updateServings(selectedRecipe.servings + 1);
                           }}
                           style={[
-                            styles.addIngredientButton,
-                            {
-                              backgroundColor:
-                                isSavingStep || !stepDescription.trim()
-                                  ? colors.surfaceMuted
-                                  : colors.primary,
-                            },
+                            styles.stepperButton,
+                            { backgroundColor: colors.primaryMuted },
                           ]}
                         >
                           <Text
                             style={[
-                              styles.addIngredientText,
+                              styles.stepperText,
+                              { color: colors.primaryText },
+                            ]}
+                          >
+                            +
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.sectionTitle,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Receta
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.detailTabs,
+                        { backgroundColor: colors.surface },
+                      ]}
+                    >
+                      {['Ingredientes', 'Preparacion'].map((tab) => {
+                        const isSelected = recipeDetailTab === tab;
+
+                        return (
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            key={tab}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setRecipeDetailTab(tab);
+                            }}
+                            style={[
+                              styles.detailTabButton,
                               {
-                                color:
-                                  isSavingStep || !stepDescription.trim()
-                                    ? colors.inactiveText
-                                    : colors.textInverse,
+                                backgroundColor: isSelected
+                                  ? colors.primaryMuted
+                                  : colors.surface,
                               },
                             ]}
                           >
-                            {isSavingStep
-                              ? 'Guardando...'
-                              : editingStepId
-                                ? 'Actualizar paso'
-                                : 'Agregar paso'}
-                          </Text>
-                        </TouchableOpacity>
-                        {editingStepId && (
-                          <TouchableOpacity
-                            activeOpacity={0.75}
-                            onPress={() => {
-                              Keyboard.dismiss();
-                              cancelPreparationStepEdition();
-                            }}
+                            <Text
+                              style={[
+                                styles.detailTabText,
+                                {
+                                  color: isSelected
+                                    ? colors.primaryText
+                                    : colors.inactiveText,
+                                },
+                              ]}
+                            >
+                              {tab}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {recipeDetailTab === 'Ingredientes' ? (
+                      [
+                        shouldGroupRecipeIngredients
+                          ? groupedRecipeIngredients.flatMap(
+                              ({ ingredients, section }) => {
+                                const isExpanded =
+                                  expandedIngredientSections[section] !== false;
+
+                                return [
+                                  <View
+                                    key={`${section}-header`}
+                                    style={[
+                                      styles.ingredientSectionHeaderShell,
+                                      {
+                                        backgroundColor:
+                                          colors.screenBackground,
+                                      },
+                                    ]}
+                                  >
+                                    <TouchableOpacity
+                                      activeOpacity={0.75}
+                                      onPress={() => {
+                                        Keyboard.dismiss();
+                                        setExpandedIngredientSections(
+                                          (currentSections) => ({
+                                            ...currentSections,
+                                            [section]: !isExpanded,
+                                          }),
+                                        );
+                                      }}
+                                      style={[
+                                        styles.ingredientSectionHeader,
+                                        {
+                                          backgroundColor:
+                                            colors.fieldBackground,
+                                          borderColor: colors.border,
+                                        },
+                                      ]}
+                                    >
+                                      <View
+                                        style={
+                                          styles.ingredientSectionHeaderContent
+                                        }
+                                      >
+                                        <Text
+                                          numberOfLines={1}
+                                          style={[
+                                            styles.ingredientSectionHeaderTitle,
+                                            { color: colors.textPrimary },
+                                          ]}
+                                        >
+                                          {section}
+                                        </Text>
+                                        <Text
+                                          numberOfLines={1}
+                                          style={[
+                                            styles.ingredientSectionHeaderMeta,
+                                            { color: colors.textMuted },
+                                          ]}
+                                        >
+                                          {ingredients.length}{' '}
+                                          {ingredients.length === 1
+                                            ? 'ingrediente'
+                                            : 'ingredientes'}
+                                        </Text>
+                                        <View
+                                          style={[
+                                            styles.ingredientSectionToggle,
+                                            {
+                                              backgroundColor: colors.surface,
+                                              borderColor: colors.border,
+                                            },
+                                          ]}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.ingredientSectionToggleText,
+                                              { color: colors.textSecondary },
+                                            ]}
+                                          >
+                                            {isExpanded ? '-' : '+'}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    </TouchableOpacity>
+                                  </View>,
+                                  ...(isExpanded
+                                    ? ingredients.map((ingredient) => {
+                                        const isEditingIngredient =
+                                          ingredient.id === editingIngredientId;
+
+                                        return (
+                                          <EditableIngredientRow
+                                            colors={colors}
+                                            feedbackMessage={
+                                              ingredientFeedbackMessage
+                                            }
+                                            feedbackOpacity={
+                                              ingredientFeedbackOpacity
+                                            }
+                                            hasFeedback={
+                                              feedbackIngredientId ===
+                                              ingredient.id
+                                            }
+                                            ingredient={ingredient}
+                                            isEditing={isEditingIngredient}
+                                            key={ingredient.id}
+                                            onEdit={editIngredient}
+                                            onLayout={(event) => {
+                                              ingredientCardPositions.current[
+                                                ingredient.id
+                                              ] = event.nativeEvent.layout.y;
+                                            }}
+                                            onRemove={removeIngredient}
+                                          />
+                                        );
+                                      })
+                                    : []),
+                                ];
+                              },
+                            )
+                          : sortedRecipeIngredients.map((ingredient) => {
+                              const isEditingIngredient =
+                                ingredient.id === editingIngredientId;
+
+                              return (
+                                <EditableIngredientRow
+                                  colors={colors}
+                                  feedbackMessage={ingredientFeedbackMessage}
+                                  feedbackOpacity={ingredientFeedbackOpacity}
+                                  hasFeedback={
+                                    feedbackIngredientId === ingredient.id
+                                  }
+                                  ingredient={ingredient}
+                                  isEditing={isEditingIngredient}
+                                  key={ingredient.id}
+                                  onEdit={editIngredient}
+                                  onLayout={(event) => {
+                                    ingredientCardPositions.current[
+                                      ingredient.id
+                                    ] = event.nativeEvent.layout.y;
+                                  }}
+                                  onRemove={removeIngredient}
+                                />
+                              );
+                            }),
+                        sortedRecipeIngredients.length === 0 && (
+                          <View
+                            key="empty-ingredients"
                             style={[
-                              styles.cancelIngredientButton,
+                              styles.detailEmptyState,
                               { borderColor: colors.border },
                             ]}
                           >
                             <Text
                               style={[
-                                styles.editIngredientText,
+                                styles.emptyTitle,
                                 { color: colors.textPrimary },
                               ]}
                             >
-                              Cancelar edicion
+                              Sin ingredientes
+                            </Text>
+                            <Text
+                              style={[
+                                styles.emptyText,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              Los ingredientes se veran reflejados cuando los
+                              agregues.
+                            </Text>
+                          </View>
+                        ),
+
+                        <View
+                          key="ingredient-form"
+                          onLayout={(event) => {
+                            ingredientFormOffsetY.current =
+                              event.nativeEvent.layout.y;
+                          }}
+                          style={[
+                            styles.ingredientForm,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: editingIngredientId
+                                ? colors.primary
+                                : colors.border,
+                            },
+                            editingIngredientId && styles.ingredientFormEditing,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.sectionLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            {editingIngredientId
+                              ? 'Editar ingrediente'
+                              : 'Agregar ingrediente'}
+                          </Text>
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setIngredientPickerIsVisible(true);
+                            }}
+                            style={[
+                              styles.inventoryIngredientSelect,
+                              {
+                                backgroundColor: colors.fieldBackground,
+                                borderColor: colors.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.inventoryIngredientSelectText,
+                                {
+                                  color: selectedInventoryIngredient
+                                    ? colors.textPrimary
+                                    : colors.textMuted,
+                                },
+                              ]}
+                            >
+                              {selectedInventoryIngredient?.name ||
+                                'Seleccionar ingrediente del inventario'}
+                            </Text>
+                            {selectedInventoryIngredient && (
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.inventoryIngredientSelectMeta,
+                                  { color: colors.textMuted },
+                                ]}
+                              >
+                                {selectedInventoryIngredient.category ||
+                                  'Sin categoria'}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setIngredientSectionPickerIsVisible(true);
+                            }}
+                            style={[
+                              styles.inventoryIngredientSelect,
+                              {
+                                backgroundColor: colors.fieldBackground,
+                                borderColor: colors.border,
+                              },
+                            ]}
+                          >
+                            <View style={styles.inlineSelectRow}>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.inventoryIngredientSelectText,
+                                  styles.inlineSelectText,
+                                  {
+                                    color: ingredientSection
+                                      ? colors.textPrimary
+                                      : colors.textMuted,
+                                  },
+                                ]}
+                              >
+                                {ingredientSection || 'Seleccionar sección'}
+                              </Text>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.inventoryIngredientSelectMeta,
+                                  { color: colors.textMuted },
+                                ]}
+                              >
+                                Opcional
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          <View style={styles.quantityRow}>
+                            <TextInput
+                              keyboardType="decimal-pad"
+                              onChangeText={setIngredientQuantity}
+                              placeholder="Cantidad"
+                              placeholderTextColor={colors.textMuted}
+                              style={[
+                                styles.quantityInput,
+                                {
+                                  backgroundColor: colors.fieldBackground,
+                                  color: colors.textPrimary,
+                                },
+                              ]}
+                              value={ingredientQuantity}
+                            />
+                            <View style={styles.unitListContainer}>
+                              <TouchableOpacity
+                                activeOpacity={0.75}
+                                onPress={() => {
+                                  Keyboard.dismiss();
+                                  setUnitPickerIsVisible(true);
+                                }}
+                                style={[
+                                  styles.unitSelectBox,
+                                  {
+                                    backgroundColor: colors.fieldBackground,
+                                    borderColor: colors.border,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.unitSelectText,
+                                    { color: colors.textPrimary },
+                                  ]}
+                                >
+                                  {ingredientUnit}
+                                </Text>
+                                <Text
+                                  numberOfLines={1}
+                                  style={[
+                                    styles.unitSelectDescription,
+                                    { color: colors.textMuted },
+                                  ]}
+                                >
+                                  {getIngredientUnitLabel(ingredientUnit)}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          {ingredientAlreadyExistsInSection && (
+                            <Text
+                              style={[
+                                styles.ingredientDuplicateWarning,
+                                { color: colors.danger },
+                              ]}
+                            >
+                              Este ingrediente ya fue agregado en esta sección.
+                            </Text>
+                          )}
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            disabled={
+                              isSavingIngredient ||
+                              !selectedInventoryIngredient ||
+                              !ingredientQuantity.trim() ||
+                              ingredientAlreadyExistsInSection
+                            }
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              addIngredient();
+                            }}
+                            style={[
+                              styles.addIngredientButton,
+                              {
+                                backgroundColor:
+                                  isSavingIngredient ||
+                                  !selectedInventoryIngredient ||
+                                  !ingredientQuantity.trim() ||
+                                  ingredientAlreadyExistsInSection
+                                    ? colors.surfaceMuted
+                                    : colors.primary,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.addIngredientText,
+                                {
+                                  color:
+                                    isSavingIngredient ||
+                                    !selectedInventoryIngredient ||
+                                    !ingredientQuantity.trim() ||
+                                    ingredientAlreadyExistsInSection
+                                      ? colors.inactiveText
+                                      : colors.textInverse,
+                                },
+                              ]}
+                            >
+                              {isSavingIngredient
+                                ? 'Guardando...'
+                                : editingIngredientId
+                                  ? 'Actualizar ingrediente'
+                                  : 'Agregar ingrediente'}
                             </Text>
                           </TouchableOpacity>
+                          {editingIngredientId && (
+                            <TouchableOpacity
+                              activeOpacity={0.75}
+                              onPress={() => {
+                                Keyboard.dismiss();
+                                cancelIngredientEdition();
+                              }}
+                              style={[
+                                styles.cancelIngredientButton,
+                                { borderColor: colors.border },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.editIngredientText,
+                                  { color: colors.textPrimary },
+                                ]}
+                              >
+                                Cancelar edición
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>,
+                      ]
+                    ) : (
+                      <>
+                        {(selectedRecipe.steps || []).length > 1 && (
+                          <Text
+                            style={[
+                              styles.stepHelpText,
+                              { color: colors.textMuted },
+                            ]}
+                          >
+                            Arrastra el control de la derecha para reordenar los
+                            pasos.
+                          </Text>
                         )}
-                      </View>
-                    </>
-                  )}
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      confirmDeleteRecipe();
-                    }}
-                    style={[
-                      styles.deleteRecipeButton,
-                      { borderColor: colors.danger },
-                    ]}
-                  >
-                    <Text
+                        {(() => {
+                          const sortedSteps = [
+                            ...(selectedRecipe.steps || []),
+                          ].sort((stepA, stepB) => stepA.order - stepB.order);
+
+                          return sortedSteps.map((step) => {
+                            const previewFromOrder = stepDragPreview?.fromOrder;
+                            const previewTargetOrder =
+                              stepDragPreview?.targetOrder;
+                            let displacement = 0;
+
+                            if (
+                              stepDragPreview?.stepId !== step.id &&
+                              previewFromOrder &&
+                              previewTargetOrder
+                            ) {
+                              if (
+                                previewTargetOrder > previewFromOrder &&
+                                step.order > previewFromOrder &&
+                                step.order <= previewTargetOrder
+                              ) {
+                                displacement = -STEP_DRAG_SLOT_HEIGHT;
+                              }
+
+                              if (
+                                previewTargetOrder < previewFromOrder &&
+                                step.order < previewFromOrder &&
+                                step.order >= previewTargetOrder
+                              ) {
+                                displacement = STEP_DRAG_SLOT_HEIGHT;
+                              }
+                            }
+
+                            return (
+                              <DraggablePreparationStep
+                                colors={colors}
+                                displacement={displacement}
+                                feedbackMessage={stepFeedbackMessage}
+                                feedbackOpacity={stepFeedbackOpacity}
+                                hasFeedback={feedbackStepId === step.id}
+                                isEditing={editingStepId === step.id}
+                                key={step.id}
+                                onDragPreview={setStepDragPreview}
+                                onDragStateChange={handleStepDragStateChange}
+                                onEdit={editPreparationStep}
+                                onLayout={(event) => {
+                                  stepCardPositions.current[step.id] =
+                                    event.nativeEvent.layout.y;
+                                }}
+                                onMove={movePreparationStep}
+                                onRemove={removePreparationStep}
+                                step={step}
+                                stepsCount={sortedSteps.length}
+                              />
+                            );
+                          });
+                        })()}
+
+                        {(selectedRecipe.steps || []).length === 0 && (
+                          <View
+                            style={[
+                              styles.detailEmptyState,
+                              { borderColor: colors.border },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.emptyTitle,
+                                { color: colors.textPrimary },
+                              ]}
+                            >
+                              Sin pasos de preparacion
+                            </Text>
+                            <Text
+                              style={[
+                                styles.emptyText,
+                                { color: colors.textMuted },
+                              ]}
+                            >
+                              Los pasos de preparacion se veran reflejados
+                              cuando los agregues.
+                            </Text>
+                          </View>
+                        )}
+
+                        <View
+                          onLayout={(event) => {
+                            stepFormOffsetY.current =
+                              event.nativeEvent.layout.y;
+                          }}
+                          style={[
+                            styles.ingredientForm,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: editingStepId
+                                ? colors.primary
+                                : colors.border,
+                            },
+                            editingStepId && styles.ingredientFormEditing,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.sectionLabel,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            {editingStepId ? 'Editar paso' : 'Agregar paso'}
+                          </Text>
+                          <TextInput
+                            multiline
+                            onChangeText={setStepDescription}
+                            placeholder="Ej. Batir queso crema con azucar hasta suavizar."
+                            placeholderTextColor={colors.textMuted}
+                            style={[
+                              styles.stepInput,
+                              {
+                                backgroundColor: colors.fieldBackground,
+                                color: colors.textPrimary,
+                              },
+                            ]}
+                            textAlignVertical="top"
+                            value={stepDescription}
+                          />
+                          <TouchableOpacity
+                            activeOpacity={0.75}
+                            disabled={isSavingStep || !stepDescription.trim()}
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              savePreparationStep();
+                            }}
+                            style={[
+                              styles.addIngredientButton,
+                              {
+                                backgroundColor:
+                                  isSavingStep || !stepDescription.trim()
+                                    ? colors.surfaceMuted
+                                    : colors.primary,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.addIngredientText,
+                                {
+                                  color:
+                                    isSavingStep || !stepDescription.trim()
+                                      ? colors.inactiveText
+                                      : colors.textInverse,
+                                },
+                              ]}
+                            >
+                              {isSavingStep
+                                ? 'Guardando...'
+                                : editingStepId
+                                  ? 'Actualizar paso'
+                                  : 'Agregar paso'}
+                            </Text>
+                          </TouchableOpacity>
+                          {editingStepId && (
+                            <TouchableOpacity
+                              activeOpacity={0.75}
+                              onPress={() => {
+                                Keyboard.dismiss();
+                                cancelPreparationStepEdition();
+                              }}
+                              style={[
+                                styles.cancelIngredientButton,
+                                { borderColor: colors.border },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.editIngredientText,
+                                  { color: colors.textPrimary },
+                                ]}
+                              >
+                                Cancelar edición
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </>
+                    )}
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        confirmDeleteRecipe();
+                      }}
                       style={[
-                        styles.deleteRecipeText,
-                        { color: colors.danger },
+                        styles.deleteRecipeButton,
+                        { borderColor: colors.danger },
                       ]}
                     >
-                      Eliminar receta
-                    </Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </>
-            )}
-          </Animated.View>
+                      <Text
+                        style={[
+                          styles.deleteRecipeText,
+                          { color: colors.danger },
+                        ]}
+                      >
+                        Eliminar receta
+                      </Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </>
+              )}
+            </Animated.View>
+          </KeyboardAvoidingView>
           {unitPickerIsVisible && (
             <View style={styles.unitPickerOverlay}>
-              <View
+              <Pressable
+                onPress={() => setUnitPickerIsVisible(false)}
                 style={[
                   styles.unitPickerBackdrop,
                   { backgroundColor: colors.backdrop },
@@ -3152,11 +3178,10 @@ export default function RecipeBookScreen({
                     showsVerticalScrollIndicator={true}
                   >
                     {filteredInventoryIngredientOptions.map((inventoryItem) => {
-                      const isSelected =
-                        idsMatch(
-                          selectedInventoryIngredient?.inventoryId,
-                          inventoryItem.inventoryId,
-                        );
+                      const isSelected = idsMatch(
+                        selectedInventoryIngredient?.inventoryId,
+                        inventoryItem.inventoryId,
+                      );
 
                       return (
                         <TouchableOpacity
@@ -3233,317 +3258,57 @@ export default function RecipeBookScreen({
               </View>
             </View>
           )}
-          {ingredientSectionPickerIsVisible && (
-            <View style={styles.unitPickerOverlay}>
-              <Pressable
-                onPress={() => setIngredientSectionPickerIsVisible(false)}
-                style={[
-                  styles.unitPickerBackdrop,
-                  { backgroundColor: colors.backdrop },
-                ]}
-              />
-              <View
-                style={[
-                  styles.unitPopupCard,
-                  {
-                    backgroundColor: colors.screenBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.unitPopupTitle, { color: colors.textPrimary }]}
-                >
-                  Sección del ingrediente
-                </Text>
-                <ScrollView
-                  contentContainerStyle={styles.sectionOptionsList}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  style={styles.sectionOptionsScroll}
-                >
-                  {[
-                    {
-                      id: 'empty-section',
-                      name: '',
-                      normalizedName: '',
-                      recipeSectionId: null,
-                    },
-                    ...ingredientSectionOptions,
-                  ].map((section) => {
-                    const label = section.name || 'Sin sección';
-                    const isSelected = ingredientSection === section.name;
-
-                    return (
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        key={section.id}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          setIngredientSection(section.name);
-                          setIngredientSectionPickerIsVisible(false);
-                        }}
-                        style={[
-                          styles.unitOptionRow,
-                          styles.sectionOptionRow,
-                          {
-                            backgroundColor: isSelected
-                              ? colors.primaryMuted
-                              : colors.surface,
-                            borderColor: isSelected
-                              ? colors.primary
-                              : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.unitOptionDescription,
-                            styles.sectionOptionText,
-                            {
-                              color: isSelected
-                                ? colors.primaryText
-                                : colors.textPrimary,
-                            },
-                          ]}
-                        >
-                          {label}
-                        </Text>
-                        {!!section.name && (
-                          <TouchableOpacity
-                            accessibilityLabel={`Eliminar sección ${section.name}`}
-                            activeOpacity={0.7}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              Keyboard.dismiss();
-                              requestDeleteConfirmation({
-                                confirmLabel: 'Eliminar',
-                                message: `Se eliminara la sección "${section.name}" y se quitara de los ingredientes que la usan.`,
-                                onConfirm: () =>
-                                  deleteIngredientSection(section),
-                                title: 'Eliminar sección',
-                              });
-                            }}
-                            style={styles.sectionDeleteButton}
-                          >
-                            <Text
-                              style={[
-                                styles.deleteActionText,
-                                { color: colors.danger },
-                              ]}
-                            >
-                              Eliminar
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                <View style={styles.newSectionContainer}>
-                  <TextInput
-                    onChangeText={setNewIngredientSection}
-                    placeholder="Nueva sección"
-                    placeholderTextColor={colors.textMuted}
-                    style={[
-                      styles.newSectionInput,
-                      {
-                        backgroundColor: colors.fieldBackground,
-                        color: colors.textPrimary,
-                      },
-                    ]}
-                    value={newIngredientSection}
-                  />
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    disabled={!newIngredientSection.trim()}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      addIngredientSection();
-                    }}
-                    style={[
-                      styles.newSectionButton,
-                      {
-                        backgroundColor: newIngredientSection.trim()
-                          ? colors.primary
-                          : colors.surfaceMuted,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.newSectionButtonText,
-                        {
-                          color: newIngredientSection.trim()
-                            ? colors.textInverse
-                            : colors.inactiveText,
-                        },
-                      ]}
-                    >
-                      Agregar
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
-          {recipeTypePickerIsVisible && (
-            <View style={styles.unitPickerOverlay}>
-              <Pressable
-                onPress={() => setRecipeTypePickerIsVisible(false)}
-                style={[
-                  styles.unitPickerBackdrop,
-                  { backgroundColor: colors.backdrop },
-                ]}
-              />
-              <View
-                style={[
-                  styles.unitPopupCard,
-                  {
-                    backgroundColor: colors.screenBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.unitPopupTitle, { color: colors.textPrimary }]}
-                >
-                  Tipo de receta
-                </Text>
-                <ScrollView
-                  contentContainerStyle={styles.sectionOptionsList}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled
-                  showsVerticalScrollIndicator
-                  style={styles.sectionOptionsScroll}
-                >
-                  {[
-                    {
-                      id: 'empty-recipe-type',
-                      name: '',
-                      normalizedName: '',
-                      recipeTypeId: null,
-                    },
-                    ...recipeTypeOptions,
-                  ].map((type) => {
-                    const selectedType = selectedRecipe
-                      ? selectedRecipe.type
-                      : recipeType;
-                    const label = type.name || 'Sin tipo';
-                    const isSelected = selectedType === type.name;
-
-                    return (
-                      <TouchableOpacity
-                        activeOpacity={0.75}
-                        key={type.id}
-                        onPress={() => {
-                          Keyboard.dismiss();
-                          selectRecipeType(type.name);
-                        }}
-                        style={[
-                          styles.unitOptionRow,
-                          styles.sectionOptionRow,
-                          {
-                            backgroundColor: isSelected
-                              ? colors.primaryMuted
-                              : colors.surface,
-                            borderColor: isSelected
-                              ? colors.primary
-                              : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.unitOptionDescription,
-                            styles.sectionOptionText,
-                            {
-                              color: isSelected
-                                ? colors.primaryText
-                                : colors.textPrimary,
-                            },
-                          ]}
-                        >
-                          {label}
-                        </Text>
-                        {!!type.name && (
-                          <TouchableOpacity
-                            accessibilityLabel={`Eliminar tipo ${type.name}`}
-                            activeOpacity={0.7}
-                            onPress={(event) => {
-                              event.stopPropagation();
-                              Keyboard.dismiss();
-                              requestDeleteConfirmation({
-                                confirmLabel: 'Eliminar',
-                                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
-                                onConfirm: () => deleteRecipeType(type),
-                                title: 'Eliminar tipo',
-                              });
-                            }}
-                            style={styles.sectionDeleteButton}
-                          >
-                            <Text
-                              style={[
-                                styles.deleteActionText,
-                                { color: colors.danger },
-                              ]}
-                            >
-                              Eliminar
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                <View style={styles.newSectionContainer}>
-                  <TextInput
-                    onChangeText={setNewRecipeType}
-                    placeholder="Nuevo tipo"
-                    placeholderTextColor={colors.textMuted}
-                    style={[
-                      styles.newSectionInput,
-                      {
-                        backgroundColor: colors.fieldBackground,
-                        color: colors.textPrimary,
-                      },
-                    ]}
-                    value={newRecipeType}
-                  />
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    disabled={!newRecipeType.trim()}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      addRecipeType();
-                    }}
-                    style={[
-                      styles.newSectionButton,
-                      {
-                        backgroundColor: newRecipeType.trim()
-                          ? colors.primary
-                          : colors.surfaceMuted,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.newSectionButtonText,
-                        {
-                          color: newRecipeType.trim()
-                            ? colors.textInverse
-                            : colors.inactiveText,
-                        },
-                      ]}
-                    >
-                      Agregar
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
+          <ManagedOptionPickerModal
+            colors={colors}
+            deleteAccessibilityLabel={(section) =>
+              `Eliminar sección ${section.name}`
+            }
+            emptyLabel="Sin sección"
+            isVisible={ingredientSectionPickerIsVisible}
+            newValue={newIngredientSection}
+            newValuePlaceholder="Nueva sección"
+            onAdd={addIngredientSection}
+            onChangeNewValue={setNewIngredientSection}
+            onClose={() => setIngredientSectionPickerIsVisible(false)}
+            onDelete={(section) =>
+              requestDeleteConfirmation({
+                confirmLabel: 'Eliminar',
+                message: `Se eliminara la sección "${section.name}" y se quitara de los ingredientes que la usan.`,
+                onConfirm: () => deleteIngredientSection(section),
+                title: 'Eliminar sección',
+              })
+            }
+            onSelect={(sectionName) => {
+              setIngredientSection(sectionName);
+              setIngredientSectionPickerIsVisible(false);
+            }}
+            options={ingredientSectionOptions}
+            selectedValue={ingredientSection}
+            title="Sección del ingrediente"
+          />
+          <ManagedOptionPickerModal
+            colors={colors}
+            deleteAccessibilityLabel={(type) => `Eliminar tipo ${type.name}`}
+            emptyLabel="Sin tipo"
+            isVisible={recipeTypePickerIsVisible}
+            newValue={newRecipeType}
+            newValuePlaceholder="Nuevo tipo"
+            onAdd={addRecipeType}
+            onChangeNewValue={setNewRecipeType}
+            onClose={() => setRecipeTypePickerIsVisible(false)}
+            onDelete={(type) =>
+              requestDeleteConfirmation({
+                confirmLabel: 'Eliminar',
+                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
+                onConfirm: () => deleteRecipeType(type),
+                title: 'Eliminar tipo',
+              })
+            }
+            onSelect={selectRecipeType}
+            options={recipeTypeOptions}
+            selectedValue={selectedRecipe ? selectedRecipe.type : recipeType}
+            title="Tipo de receta"
+          />
         </View>
       </Modal>
       <Modal
@@ -3552,7 +3317,10 @@ export default function RecipeBookScreen({
         transparent
         visible={Boolean(deleteDialog)}
       >
-        <View style={styles.deleteModalRoot}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.deleteModalRoot}
+        >
           <Pressable
             onPress={closeDeleteDialog}
             style={[
@@ -3665,7 +3433,7 @@ export default function RecipeBookScreen({
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -3776,10 +3544,14 @@ const EditableIngredientRow = ({
 const DraggablePreparationStep = ({
   colors,
   displacement,
+  feedbackMessage,
+  feedbackOpacity,
+  hasFeedback,
   isEditing,
   onDragPreview,
   onDragStateChange,
   onEdit,
+  onLayout,
   onMove,
   onRemove,
   step,
@@ -3909,6 +3681,7 @@ const DraggablePreparationStep = ({
 
   return (
     <Animated.View
+      onLayout={onLayout}
       style={[
         styles.stepRow,
         isDragging && styles.stepRowDragging,
@@ -3919,6 +3692,18 @@ const DraggablePreparationStep = ({
         },
       ]}
     >
+      {hasFeedback && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.ingredientFeedbackBorder,
+            {
+              borderColor: colors.primary,
+              opacity: feedbackOpacity,
+            },
+          ]}
+        />
+      )}
       <Pressable
         onPress={() => {
           Keyboard.dismiss();
@@ -3957,6 +3742,23 @@ const DraggablePreparationStep = ({
                   En edicion
                 </Text>
               </View>
+            ) : hasFeedback ? (
+              <Animated.View
+                style={[
+                  styles.ingredientEditingBadge,
+                  { backgroundColor: colors.primaryMuted },
+                  { opacity: feedbackOpacity },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.ingredientEditingText,
+                    { color: colors.primaryText },
+                  ]}
+                >
+                  {feedbackMessage}
+                </Text>
+              </Animated.View>
             ) : (
               <TouchableOpacity
                 accessibilityLabel="Eliminar paso"
@@ -4166,7 +3968,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   detailInput: {
     borderRadius: 8,
@@ -4299,31 +4101,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.semibold,
     marginBottom: 14,
   },
-  newSectionButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    height: 44,
-    justifyContent: 'center',
-    minWidth: 88,
-    paddingHorizontal: 12,
-  },
-  newSectionButtonText: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
-  },
-  newSectionContainer: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  newSectionInput: {
-    borderRadius: 8,
-    flex: 1,
-    fontSize: typography.sizes.body,
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
   ingredientAmount: {
     fontSize: typography.sizes.caption,
     lineHeight: 17,
@@ -4369,6 +4146,11 @@ const styles = StyleSheet.create({
   ingredientInfo: {
     flex: 1,
     paddingRight: 10,
+  },
+  keyboardSheetWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
   },
   ingredientName: {
     fontSize: typography.sizes.body,
@@ -4615,11 +4397,31 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   recipeNameEditInput: {
-    borderRadius: 8,
+    flex: 1,
     fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.semibold,
     minHeight: 44,
+    minWidth: 0,
     paddingHorizontal: 12,
+  },
+  recipeNameEditFrame: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 44,
+  },
+  recipeNameSaveButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginRight: 6,
+    minHeight: 32,
+    paddingHorizontal: 10,
+  },
+  recipeNameSaveText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
   },
   recipeModal: {
     borderTopLeftRadius: 30,
@@ -4631,7 +4433,7 @@ const styles = StyleSheet.create({
   recipeDetailModal: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    maxHeight: '94%',
+    maxHeight: '98%',
     padding: 18,
     paddingTop: 0,
     width: '100%',
@@ -4761,6 +4563,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     minHeight: 68,
     padding: 12,
+    position: 'relative',
   },
   stepRowDragging: {
     borderWidth: 2,
@@ -4810,7 +4613,7 @@ const styles = StyleSheet.create({
   },
   servingsHint: {
     fontSize: typography.sizes.caption,
-    lineHeight: 17,
+    lineHeight: 12,
     marginTop: 4,
   },
   servingsCopy: {
@@ -4825,7 +4628,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'space-between',
-    minHeight: 76,
+    minHeight: 50,
     padding: 12,
   },
   servingsStepper: {
@@ -4856,25 +4659,8 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.bold,
     lineHeight: 22,
   },
-  sectionDeleteButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: -4,
-    minHeight: 34,
-    minWidth: 62,
-  },
   sectionOptionRow: {
     justifyContent: 'space-between',
-  },
-  sectionOptionText: {
-    flex: 1,
-  },
-  sectionOptionsList: {
-    gap: 8,
-    paddingRight: 2,
-  },
-  sectionOptionsScroll: {
-    maxHeight: 280,
   },
   unitListContainer: {
     width: 126,

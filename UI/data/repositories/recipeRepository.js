@@ -2,13 +2,23 @@ import { createRepository } from './repositoryUtils';
 
 export const RECIPE_COLLECTION = 'recipes';
 
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
+
 const normalizeRecipe = (recipe = {}) => ({
   cost: Number(recipe.cost || 0),
   ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-  name: recipe.name || '',
+  name: capitalizeFirstLetter(recipe.name),
   servings: Number(recipe.servings || 1),
   steps: Array.isArray(recipe.steps) ? recipe.steps : [],
-  type: recipe.type || '',
+  type: capitalizeFirstLetter(recipe.type),
 });
 
 const repository = createRepository({

@@ -26,6 +26,7 @@
         "backgroundColor": "#EFECFF",
         "monochromeImage": "./assets/adaptive-icon.png"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.UI"
     },
     "web": {

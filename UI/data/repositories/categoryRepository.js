@@ -2,10 +2,20 @@ import { createRepository } from './repositoryUtils';
 
 export const CATEGORY_COLLECTION = 'categories';
 
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
+
 const normalizeCategory = (category = {}) => ({
   categoryId: category.categoryId || '',
-  description: category.description || '',
-  shortDescription: category.shortDescription || '',
+  description: capitalizeFirstLetter(category.description),
+  shortDescription: capitalizeFirstLetter(category.shortDescription),
 });
 
 const repository = createRepository({
