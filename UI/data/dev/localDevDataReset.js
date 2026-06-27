@@ -16,6 +16,7 @@ const SMOKE_PREFIXES = [
   'smoke_test',
   'rollback_smoke_test',
   'recipe_sale_smoke',
+  'phase_13_sync_dev',
 ];
 
 const COLLECTIONS = [

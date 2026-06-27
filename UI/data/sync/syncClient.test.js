@@ -20,7 +20,7 @@ describe('syncClient', () => {
   });
 
   test('fails before network access when no backend URL is configured', async () => {
-    const client = createSyncClient();
+    const client = createSyncClient({ baseUrl: '' });
 
     await expect(
       client.pushChanges({
@@ -31,8 +31,65 @@ describe('syncClient', () => {
     ).rejects.toThrow('Sync API URL no configurada');
   });
 
+  test('builds correct backend push request', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          accepted: [],
+          cursor: '0',
+          rejected: [],
+        }),
+    });
+    const client = createSyncClient({ baseUrl: 'http://sync.example.test/' });
+    const payload = {
+      deviceId: 'device_1',
+      events: [{ eventId: 'event_1' }],
+      groupId: 'group_1',
+    };
+
+    await client.pushChanges(payload);
+
+    expect(global.fetch).toHaveBeenCalledWith('http://sync.example.test/sync/push', {
+      body: JSON.stringify(payload),
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    });
+  });
+
+  test('builds correct backend pull request', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          changes: [],
+          cursor: '5',
+          groupId: 'group_1',
+        }),
+    });
+    const client = createSyncClient({ baseUrl: 'http://sync.example.test/' });
+
+    await client.pullChanges({
+      cursor: '4',
+      groupId: 'group_1',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://sync.example.test/sync/pull?groupId=group_1&cursor=4',
+      {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        method: 'GET',
+      },
+    );
+  });
+
   test('consumes backend push response shape', async () => {
-    process.env.EXPO_PUBLIC_SYNC_API_URL = 'http://localhost:3000';
     global.fetch.mockResolvedValueOnce({
       ok: true,
       text: async () =>
@@ -51,7 +108,7 @@ describe('syncClient', () => {
           rejected: [],
         }),
     });
-    const client = createSyncClient();
+    const client = createSyncClient({ baseUrl: 'http://localhost:3000' });
 
     await expect(
       client.pushChanges({
@@ -76,7 +133,6 @@ describe('syncClient', () => {
   });
 
   test('consumes backend pull response shape', async () => {
-    process.env.EXPO_PUBLIC_SYNC_API_URL = 'http://localhost:3000';
     global.fetch.mockResolvedValueOnce({
       ok: true,
       text: async () =>
@@ -99,7 +155,7 @@ describe('syncClient', () => {
           groupId: 'group_1',
         }),
     });
-    const client = createSyncClient();
+    const client = createSyncClient({ baseUrl: 'http://localhost:3000' });
 
     await expect(
       client.pullChanges({

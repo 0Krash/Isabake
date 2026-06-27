@@ -11,6 +11,7 @@ const recipeRouter = require('./routes/recipeRoutes');
 const recipeSectionRouter = require('./routes/recipeSectionRoutes');
 const recipeTypeRouter = require('./routes/recipeTypeRoutes');
 const inventoryRouter = require('./routes/inventoryRoutes');
+const syncRouter = require('./routes/syncRoutes');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/v1/recipes', recipeRouter);
 app.use('/api/v1/recipe-sections', recipeSectionRouter);
 app.use('/api/v1/recipe-types', recipeTypeRouter);
 app.use('/api/v1/inventory', inventoryRouter);
+app.use('/sync', syncRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

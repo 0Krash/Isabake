@@ -33,6 +33,7 @@ Jest tests cover:
 - outbox count helper result shape with mocked storage
 - `runLocalTransaction` return/error propagation with mocked DB
 - dev runner result shaping and destructive-check skipping
+- mobile sync client request/response compatibility with the backend contract
 
 ## Expo Runtime Checks
 
@@ -46,6 +47,9 @@ These checks use Expo SQLite and must run inside an Expo runtime:
 - `runRecipeSaleServiceSmokeTest()`
 - `previewDevDataReset()`
 - `runDevDataReset()`
+- `runBackendSyncConnectivityCheck()`
+- `runPushPullDevCheck()`
+- `runTwoWorkspaceIsolationDevCheck()`
 
 Import them through the central runner:
 
@@ -57,6 +61,11 @@ import {
   runLocalDevChecks,
   runSyncDevChecks,
 } from './data/dev/runDevChecks';
+import {
+  runBackendSyncConnectivityCheck,
+  runPushPullDevCheck,
+  runTwoWorkspaceIsolationDevCheck,
+} from './data/dev/runSyncIntegrationChecks';
 ```
 
 Recommended Expo dev-console calls:
@@ -65,6 +74,17 @@ Recommended Expo dev-console calls:
 await runLocalDevChecks();
 await runSyncDevChecks();
 await runAllDevChecks();
+```
+
+Manual sync integration checks:
+
+```js
+await runBackendSyncConnectivityCheck({ groupId: 'your_group_id' });
+await runPushPullDevCheck({ groupId: 'your_group_id' });
+await runTwoWorkspaceIsolationDevCheck({
+  groupA: 'your_group_id',
+  groupB: 'other_dev_group_id',
+});
 ```
 
 By default, mutating smoke tests are skipped. To run smoke tests that create
@@ -87,6 +107,14 @@ Mutating checks, skipped unless `includeMutatingChecks: true`:
 - local transaction rollback smoke
 - inventory stock service smoke
 - recipe sale service smoke
+
+Mutating manual sync integration checks:
+
+- `runPushPullDevCheck()`
+- `runTwoWorkspaceIsolationDevCheck()`
+
+These create records with the `phase_13_sync_dev` prefix so they can be found by
+the dev reset helper.
 
 Reset helpers never run from `runAllDevChecks()`.
 
@@ -114,3 +142,45 @@ npm run check:no-startup-test-wiring
 
 This fails if `App.js` imports or calls known readiness checks, smoke tests,
 reset helpers, or low-level sync runners.
+
+## Backend Sync Server
+
+Run the backend locally from the backend folder:
+
+```sh
+cd ../root/src/Servers/TransBalance
+npm install
+npm start
+```
+
+The mobile sync client calls:
+
+- `POST /sync/push`
+- `GET /sync/pull?groupId=...&cursor=...`
+
+Configure the mobile sync base URL with `URL_Sync` in `.env`. The value should be
+the backend host root, not `/sync`, because the client appends `/sync/push` and
+`/sync/pull`.
+
+Examples:
+
+```sh
+URL_Sync=`${API_HOST}`
+```
+
+Android emulator:
+
+```sh
+API_HOST='http://10.0.2.2:3000'
+URL_Sync=`${API_HOST}`
+```
+
+Physical device:
+
+```sh
+API_HOST='http://YOUR_LAN_IP:3000'
+URL_Sync=`${API_HOST}`
+```
+
+The phone and backend machine must be on the same network, and the backend port
+must be reachable from the device.

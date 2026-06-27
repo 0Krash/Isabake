@@ -185,10 +185,6 @@ export const pushPendingChanges = async ({
       );
     }
 
-    if (response.cursor) {
-      await storeLastSyncCursor(groupId, response.cursor);
-    }
-
     return {
       accepted,
       cursor: response.cursor || null,
@@ -227,12 +223,34 @@ export const pullRemoteChanges = async ({
   try {
     const cursor = await getLastSyncCursor(groupId);
     const response = await client.pullChanges({ cursor, groupId });
+
+    if (response.groupId && response.groupId !== groupId) {
+      return {
+        applied: [],
+        conflicts: [],
+        error: 'response_groupId_mismatch',
+        ok: false,
+        skipped: [],
+      };
+    }
+
     const changes = Array.isArray(response.changes) ? response.changes : [];
     const applied = [];
     const conflicts = [];
+    const skipped = [];
 
     for (const change of changes) {
       const remoteDocument = change.document || {};
+
+      if (remoteDocument.groupId && remoteDocument.groupId !== groupId) {
+        skipped.push({
+          collection: change.collection,
+          reason: 'change_groupId_mismatch',
+          remoteId: change.remoteId,
+        });
+        continue;
+      }
+
       const localId =
         remoteDocument.localId ||
         remoteDocument.id ||
@@ -284,6 +302,7 @@ export const pullRemoteChanges = async ({
       conflicts,
       cursor: response.cursor || cursor || null,
       ok: conflicts.length === 0,
+      skipped,
     };
   } catch (error) {
     return {
@@ -291,6 +310,7 @@ export const pullRemoteChanges = async ({
       conflicts: [],
       error: String(error?.message || error),
       ok: false,
+      skipped: [],
     };
   }
 };

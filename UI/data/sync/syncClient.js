@@ -1,3 +1,4 @@
+import { API_HOST, URL_Sync } from '@env';
 import { DEFAULT_SYNC_ENDPOINTS } from './syncTypes';
 
 const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
@@ -7,8 +8,10 @@ const getConfiguredBaseUrl = () => {
     typeof process !== 'undefined' && process.env ? process.env : {};
 
   return (
+    URL_Sync ||
     environment.EXPO_PUBLIC_SYNC_API_URL ||
     environment.EXPO_PUBLIC_API_URL ||
+    API_HOST ||
     ''
   );
 };
@@ -24,7 +27,13 @@ const parseJsonResponse = async (response) => {
 };
 
 const requestJson = async (path, options = {}) => {
-  const baseUrl = trimTrailingSlash(options.baseUrl || getConfiguredBaseUrl());
+  const configuredBaseUrl = Object.prototype.hasOwnProperty.call(
+    options,
+    'baseUrl',
+  )
+    ? options.baseUrl
+    : getConfiguredBaseUrl();
+  const baseUrl = trimTrailingSlash(configuredBaseUrl);
 
   if (!baseUrl) {
     throw new Error('Sync API URL no configurada');
