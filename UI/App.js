@@ -11,6 +11,7 @@ import RecipeBookScreen from './screens/RecipeBook/RecipeBookScreen';
 import RecipeSaleScreen from './screens/RecipeBook/RecipeSaleScreen';
 import InventoryScreen from './screens/Inventory/InventoryScreen';
 import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
+import ConflictResolutionScreen from './screens/Sync/ConflictResolutionScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
@@ -71,6 +72,10 @@ export default function App() {
       return <InventoryScreen />;
     }
 
+    if (activeTab === 'conflicts') {
+      return <ConflictResolutionScreen />;
+    }
+
     if (activeTab === 'dev-sync' && devSyncDiagnosticsEnabled) {
       return <SyncDiagnosticsScreen />;
     }
@@ -115,6 +120,7 @@ export default function App() {
         {!saleRecipe && (
           <AppBottomNavigation
             activeTab={activeTab}
+            conflictTabEnabled
             extraTabs={
               devSyncDiagnosticsEnabled
                 ? [{ key: 'dev-sync', label: 'Sync Dev' }]

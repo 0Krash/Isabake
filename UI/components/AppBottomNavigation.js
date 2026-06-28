@@ -12,11 +12,16 @@ const tabs = [
 
 export default function AppBottomNavigation({
   activeTab,
+  conflictTabEnabled = false,
   extraTabs = [],
   onTabPress,
 }) {
   const { colors } = useTransactionBalanceTheme();
-  const visibleTabs = [...tabs, ...extraTabs];
+  const visibleTabs = [
+    ...tabs,
+    ...(conflictTabEnabled ? [{ key: 'conflicts', label: 'Conflictos' }] : []),
+    ...extraTabs,
+  ];
 
   return (
     <View

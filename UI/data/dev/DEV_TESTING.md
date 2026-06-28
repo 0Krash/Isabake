@@ -332,6 +332,35 @@ npm run check:no-startup-test-wiring
 This fails if `App.js` imports or calls known readiness checks, smoke tests,
 reset helpers, or low-level sync runners.
 
+## Production Conflict UI
+
+Phase 17 adds a production-safe conflict resolution screen. It does not run
+sync, resolve conflicts, or contact the backend on startup.
+
+Create a conflict during development from the Sync Dev screen by running one of
+the conflict diagnostics, such as the conflict simulation or pull-over-pending
+check. Then open the bottom tab labeled `Conflictos`.
+
+The conflict screen shows the total conflicts, counts by collection, the
+conflict list, local JSON data, remote JSON data, conflict metadata, version
+numbers, timestamps, and related outbox status.
+
+Resolution behavior:
+
+- `Preferir local` keeps the local version and leaves it pending for the next
+  sync retry. It does not claim the data is already synced.
+- `Preferir remoto` applies the remote version locally and does not create a
+  new outbox event.
+- Both actions require confirmation first; there is no one-tap destructive
+  resolution.
+
+Still missing before broader production sync UX:
+
+- field-level merge UI
+- audit history UI
+- real login screens
+- realtime notifications
+
 ## Backend Sync Server
 
 Run the backend locally from the backend folder:
