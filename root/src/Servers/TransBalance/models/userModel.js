@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       default: null,
+      index: true,
     },
     displayName: {
       type: String,
@@ -34,6 +35,17 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  },
+);
+
+userSchema.index(
+  { email: 1 },
+  {
+    partialFilterExpression: {
+      deletedAt: null,
+      email: { $type: 'string' },
+    },
+    unique: true,
   },
 );
 

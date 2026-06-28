@@ -168,6 +168,7 @@ const SyncEvent = require('../../models/syncEventModel');
 const User = require('../../models/userModel');
 const Workspace = require('../../models/workspaceModel');
 const WorkspaceMembership = require('../../models/workspaceMembershipModel');
+const { signJwt } = require('../../services/authTokenService');
 const app = require('../../app');
 
 const eventPayload = (eventId = 'event_1') => ({
@@ -179,6 +180,14 @@ const eventPayload = (eventId = 'event_1') => ({
   documentId: 'recipe_local_1',
   eventId,
   operation: 'create',
+});
+
+const jwtAuth = (userId) => ({
+  authorization: `Bearer ${signJwt({
+    email: `${userId}@example.test`,
+    sub: userId,
+    tokenUse: 'access',
+  })}`,
 });
 
 describe('sync routes contract', () => {
@@ -201,6 +210,11 @@ describe('sync routes contract', () => {
       status: 'active',
       userId: 'user_owner',
       workspaceId: 'group_a',
+    });
+    User.__store.push({
+      authProvider: 'password',
+      email: 'owner@example.test',
+      userId: 'user_owner',
     });
   });
 
@@ -301,6 +315,38 @@ describe('sync routes contract', () => {
     expect(pushResponse.body.message).toBe('auth_required');
     expect(pullResponse.status).toBe(401);
     expect(pullResponse.body.message).toBe('auth_required');
+  });
+
+  test('accepts valid JWT with workspace membership', async () => {
+    const response = await request(app)
+      .post('/sync/push')
+      .set(jwtAuth('user_owner'))
+      .send({
+        deviceId: 'device_1',
+        events: [eventPayload('event_jwt_1')],
+        groupId: 'group_a',
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.accepted[0]).toEqual(
+      expect.objectContaining({
+        eventId: 'event_jwt_1',
+      }),
+    );
+  });
+
+  test('rejects invalid JWT without dev headers', async () => {
+    const response = await request(app)
+      .post('/sync/push')
+      .set('authorization', 'Bearer invalid-token')
+      .send({
+        deviceId: 'device_1',
+        events: [],
+        groupId: 'group_a',
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe('invalid_token');
   });
 
   test('rejects authenticated non-member push', async () => {

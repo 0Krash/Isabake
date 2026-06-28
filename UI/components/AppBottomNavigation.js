@@ -11,6 +11,7 @@ const tabs = [
 ];
 
 export default function AppBottomNavigation({
+  accountTabEnabled = false,
   activeTab,
   conflictTabEnabled = false,
   extraTabs = [],
@@ -20,6 +21,7 @@ export default function AppBottomNavigation({
   const visibleTabs = [
     ...tabs,
     ...(conflictTabEnabled ? [{ key: 'conflicts', label: 'Conflictos' }] : []),
+    ...(accountTabEnabled ? [{ key: 'account', label: 'Cuenta' }] : []),
     ...extraTabs,
   ];
 

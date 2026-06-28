@@ -1,5 +1,12 @@
 import { createSyncClient } from './syncClient';
 
+const realAuthSession = {
+  accessToken: 'jwt_user_1',
+  authProvider: 'password',
+  temporary: false,
+  userId: 'user_1',
+};
+
 describe('syncClient', () => {
   const originalEnv = process.env;
   const originalFetch = global.fetch;
@@ -41,7 +48,10 @@ describe('syncClient', () => {
           rejected: [],
         }),
     });
-    const client = createSyncClient({ baseUrl: 'http://sync.example.test/' });
+    const client = createSyncClient({
+      authSession: realAuthSession,
+      baseUrl: 'http://sync.example.test/',
+    });
     const payload = {
       deviceId: 'device_1',
       events: [{ eventId: 'event_1' }],
@@ -54,6 +64,7 @@ describe('syncClient', () => {
       body: JSON.stringify(payload),
       headers: {
         Accept: 'application/json',
+        Authorization: 'Bearer jwt_user_1',
         'Content-Type': 'application/json',
       },
       method: 'POST',
@@ -70,7 +81,10 @@ describe('syncClient', () => {
           groupId: 'group_1',
         }),
     });
-    const client = createSyncClient({ baseUrl: 'http://sync.example.test/' });
+    const client = createSyncClient({
+      authSession: realAuthSession,
+      baseUrl: 'http://sync.example.test/',
+    });
 
     await client.pullChanges({
       cursor: '4',
@@ -82,6 +96,7 @@ describe('syncClient', () => {
       {
         headers: {
           Accept: 'application/json',
+          Authorization: 'Bearer jwt_user_1',
           'Content-Type': 'application/json',
         },
         method: 'GET',
@@ -101,8 +116,10 @@ describe('syncClient', () => {
     });
     const client = createSyncClient({
       authSession: {
-        authToken: 'token_user_1',
+        accessToken: 'jwt_user_1',
+        authProvider: 'password',
         email: 'user@example.test',
+        temporary: false,
         userId: 'user_1',
       },
       baseUrl: 'http://sync.example.test',
@@ -118,12 +135,11 @@ describe('syncClient', () => {
       'http://sync.example.test/sync/push',
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: 'Bearer token_user_1',
-          'x-dev-user-email': 'user@example.test',
-          'x-dev-user-id': 'user_1',
+          Authorization: 'Bearer jwt_user_1',
         }),
       }),
     );
+    expect(global.fetch.mock.calls[0][1].headers['x-dev-user-id']).toBeUndefined();
   });
 
   test('fails safely when auth is required and missing', async () => {
@@ -136,7 +152,7 @@ describe('syncClient', () => {
       client.pullChanges({
         groupId: 'group_1',
       }),
-    ).rejects.toThrow('Sesion auth requerida para sync remoto');
+    ).rejects.toThrow('auth_required');
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -159,7 +175,10 @@ describe('syncClient', () => {
           rejected: [],
         }),
     });
-    const client = createSyncClient({ baseUrl: 'http://localhost:3000' });
+    const client = createSyncClient({
+      authSession: realAuthSession,
+      baseUrl: 'http://localhost:3000',
+    });
 
     await expect(
       client.pushChanges({
@@ -206,7 +225,10 @@ describe('syncClient', () => {
           groupId: 'group_1',
         }),
     });
-    const client = createSyncClient({ baseUrl: 'http://localhost:3000' });
+    const client = createSyncClient({
+      authSession: realAuthSession,
+      baseUrl: 'http://localhost:3000',
+    });
 
     await expect(
       client.pullChanges({

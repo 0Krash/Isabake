@@ -1,6 +1,6 @@
 const express = require('express');
 const syncController = require('../controllers/syncController');
-const { requireAuth } = require('../middleware/devAuth');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 

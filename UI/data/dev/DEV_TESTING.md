@@ -392,8 +392,8 @@ x-dev-user-id: owner
 x-dev-user-email: owner@example.test
 ```
 
-The bearer token is not production auth. It exists only so sync can enforce
-workspace membership while real login/session work is still pending.
+The bearer token in this example is dev-only auth. It exists only for Sync Dev
+diagnostics and automated tests.
 
 Configure the mobile sync base URL with `URL_Sync` in `.env`. The value should be
 the backend host root, not `/sync`, because the client appends `/sync/push` and
@@ -439,10 +439,79 @@ npm run check:sync-config
 This check fails when `URL_Sync` is missing, invalid, or still uses unsupported
 interpolation.
 
-## Phase 14 Auth And Workspace Examples
+## Phase 18 Real Auth And Workspace Examples
+
+Real sync auth uses JWT:
+
+```sh
+Authorization: Bearer <accessToken>
+```
+
+Backend env:
+
+```sh
+JWT_SECRET='replace-with-a-long-random-secret'
+```
+
+Register:
+
+```sh
+curl -X POST "$URL_Sync/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"displayName":"Ana","email":"ana@example.test","password":"password123"}'
+```
+
+Login:
+
+```sh
+curl -X POST "$URL_Sync/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"ana@example.test","password":"password123"}'
+```
+
+Use the returned `session.accessToken` for workspace and sync requests.
+
+Mobile app:
+
+- Open `Cuenta`.
+- Use `Crear cuenta` or `Iniciar sesion`.
+- Local-only mode remains available without login.
+- Logout clears only the auth session; it does not delete local data.
+
+The mobile token store currently uses an in-memory/test-safe fallback because
+`expo-secure-store` is not installed in this project. Add SecureStore later and
+wire it through the auth token store adapter before treating mobile persistence
+as production hardened.
+
+Create workspace with JWT:
+
+```sh
+curl -X POST "$URL_Sync/workspaces" \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"groupId":"demo_group","name":"Demo workspace"}'
+```
+
+Authenticated push with JWT:
+
+```sh
+curl -X POST "$URL_Sync/sync/push" \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"groupId":"demo_group","deviceId":"device_1","events":[]}'
+```
+
+Authenticated pull with JWT:
+
+```sh
+curl "$URL_Sync/sync/pull?groupId=demo_group&cursor=0" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+## Dev Auth And Workspace Examples
 
 Create or upsert a dev user implicitly by sending auth headers. No separate
-signup is required in Phase 14.
+signup is required for dev diagnostics.
 
 Create workspace:
 
@@ -473,7 +542,7 @@ curl -X POST "$URL_Sync/workspaces/demo_group/members" \
   -d '{"userId":"member","role":"member","status":"active"}'
 ```
 
-Authenticated push:
+Dev authenticated push:
 
 ```sh
 curl -X POST "$URL_Sync/sync/push" \
@@ -483,7 +552,7 @@ curl -X POST "$URL_Sync/sync/push" \
   -d '{"groupId":"demo_group","deviceId":"device_1","events":[]}'
 ```
 
-Authenticated pull:
+Dev authenticated pull:
 
 ```sh
 curl "$URL_Sync/sync/pull?groupId=demo_group&cursor=0" \
@@ -498,10 +567,12 @@ Role rules:
 - `invited`, `removed`, and non-members cannot push or pull.
 - `owner` and `admin` can add members.
 
-Temporary limitations before production:
+Temporary limitations before broader production sync:
 
-- Dev auth headers are not secure production authentication.
-- There is no password login UI or token refresh.
+- Dev auth headers are not production authentication and are disabled in
+  production unless `ENABLE_DEV_AUTH=true`.
+- Auth UI is intentionally minimal.
+- Mobile secure persistent storage still needs SecureStore wiring.
 - Workspace invitations do not send email.
 - No WebSockets/realtime sync.
 - Sync is still manual; it does not run on startup or every local write.

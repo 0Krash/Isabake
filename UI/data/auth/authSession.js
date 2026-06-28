@@ -5,8 +5,9 @@ const normalizeSession = (session = {}) => {
     return null;
   }
 
-  const authToken = session.authToken || session.token || null;
-  const userId = session.userId || null;
+  const user = session.user || {};
+  const authToken = session.authToken || session.accessToken || session.token || null;
+  const userId = session.userId || user.userId || null;
 
   if (!authToken || !userId) {
     return null;
@@ -15,9 +16,14 @@ const normalizeSession = (session = {}) => {
   return {
     authProvider: session.authProvider || 'dev-header',
     authToken,
-    displayName: session.displayName || null,
-    email: session.email || `${userId}@dev.local`,
-    temporary: session.temporary !== false,
+    displayName: session.displayName || user.displayName || null,
+    email: session.email || user.email || `${userId}@dev.local`,
+    refreshToken: session.refreshToken || null,
+    temporary:
+      session.temporary !== undefined
+        ? session.temporary
+        : (session.authProvider || user.authProvider) !== 'password',
+    user: session.user || null,
     userId,
   };
 };
@@ -48,10 +54,15 @@ export const getAuthHeaders = (session = currentAuthSession) => {
 
   return {
     Authorization: `Bearer ${normalizedSession.authToken}`,
-    'x-dev-user-email': normalizedSession.email,
-    'x-dev-user-id': normalizedSession.userId,
-    ...(normalizedSession.displayName
-      ? { 'x-dev-user-name': normalizedSession.displayName }
+    ...(normalizedSession.authProvider === 'dev-header' ||
+    normalizedSession.temporary
+      ? {
+          'x-dev-user-email': normalizedSession.email,
+          'x-dev-user-id': normalizedSession.userId,
+          ...(normalizedSession.displayName
+            ? { 'x-dev-user-name': normalizedSession.displayName }
+            : {}),
+        }
       : {}),
   };
 };

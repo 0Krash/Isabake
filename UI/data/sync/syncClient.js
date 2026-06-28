@@ -1,6 +1,7 @@
 import { getSyncBaseUrl } from './syncConfig';
 import { DEFAULT_SYNC_ENDPOINTS } from './syncTypes';
 import { getAuthHeaders } from '../auth/authSession';
+import { getCurrentSession } from '../auth/authService';
 
 const parseJsonResponse = async (response) => {
   const text = await response.text();
@@ -21,10 +22,17 @@ const requestJson = async (path, options = {}) => {
 
   const authHeaders =
     options.authHeaders ||
-    getAuthHeaders(options.authSession || (await options.getAuthSession?.()));
+    getAuthHeaders(
+      options.authSession ||
+        (await options.getAuthSession?.()) ||
+        (await getCurrentSession()),
+    );
 
-  if (options.requireAuth === true && !authHeaders.Authorization) {
-    throw new Error('Sesion auth requerida para sync remoto');
+  if (
+    (options.requireAuth === true || options.requireAuth !== false) &&
+    !authHeaders.Authorization
+  ) {
+    throw new Error('auth_required');
   }
 
   const response = await (options.fetchImpl || fetch)(`${baseUrl}${path}`, {

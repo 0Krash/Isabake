@@ -1,7 +1,7 @@
 const express = require('express');
 
 const workspaceController = require('../controllers/workspaceController');
-const { requireAuth } = require('../middleware/devAuth');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 

@@ -6,6 +6,10 @@ const toPlainObject = (document) =>
   typeof document?.toObject === 'function' ? document.toObject() : document;
 
 class MongooseWorkspaceRepository {
+  async createUser(user) {
+    return toPlainObject(await User.create(user));
+  }
+
   async upsertUser(user) {
     return toPlainObject(
       await User.findOneAndUpdate(
@@ -23,6 +27,10 @@ class MongooseWorkspaceRepository {
 
   async findUserByUserId(userId) {
     return toPlainObject(await User.findOne({ userId, deletedAt: null }));
+  }
+
+  async findUserByEmail(email) {
+    return toPlainObject(await User.findOne({ email, deletedAt: null }));
   }
 
   async createWorkspace(workspace) {

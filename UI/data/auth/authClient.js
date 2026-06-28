@@ -1,4 +1,5 @@
 import { getSyncBaseUrl } from '../sync/syncConfig';
+import { getCurrentSession } from './authService';
 import { getAuthHeaders } from './authSession';
 
 const parseJsonResponse = async (response) => {
@@ -15,7 +16,11 @@ export const requestAuthenticatedJson = async (path, options = {}) => {
 
   const authHeaders =
     options.authHeaders ||
-    getAuthHeaders(options.authSession || (await options.getAuthSession?.()));
+    getAuthHeaders(
+      options.authSession ||
+        (await options.getAuthSession?.()) ||
+        (await getCurrentSession()),
+    );
 
   if (options.requireAuth !== false && !authHeaders.Authorization) {
     throw new Error('Sesion auth requerida para sync remoto');
