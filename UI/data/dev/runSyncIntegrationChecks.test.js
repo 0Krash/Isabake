@@ -77,12 +77,45 @@ jest.mock('../sync', () => ({
 
 import {
   runAuthWorkspaceDevCheck,
+  runAuthenticatedPushPullDevCheck,
+  runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
   runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
-import { pushPendingChanges } from '../sync';
+import { pullRemoteChanges, pushPendingChanges } from '../sync';
+
+const acceptPushEvents = async ({ eventIds = [] }) => {
+  eventIds.forEach((eventId) => {
+    const outboxEvent = mockOutboxEvents.find((event) => event.id === eventId);
+
+    if (outboxEvent) {
+      outboxEvent.status = 'done';
+      const document = mockDocuments.get(
+        `${outboxEvent.collection}:${outboxEvent.documentId}`,
+      );
+
+      if (document) {
+        document.remoteId = `remote_${outboxEvent.documentId}`;
+        document.serverVersion = 1;
+        document.syncStatus = 'synced';
+      }
+    }
+  });
+
+  return {
+    accepted: eventIds.map((eventId) => ({
+      eventId,
+      localId: eventId.replace('outbox_', ''),
+      remoteId: `remote_${eventId}`,
+      serverVersion: 1,
+    })),
+    ok: true,
+    rejected: [],
+    skipped: [],
+  };
+};
 
 describe('runSyncIntegrationChecks', () => {
   beforeEach(() => {
@@ -203,6 +236,71 @@ describe('runSyncIntegrationChecks', () => {
     );
   });
 
+  test('unauthenticated push/pull reports auth_required_for_push_pull', async () => {
+    pushPendingChanges.mockImplementation(async () => ({
+      accepted: [],
+      error: 'auth_required',
+      ok: false,
+      rejected: [],
+      skipped: [],
+    }));
+
+    const result = await runPushPullDevCheck({
+      groupId: 'phase_14_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'auth_required',
+        failedStep: 'auth_required_for_push_pull',
+        ok: false,
+      }),
+    );
+    expect(result.debug).toEqual(
+      expect.objectContaining({
+        authHeadersPresent: false,
+        groupId: 'phase_14_group',
+        userId: null,
+      }),
+    );
+  });
+
+  test('authenticated push/pull passes when backend accepts exact event', async () => {
+    pushPendingChanges.mockImplementation(acceptPushEvents);
+
+    const result = await runAuthenticatedPushPullDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl: jest.fn(async (url) => ({
+        ok: true,
+        status: url.includes('/workspaces') ? 201 : 200,
+        text: async () =>
+          JSON.stringify(
+            url.includes('/workspaces')
+              ? {
+                  membership: { role: 'member' },
+                  status: 'success',
+                  workspace: {
+                    groupId: 'phase_14_group',
+                    workspaceId: 'phase_14_group',
+                  },
+                }
+              : {},
+          ),
+      })),
+      groupId: 'phase_14_group',
+      userId: 'phase_14_user',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'pushPullDev',
+        ok: true,
+      }),
+    );
+    expect(result.details.acceptedEventsSynced).toBe(true);
+    expect(result.details.expectedEventId).toEqual(expect.stringContaining('outbox_'));
+  });
+
   test('workspace isolation fails when pulls return zero changes', async () => {
     pushPendingChanges.mockImplementation(async ({ eventIds = [], groupId }) => ({
       accepted: eventIds.map((eventId) => ({
@@ -236,6 +334,97 @@ describe('runSyncIntegrationChecks', () => {
         ok: false,
       }),
     );
+  });
+
+  test('workspace isolation fails if auth is required and missing', async () => {
+    const result = await runTwoWorkspaceIsolationDevCheck({
+      groupA: 'group_a',
+      groupB: 'group_b',
+      requireAuth: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'auth_required',
+        failedStep: 'auth_required_for_workspace_isolation',
+        ok: false,
+      }),
+    );
+    expect(result.debug.groupAAuthHeadersPresent).toBe(false);
+    expect(result.debug.groupBAuthHeadersPresent).toBe(false);
+  });
+
+  test('authenticated workspace isolation passes with valid auth', async () => {
+    pushPendingChanges.mockImplementation(acceptPushEvents);
+    pullRemoteChanges.mockImplementationOnce(async () => ({
+      applied: [],
+      conflicts: [],
+      cursor: '999',
+      ok: true,
+      skipped: [
+        {
+          reason: 'change_groupId_mismatch',
+        },
+      ],
+    }));
+    const fetchImpl = jest.fn(async (url, request = {}) => {
+      if (url.includes('/workspaces')) {
+        return {
+          ok: true,
+          status: request.method === 'POST' ? 201 : 200,
+          text: async () =>
+            JSON.stringify({
+              membership: { role: 'owner' },
+              status: 'success',
+              workspace: {
+                groupId: url.includes('group_b') ? 'group_b' : 'group_a',
+                workspaceId: url.includes('group_b') ? 'group_b' : 'group_a',
+              },
+            }),
+        };
+      }
+
+      const query = url.includes('group_b') ? 'group_b' : 'group_a';
+      const localIds = Array.from(mockDocuments.values())
+        .filter((document) => document.groupId === query)
+        .map((document) => document.id);
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            changes: localIds.map((localId, index) => ({
+              collection: 'recipes',
+              document: {
+                groupId: query,
+                localId,
+              },
+              remoteId: `remote_${localId}`,
+              serverVersion: index + 1,
+            })),
+            cursor: '1',
+            groupId: query,
+          }),
+      };
+    });
+
+    const result = await runAuthenticatedWorkspaceIsolationDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupA: 'group_a',
+      groupB: 'group_b',
+      ownerUserId: 'phase_14_owner',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'twoWorkspaceIsolationDev',
+        ok: true,
+      }),
+    );
+    expect(result.details.pullAChangeCount).toBeGreaterThan(0);
+    expect(result.details.pullBChangeCount).toBeGreaterThan(0);
   });
 
   test('auth/workspace dev check creates workspace and member through API', async () => {
@@ -313,17 +502,7 @@ describe('runSyncIntegrationChecks', () => {
   });
 
   test('membership sync access check validates viewer and non-member failures', async () => {
-    pushPendingChanges.mockImplementation(async ({ eventIds = [] }) => ({
-      accepted: eventIds.map((eventId) => ({
-        eventId,
-        localId: eventId.replace('outbox_', ''),
-        remoteId: `remote_${eventId}`,
-        serverVersion: 1,
-      })),
-      ok: true,
-      rejected: [],
-      skipped: [],
-    }));
+    pushPendingChanges.mockImplementation(acceptPushEvents);
     const fetchImpl = jest.fn(async (url, request) => {
       const headers = request.headers || {};
       const userId = headers['x-dev-user-id'];
@@ -347,7 +526,11 @@ describe('runSyncIntegrationChecks', () => {
       }
 
       if (url.includes('/sync/pull')) {
-        if (userId.includes('non_member')) {
+        if (
+          userId.includes('non_member') ||
+          userId.includes('invited') ||
+          userId.includes('removed')
+        ) {
           return {
             ok: false,
             status: 403,
@@ -361,7 +544,17 @@ describe('runSyncIntegrationChecks', () => {
           status: 200,
           text: async () =>
             JSON.stringify({
-              changes: [],
+              changes: [
+                {
+                  collection: 'recipes',
+                  document: {
+                    groupId: 'phase_14_group',
+                    localId: 'remote_visible_doc',
+                  },
+                  remoteId: 'remote_visible_doc',
+                  serverVersion: 1,
+                },
+              ],
               cursor: '1',
               groupId: 'phase_14_group',
             }),
@@ -374,6 +567,20 @@ describe('runSyncIntegrationChecks', () => {
           status: 403,
           text: async () =>
             JSON.stringify({ message: 'workspace_role_cannot_sync' }),
+        };
+      }
+
+      if (
+        url.includes('/sync/push') &&
+        (userId.includes('non_member') ||
+          userId.includes('invited') ||
+          userId.includes('removed'))
+      ) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () =>
+            JSON.stringify({ message: 'workspace_membership_required' }),
         };
       }
 
@@ -405,5 +612,108 @@ describe('runSyncIntegrationChecks', () => {
     expect(result.details.nonMemberPullError).toBe(
       'workspace_membership_required',
     );
+    expect(result.details.nonMemberPushError).toBe(
+      'workspace_membership_required',
+    );
+    expect(result.details.invitedPullError).toBe(
+      'workspace_membership_required',
+    );
+    expect(result.details.invitedPushError).toBe(
+      'workspace_membership_required',
+    );
+    expect(result.details.removedPullError).toBe(
+      'workspace_membership_required',
+    );
+    expect(result.details.removedPushError).toBe(
+      'workspace_membership_required',
+    );
+    expect(result.details.memberPushAcceptedCount).toBeGreaterThan(0);
+    expect(result.details.memberPullChangeCount).toBeGreaterThan(0);
+    expect(result.details.viewerPullChangeCount).toBeGreaterThan(0);
+  });
+
+  test('membership access fails if member push accepted count is zero', async () => {
+    pushPendingChanges.mockImplementationOnce(acceptPushEvents);
+    pushPendingChanges.mockImplementationOnce(async () => ({
+      accepted: [],
+      ok: true,
+      rejected: [],
+      skipped: [],
+    }));
+    const fetchImpl = jest.fn(async (url, request) => {
+      const userId = request.headers?.['x-dev-user-id'] || '';
+
+      if (url.includes('/workspaces')) {
+        return {
+          ok: true,
+          status: request.method === 'POST' ? 201 : 200,
+          text: async () =>
+            JSON.stringify({
+              membership: { role: 'member' },
+              status: 'success',
+              workspace: {
+                groupId: 'phase_14_group',
+                workspaceId: 'phase_14_group',
+              },
+            }),
+        };
+      }
+
+      if (
+        userId.includes('viewer') &&
+        url.includes('/sync/push')
+      ) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () =>
+            JSON.stringify({ message: 'workspace_role_cannot_sync' }),
+        };
+      }
+
+      if (
+        userId.includes('non_member') ||
+        userId.includes('invited') ||
+        userId.includes('removed')
+      ) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () =>
+            JSON.stringify({ message: 'workspace_membership_required' }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            changes: [
+              {
+                collection: 'recipes',
+                document: {
+                  groupId: 'phase_14_group',
+                  localId: 'visible',
+                },
+                remoteId: 'visible',
+                serverVersion: 1,
+              },
+            ],
+            cursor: '1',
+            groupId: 'phase_14_group',
+          }),
+      };
+    });
+
+    const result = await runMembershipSyncAccessDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_14_group',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.details.memberPushAcceptedCount).toBe(0);
+    expect(result.details.checks.memberPushAccepted).toBe(false);
   });
 });

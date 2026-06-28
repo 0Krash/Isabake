@@ -18,6 +18,7 @@ const SMOKE_PREFIXES = [
   'recipe_sale_smoke',
   'phase_13_sync_dev',
   'phase_14_auth_dev',
+  'phase_14_auth_sync_dev',
 ];
 
 const COLLECTIONS = [

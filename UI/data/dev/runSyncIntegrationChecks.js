@@ -5,6 +5,7 @@ import { createWorkspaceApiClient } from '../workspace/workspaceApiClient';
 
 const DEV_SYNC_PREFIX = 'phase_13_sync_dev';
 const DEV_AUTH_PREFIX = 'phase_14_auth_dev';
+const DEV_AUTH_SYNC_PREFIX = 'phase_14_auth_sync_dev';
 
 const nowIso = () => new Date().toISOString();
 
@@ -43,9 +44,40 @@ const getDevGroupId = (options, key = 'groupId') => {
   return `${DEV_SYNC_PREFIX}_group`;
 };
 
-const getDefaultClient = async (client) => {
+const hasAuthOptions = (options = {}) =>
+  Boolean(
+    options.authHeaders ||
+      options.authSession ||
+      options.userId ||
+      options.requireAuth,
+  );
+
+const getAuthSessionForOptions = (options = {}, fallbackUserId) =>
+  options.authSession ||
+  (options.userId || fallbackUserId
+    ? createDevSession(options.userId || fallbackUserId)
+    : null);
+
+const getAuthDebug = (options = {}, fallbackUserId = null) => {
+  const authSession = getAuthSessionForOptions(options, fallbackUserId);
+  const headers = options.authHeaders || getAuthHeaders(authSession);
+
+  return {
+    authHeadersPresent: Boolean(headers.Authorization),
+    userId: authSession?.userId || options.userId || fallbackUserId || null,
+  };
+};
+
+const getDefaultClient = async (client, options = {}) => {
   if (client) {
     return client;
+  }
+
+  if (hasAuthOptions(options)) {
+    return createSyncClient({
+      ...options,
+      authSession: getAuthSessionForOptions(options),
+    });
   }
 
   return require('../sync/syncClient').createSyncClient();
@@ -112,10 +144,14 @@ const getRemoteLocalIds = (response) =>
     (change) => change.document?.localId || change.localId || change.remoteId,
   );
 
-const createDevRecipeDocument = async ({ groupId, nameSuffix = Date.now() }) => {
+const createDevRecipeDocument = async ({
+  groupId,
+  nameSuffix = Date.now(),
+  prefix = DEV_SYNC_PREFIX,
+}) => {
   const { saveDocument } = require('../db/documentStore');
   const { createLocalId } = require('../db/localIds');
-  const id = createLocalId(`${DEV_SYNC_PREFIX}_recipe`);
+  const id = createLocalId(`${prefix}_recipe`);
 
   const document = await saveDocument(
     'recipes',
@@ -124,10 +160,10 @@ const createDevRecipeDocument = async ({ groupId, nameSuffix = Date.now() }) => 
       cost: 0,
       ingredients: [],
       localId: id,
-      name: `${DEV_SYNC_PREFIX}_${nameSuffix}`,
+      name: `${prefix}_${nameSuffix}`,
       servings: 1,
       steps: [],
-      type: DEV_SYNC_PREFIX,
+      type: prefix,
     },
     {
       groupId,
@@ -144,6 +180,7 @@ const getCreatedEvent = (outboxEvents) =>
   outboxEvents.find((event) => event.operation === 'create') || outboxEvents[0];
 
 const buildPushFailureDebug = ({
+  authHeadersPresent,
   createdDocument,
   expectedCollection = 'recipes',
   expectedDocumentId,
@@ -154,7 +191,9 @@ const buildPushFailureDebug = ({
   outboxBeforePushExpanded = [],
   push = null,
   syncStateAfterPush = null,
+  userId,
 }) => ({
+  authHeadersPresent,
   backendResponseRaw: push?.debug?.backendResponseRaw || null,
   createdDocument,
   expectedCollection,
@@ -169,7 +208,63 @@ const buildPushFailureDebug = ({
   pushRequestPayload: push?.debug?.pushRequestPayload || null,
   pushSkippedExpanded: push?.skipped || [],
   syncStateAfterPush,
+  userId,
 });
+
+const ensureDevWorkspaceMembership = async ({
+  groupId,
+  role = 'member',
+  status = 'active',
+  userId,
+  workspaceOwnerUserId = `${DEV_AUTH_PREFIX}_owner`,
+  ...options
+} = {}) => {
+  const ownerClient = createAuthedWorkspaceClient(options, workspaceOwnerUserId);
+
+  await ownerClient.createWorkspace({
+    groupId,
+    name: `${DEV_AUTH_PREFIX} workspace`,
+  });
+
+  if (userId && userId !== workspaceOwnerUserId) {
+    await ownerClient.addMember({
+      groupId,
+      role,
+      status,
+      userId,
+    });
+  }
+
+  return {
+    groupId,
+    role: userId === workspaceOwnerUserId ? 'owner' : role,
+    status: 'active',
+    userId: userId || workspaceOwnerUserId,
+  };
+};
+
+const isAuthRequiredPushFailure = (push) => push?.error === 'auth_required';
+
+const makeAuthRequiredResult = ({
+  authDebug,
+  groupId,
+  name,
+  push = null,
+  extraDebug = {},
+}) =>
+  makeResult({
+    debug: {
+      ...extraDebug,
+      authHeadersPresent: authDebug.authHeadersPresent,
+      groupId,
+      push,
+      userId: authDebug.userId,
+    },
+    error: 'auth_required',
+    failedStep: 'auth_required_for_push_pull',
+    name,
+    ok: false,
+  });
 
 export const runBackendSyncConnectivityCheck = async (options = {}) => {
   const name = 'backendSyncConnectivity';
@@ -315,6 +410,8 @@ export const runMembershipSyncAccessDevCheck = async (options = {}) => {
     const ownerUserId = options.ownerUserId || `${DEV_AUTH_PREFIX}_owner`;
     const memberUserId = options.memberUserId || `${DEV_AUTH_PREFIX}_member`;
     const viewerUserId = options.viewerUserId || `${DEV_AUTH_PREFIX}_viewer`;
+    const invitedUserId = options.invitedUserId || `${DEV_AUTH_PREFIX}_invited`;
+    const removedUserId = options.removedUserId || `${DEV_AUTH_PREFIX}_removed`;
     const nonMemberUserId =
       options.nonMemberUserId || `${DEV_AUTH_PREFIX}_non_member`;
     const ownerWorkspaceClient = createAuthedWorkspaceClient(
@@ -338,14 +435,29 @@ export const runMembershipSyncAccessDevCheck = async (options = {}) => {
       status: 'active',
       userId: viewerUserId,
     });
+    await ownerWorkspaceClient.addMember({
+      groupId,
+      role: 'member',
+      status: 'invited',
+      userId: invitedUserId,
+    });
+    await ownerWorkspaceClient.addMember({
+      groupId,
+      role: 'member',
+      status: 'removed',
+      userId: removedUserId,
+    });
 
     const ownerClient = createAuthedSyncClient(options, ownerUserId);
     const memberClient = createAuthedSyncClient(options, memberUserId);
     const viewerClient = createAuthedSyncClient(options, viewerUserId);
+    const invitedClient = createAuthedSyncClient(options, invitedUserId);
+    const removedClient = createAuthedSyncClient(options, removedUserId);
     const nonMemberClient = createAuthedSyncClient(options, nonMemberUserId);
     const { id: localId } = await createDevRecipeDocument({
       groupId,
       nameSuffix: `auth_${Date.now()}`,
+      prefix: DEV_AUTH_SYNC_PREFIX,
     });
     const outboxBeforePush = await getPendingOutboxForDocument(localId);
     const expectedOutboxEvent = getCreatedEvent(outboxBeforePush);
@@ -357,13 +469,22 @@ export const runMembershipSyncAccessDevCheck = async (options = {}) => {
       includeDebug: true,
       limit: options.limit,
     });
+    const { id: memberLocalId } = await createDevRecipeDocument({
+      groupId,
+      nameSuffix: `member_${Date.now()}`,
+      prefix: DEV_AUTH_SYNC_PREFIX,
+    });
+    const memberOutbox = await getPendingOutboxForDocument(memberLocalId);
+    const memberExpectedEvent = getCreatedEvent(memberOutbox);
+    const memberPush = await pushPendingChanges({
+      client: memberClient,
+      eventIds: [memberExpectedEvent.id],
+      groupId,
+      includeDebug: true,
+      limit: options.limit,
+    });
     const memberPull = await memberClient.pullChanges({
       cursor: '0',
-      groupId,
-    });
-    const memberPush = await memberClient.pushChanges({
-      deviceId: 'dev-member-device',
-      events: [],
       groupId,
     });
     const viewerPull = await viewerClient.pullChanges({
@@ -373,6 +494,11 @@ export const runMembershipSyncAccessDevCheck = async (options = {}) => {
 
     let viewerPushError = null;
     let nonMemberPullError = null;
+    let nonMemberPushError = null;
+    let invitedPullError = null;
+    let invitedPushError = null;
+    let removedPullError = null;
+    let removedPushError = null;
 
     try {
       await viewerClient.pushChanges({
@@ -393,30 +519,100 @@ export const runMembershipSyncAccessDevCheck = async (options = {}) => {
       nonMemberPullError = String(error?.message || error);
     }
 
+    try {
+      await nonMemberClient.pushChanges({
+        deviceId: 'dev-non-member-device',
+        events: [],
+        groupId,
+      });
+    } catch (error) {
+      nonMemberPushError = String(error?.message || error);
+    }
+
+    try {
+      await invitedClient.pullChanges({
+        cursor: '0',
+        groupId,
+      });
+    } catch (error) {
+      invitedPullError = String(error?.message || error);
+    }
+
+    try {
+      await invitedClient.pushChanges({
+        deviceId: 'dev-invited-device',
+        events: [],
+        groupId,
+      });
+    } catch (error) {
+      invitedPushError = String(error?.message || error);
+    }
+
+    try {
+      await removedClient.pullChanges({
+        cursor: '0',
+        groupId,
+      });
+    } catch (error) {
+      removedPullError = String(error?.message || error);
+    }
+
+    try {
+      await removedClient.pushChanges({
+        deviceId: 'dev-removed-device',
+        events: [],
+        groupId,
+      });
+    } catch (error) {
+      removedPushError = String(error?.message || error);
+    }
+
     const ownerAccepted = (ownerPush.accepted || []).some(
       (event) => event.eventId === expectedOutboxEvent.id,
     );
+    const memberAccepted = (memberPush.accepted || []).some(
+      (event) => event.eventId === memberExpectedEvent.id,
+    );
+    const memberPullChangeCount = memberPull.changes?.length || 0;
+    const memberPushAcceptedCount = memberPush.accepted?.length || 0;
+    const viewerPullChangeCount = viewerPull.changes?.length || 0;
+    const checks = {
+      invitedPullRejected: invitedPullError === 'workspace_membership_required',
+      invitedPushRejected: invitedPushError === 'workspace_membership_required',
+      memberPullHasChanges: memberPullChangeCount > 0,
+      memberPushAccepted: memberPushAcceptedCount > 0 && memberAccepted,
+      nonMemberPullRejected:
+        nonMemberPullError === 'workspace_membership_required',
+      nonMemberPushRejected:
+        nonMemberPushError === 'workspace_membership_required',
+      ownerPushAccepted: ownerPush.accepted?.length > 0 && ownerAccepted,
+      removedPullRejected: removedPullError === 'workspace_membership_required',
+      removedPushRejected: removedPushError === 'workspace_membership_required',
+      viewerPullHasChanges: viewerPullChangeCount > 0,
+      viewerPushRejected: viewerPushError === 'workspace_role_cannot_sync',
+    };
 
     return makeResult({
       details: {
+        checks,
         groupId,
-        memberPullChangeCount: memberPull.changes?.length || 0,
-        memberPushAcceptedCount: memberPush.accepted?.length || 0,
+        invitedPullError,
+        invitedPushError,
+        memberPullChangeCount,
+        memberPush,
+        memberPushAccepted: memberAccepted,
+        memberPushAcceptedCount,
+        nonMemberPushError,
         nonMemberPullError,
         ownerAccepted,
         ownerPush,
-        viewerPullChangeCount: viewerPull.changes?.length || 0,
+        removedPullError,
+        removedPushError,
+        viewerPullChangeCount,
         viewerPushError,
       },
       name,
-      ok:
-        ownerPush.ok &&
-        ownerAccepted &&
-        Array.isArray(memberPull.changes) &&
-        Array.isArray(memberPush.accepted) &&
-        Array.isArray(viewerPull.changes) &&
-        viewerPushError === 'workspace_role_cannot_sync' &&
-        nonMemberPullError === 'workspace_membership_required',
+      ok: Object.values(checks).every(Boolean),
     });
   } catch (error) {
     return makeResult({
@@ -433,6 +629,7 @@ export const runPushPullDevCheck = async (options = {}) => {
 
   try {
     const groupId = getDevGroupId(options);
+    const authDebug = getAuthDebug(options);
 
     if (!groupId) {
       return makeResult({
@@ -443,9 +640,18 @@ export const runPushPullDevCheck = async (options = {}) => {
       });
     }
 
-    const client = await getDefaultClient(options.client);
+    if (options.requireAuth && !authDebug.authHeadersPresent) {
+      return makeAuthRequiredResult({
+        authDebug,
+        groupId,
+        name,
+      });
+    }
+
+    const client = await getDefaultClient(options.client, options);
     const { document: createdDocument, id: localId } = await createDevRecipeDocument({
       groupId,
+      prefix: options.prefix || DEV_SYNC_PREFIX,
     });
     const outboxBeforePush = await getPendingOutboxForDocument(localId);
     const expectedOutboxEvent = getCreatedEvent(outboxBeforePush);
@@ -482,9 +688,11 @@ export const runPushPullDevCheck = async (options = {}) => {
     const outboxAfterPush = await getOutboxEventsByIds([expectedEventId]);
     const syncStateAfterPush = await getCursor(groupId);
 
-    if (!pushAcceptedForExpectedEvent) {
-      return makeResult({
-        debug: buildPushFailureDebug({
+    if (isAuthRequiredPushFailure(push)) {
+      return makeAuthRequiredResult({
+        authDebug,
+        extraDebug: buildPushFailureDebug({
+          authHeadersPresent: authDebug.authHeadersPresent,
           createdDocument,
           expectedDocumentId: localId,
           expectedEventId,
@@ -494,6 +702,28 @@ export const runPushPullDevCheck = async (options = {}) => {
           outboxBeforePushExpanded: outboxBeforePush,
           push,
           syncStateAfterPush,
+          userId: authDebug.userId,
+        }),
+        groupId,
+        name,
+        push,
+      });
+    }
+
+    if (!pushAcceptedForExpectedEvent) {
+      return makeResult({
+        debug: buildPushFailureDebug({
+          authHeadersPresent: authDebug.authHeadersPresent,
+          createdDocument,
+          expectedDocumentId: localId,
+          expectedEventId,
+          groupId,
+          localDocumentAfterPush,
+          outboxAfterPushExpanded: outboxAfterPush,
+          outboxBeforePushExpanded: outboxBeforePush,
+          push,
+          syncStateAfterPush,
+          userId: authDebug.userId,
         }),
         details: {
           expectedCollection: 'recipes',
@@ -523,6 +753,7 @@ export const runPushPullDevCheck = async (options = {}) => {
     ) {
       return makeResult({
         debug: buildPushFailureDebug({
+          authHeadersPresent: authDebug.authHeadersPresent,
           createdDocument,
           expectedDocumentId: localId,
           expectedEventId,
@@ -532,6 +763,7 @@ export const runPushPullDevCheck = async (options = {}) => {
           outboxBeforePushExpanded: outboxBeforePush,
           push,
           syncStateAfterPush,
+          userId: authDebug.userId,
         }),
         details: {
           localId,
@@ -556,6 +788,7 @@ export const runPushPullDevCheck = async (options = {}) => {
 
     return makeResult({
       debug: buildPushFailureDebug({
+        authHeadersPresent: authDebug.authHeadersPresent,
         createdDocument,
         expectedDocumentId: localId,
         expectedEventId,
@@ -565,6 +798,7 @@ export const runPushPullDevCheck = async (options = {}) => {
         outboxBeforePushExpanded: outboxBeforePush,
         push,
         syncStateAfterPush,
+        userId: authDebug.userId,
       }),
       details: {
         acceptedEventIds,
@@ -597,6 +831,29 @@ export const runPushPullDevCheck = async (options = {}) => {
   }
 };
 
+export const runAuthenticatedPushPullDevCheck = async (options = {}) => {
+  const groupId = getDevAuthGroupId(options);
+  const userId = options.userId || `${DEV_AUTH_SYNC_PREFIX}_member`;
+  const role = options.role || 'member';
+
+  await ensureDevWorkspaceMembership({
+    ...options,
+    groupId,
+    role,
+    status: 'active',
+    userId,
+  });
+
+  return runPushPullDevCheck({
+    ...options,
+    authSession: getAuthSessionForOptions(options, userId),
+    groupId,
+    prefix: DEV_AUTH_SYNC_PREFIX,
+    requireAuth: true,
+    userId,
+  });
+};
+
 export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
   const name = 'twoWorkspaceIsolationDev';
 
@@ -615,14 +872,46 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
       });
     }
 
-    const client = await getDefaultClient(options.client);
+    const authDebugA = getAuthDebug(options.groupAAuth || options);
+    const authDebugB = getAuthDebug(options.groupBAuth || options);
+
+    if (
+      options.requireAuth &&
+      (!authDebugA.authHeadersPresent || !authDebugB.authHeadersPresent)
+    ) {
+      return makeResult({
+        debug: {
+          groupA,
+          groupAAuthHeadersPresent: authDebugA.authHeadersPresent,
+          groupAUserId: authDebugA.userId,
+          groupB,
+          groupBAuthHeadersPresent: authDebugB.authHeadersPresent,
+          groupBUserId: authDebugB.userId,
+        },
+        error: 'auth_required',
+        failedStep: 'auth_required_for_workspace_isolation',
+        name,
+        ok: false,
+      });
+    }
+
+    const clientA = await getDefaultClient(
+      options.clientA || options.client,
+      options.groupAAuth || options,
+    );
+    const clientB = await getDefaultClient(
+      options.clientB || options.client,
+      options.groupBAuth || options,
+    );
     const { id: localIdA } = await createDevRecipeDocument({
       groupId: groupA,
       nameSuffix: `group_a_${Date.now()}`,
+      prefix: options.prefix || DEV_SYNC_PREFIX,
     });
     const { id: localIdB } = await createDevRecipeDocument({
       groupId: groupB,
       nameSuffix: `group_b_${Date.now()}`,
+      prefix: options.prefix || DEV_SYNC_PREFIX,
     });
     const outboxA = await getPendingOutboxForDocument(localIdA);
     const outboxB = await getPendingOutboxForDocument(localIdB);
@@ -648,14 +937,14 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
 
     const { pullRemoteChanges, pushPendingChanges } = require('../sync');
     const pushA = await pushPendingChanges({
-      client,
+      client: clientA,
       eventIds: [eventA.id],
       groupId: groupA,
       includeDebug: true,
       limit: options.limit,
     });
     const pushB = await pushPendingChanges({
-      client,
+      client: clientB,
       eventIds: [eventB.id],
       groupId: groupB,
       includeDebug: true,
@@ -667,6 +956,29 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
     const acceptedB = (pushB.accepted || []).some(
       (event) => event.eventId === eventB.id,
     );
+
+    if (isAuthRequiredPushFailure(pushA) || isAuthRequiredPushFailure(pushB)) {
+      return makeResult({
+        debug: {
+          eventA,
+          eventB,
+          groupA,
+          groupAAuthHeadersPresent: authDebugA.authHeadersPresent,
+          groupAUserId: authDebugA.userId,
+          groupB,
+          groupBAuthHeadersPresent: authDebugB.authHeadersPresent,
+          groupBUserId: authDebugB.userId,
+          localIdA,
+          localIdB,
+          pushA,
+          pushB,
+        },
+        error: 'auth_required',
+        failedStep: 'auth_required_for_workspace_isolation',
+        name,
+        ok: false,
+      });
+    }
 
     if (!acceptedA || !acceptedB) {
       return makeResult({
@@ -687,11 +999,11 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
       });
     }
 
-    const pullA = await client.pullChanges({
+    const pullA = await clientA.pullChanges({
       cursor: '0',
       groupId: groupA,
     });
-    const pullB = await client.pullChanges({
+    const pullB = await clientB.pullChanges({
       cursor: '0',
       groupId: groupB,
     });
@@ -792,8 +1104,50 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
   }
 };
 
+export const runAuthenticatedWorkspaceIsolationDevCheck = async (options = {}) => {
+  const ownerUserId = options.ownerUserId || `${DEV_AUTH_SYNC_PREFIX}_owner`;
+  const groupA = options.groupA || `${DEV_AUTH_SYNC_PREFIX}_group_a`;
+  const groupB = options.groupB || `${DEV_AUTH_SYNC_PREFIX}_group_b`;
+  const authSession = getAuthSessionForOptions(options, ownerUserId);
+
+  await ensureDevWorkspaceMembership({
+    ...options,
+    groupId: groupA,
+    role: 'owner',
+    userId: ownerUserId,
+    workspaceOwnerUserId: ownerUserId,
+  });
+  await ensureDevWorkspaceMembership({
+    ...options,
+    groupId: groupB,
+    role: 'owner',
+    userId: ownerUserId,
+    workspaceOwnerUserId: ownerUserId,
+  });
+
+  return runTwoWorkspaceIsolationDevCheck({
+    ...options,
+    groupA,
+    groupAAuth: {
+      ...options,
+      authSession,
+      userId: ownerUserId,
+    },
+    groupB,
+    groupBAuth: {
+      ...options,
+      authSession,
+      userId: ownerUserId,
+    },
+    prefix: DEV_AUTH_SYNC_PREFIX,
+    requireAuth: true,
+  });
+};
+
 export default {
   runAuthWorkspaceDevCheck,
+  runAuthenticatedPushPullDevCheck,
+  runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
   runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,

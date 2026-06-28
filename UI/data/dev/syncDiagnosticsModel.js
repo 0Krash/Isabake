@@ -2,6 +2,8 @@ import { EXPO_PUBLIC_ENABLE_DEV_TOOLS } from '@env';
 
 import {
   runAuthWorkspaceDevCheck,
+  runAuthenticatedPushPullDevCheck,
+  runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
   runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,
@@ -23,6 +25,8 @@ export const createSyncDiagnosticsActions = ({
   authSession = createDevAuthSession({ userId: DEV_AUTH_OWNER_ID }),
   runners = {
     runAuthWorkspaceDevCheck,
+    runAuthenticatedPushPullDevCheck,
+    runAuthenticatedWorkspaceIsolationDevCheck,
     runBackendSyncConnectivityCheck,
     runMembershipSyncAccessDevCheck,
     runPushPullDevCheck,
@@ -31,12 +35,12 @@ export const createSyncDiagnosticsActions = ({
 } = {}) => [
   {
     key: 'authWorkspace',
-    label: 'Run auth/workspace dev check',
+    label: 'Auth workspace check',
     run: () => runners.runAuthWorkspaceDevCheck({ groupId }),
   },
   {
     key: 'membershipAccess',
-    label: 'Run membership sync access check',
+    label: 'Membership access check',
     run: () => runners.runMembershipSyncAccessDevCheck({ groupId }),
   },
   {
@@ -45,41 +49,64 @@ export const createSyncDiagnosticsActions = ({
     run: () => runners.runBackendSyncConnectivityCheck({ authSession, groupId }),
   },
   {
-    key: 'pushPull',
-    label: 'Run push/pull dev check',
-    run: () => runners.runPushPullDevCheck({ authSession, groupId }),
+    key: 'authenticatedPushPull',
+    label: 'Authenticated push/pull check',
+    run: () =>
+      runners.runAuthenticatedPushPullDevCheck({ authSession, groupId }),
   },
   {
-    key: 'isolation',
-    label: 'Run workspace isolation check',
-    run: () => runners.runTwoWorkspaceIsolationDevCheck(),
+    key: 'authenticatedIsolation',
+    label: 'Authenticated workspace isolation check',
+    run: () => runners.runAuthenticatedWorkspaceIsolationDevCheck(),
+  },
+  {
+    key: 'legacyPushPull',
+    label: 'Legacy unauthenticated push/pull check',
+    run: () =>
+      runners.runPushPullDevCheck({
+        groupId,
+        legacy: true,
+      }),
+  },
+  {
+    key: 'legacyIsolation',
+    label: 'Legacy unauthenticated workspace isolation check',
+    run: () =>
+      runners.runTwoWorkspaceIsolationDevCheck({
+        legacy: true,
+      }),
   },
   {
     key: 'all',
-    label: 'Run all sync dev checks',
+    label: 'Run all authenticated sync checks',
     run: async () => {
       const authWorkspace = await runners.runAuthWorkspaceDevCheck({ groupId });
-      const [connectivity, membershipAccess, pushPull, isolation] =
+      const [
+        connectivity,
+        membershipAccess,
+        authenticatedPushPull,
+        authenticatedIsolation,
+      ] =
         await Promise.all([
           runners.runBackendSyncConnectivityCheck({ authSession, groupId }),
           runners.runMembershipSyncAccessDevCheck({ groupId }),
-          runners.runPushPullDevCheck({ authSession, groupId }),
-          runners.runTwoWorkspaceIsolationDevCheck(),
+          runners.runAuthenticatedPushPullDevCheck({ authSession, groupId }),
+          runners.runAuthenticatedWorkspaceIsolationDevCheck(),
       ]);
 
       return {
+        authenticatedIsolation,
+        authenticatedPushPull,
         authWorkspace,
         checkedAt: new Date().toISOString(),
         connectivity,
-        isolation,
         membershipAccess,
         ok:
           authWorkspace.ok &&
           connectivity.ok &&
           membershipAccess.ok &&
-          pushPull.ok &&
-          isolation.ok,
-        pushPull,
+          authenticatedPushPull.ok &&
+          authenticatedIsolation.ok,
       };
     },
   },

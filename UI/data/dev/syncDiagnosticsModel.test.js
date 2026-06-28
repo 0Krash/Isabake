@@ -32,6 +32,8 @@ describe('syncDiagnosticsModel', () => {
   test('creating actions does not run diagnostics automatically', () => {
     const runners = {
       runAuthWorkspaceDevCheck: jest.fn(),
+      runAuthenticatedPushPullDevCheck: jest.fn(),
+      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(),
       runBackendSyncConnectivityCheck: jest.fn(),
       runMembershipSyncAccessDevCheck: jest.fn(),
       runPushPullDevCheck: jest.fn(),
@@ -40,8 +42,10 @@ describe('syncDiagnosticsModel', () => {
 
     const actions = createSyncDiagnosticsActions({ runners });
 
-    expect(actions).toHaveLength(6);
+    expect(actions).toHaveLength(8);
     expect(runners.runAuthWorkspaceDevCheck).not.toHaveBeenCalled();
+    expect(runners.runAuthenticatedPushPullDevCheck).not.toHaveBeenCalled();
+    expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
     expect(runners.runBackendSyncConnectivityCheck).not.toHaveBeenCalled();
     expect(runners.runMembershipSyncAccessDevCheck).not.toHaveBeenCalled();
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
@@ -51,6 +55,8 @@ describe('syncDiagnosticsModel', () => {
   test('actions call their runners with the dev sync group', async () => {
     const runners = {
       runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
       runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
       runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
       runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
@@ -61,8 +67,10 @@ describe('syncDiagnosticsModel', () => {
     await actions.find((action) => action.key === 'authWorkspace').run();
     await actions.find((action) => action.key === 'membershipAccess').run();
     await actions.find((action) => action.key === 'connectivity').run();
-    await actions.find((action) => action.key === 'pushPull').run();
-    await actions.find((action) => action.key === 'isolation').run();
+    await actions.find((action) => action.key === 'authenticatedPushPull').run();
+    await actions.find((action) => action.key === 'authenticatedIsolation').run();
+    await actions.find((action) => action.key === 'legacyPushPull').run();
+    await actions.find((action) => action.key === 'legacyIsolation').run();
 
     expect(runners.runAuthWorkspaceDevCheck).toHaveBeenCalledWith({
       groupId: DEV_AUTH_GROUP_ID,
@@ -76,22 +84,33 @@ describe('syncDiagnosticsModel', () => {
       }),
       groupId: DEV_AUTH_GROUP_ID,
     });
-    expect(runners.runPushPullDevCheck).toHaveBeenCalledWith({
+    expect(runners.runAuthenticatedPushPullDevCheck).toHaveBeenCalledWith({
       authSession: expect.objectContaining({
         userId: 'phase_14_auth_dev_owner',
       }),
       groupId: DEV_AUTH_GROUP_ID,
     });
-    expect(runners.runTwoWorkspaceIsolationDevCheck).toHaveBeenCalledWith();
+    expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).toHaveBeenCalledWith();
+    expect(runners.runPushPullDevCheck).toHaveBeenCalledWith({
+      groupId: DEV_AUTH_GROUP_ID,
+      legacy: true,
+    });
+    expect(runners.runTwoWorkspaceIsolationDevCheck).toHaveBeenCalledWith({
+      legacy: true,
+    });
   });
 
-  test('all action runs every sync diagnostic and combines status', async () => {
+  test('all action uses authenticated diagnostics and skips legacy runners', async () => {
     const runners = {
       runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({
+        ok: false,
+      })),
       runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
       runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
       runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: false })),
+      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
     const result = await actions.find((action) => action.key === 'all').run();
@@ -100,7 +119,9 @@ describe('syncDiagnosticsModel', () => {
     expect(result.authWorkspace.ok).toBe(true);
     expect(result.connectivity.ok).toBe(true);
     expect(result.membershipAccess.ok).toBe(true);
-    expect(result.pushPull.ok).toBe(true);
-    expect(result.isolation.ok).toBe(false);
+    expect(result.authenticatedPushPull.ok).toBe(true);
+    expect(result.authenticatedIsolation.ok).toBe(false);
+    expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
+    expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });
 });

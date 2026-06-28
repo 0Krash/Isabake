@@ -52,6 +52,8 @@ These checks use Expo SQLite and must run inside an Expo runtime:
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
 - `runAuthWorkspaceDevCheck()`
+- `runAuthenticatedPushPullDevCheck()`
+- `runAuthenticatedWorkspaceIsolationDevCheck()`
 - `runMembershipSyncAccessDevCheck()`
 
 Import them through the central runner:
@@ -66,6 +68,8 @@ import {
 } from './data/dev/runDevChecks';
 import {
   runAuthWorkspaceDevCheck,
+  runAuthenticatedPushPullDevCheck,
+  runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
   runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,
@@ -90,8 +94,17 @@ await runBackendSyncConnectivityCheck({
   authSession: { authToken: 'dev-token-owner', userId: 'owner' },
   groupId: 'your_group_id',
 });
+await runAuthenticatedPushPullDevCheck({
+  groupId: 'your_group_id',
+  userId: 'member',
+});
+await runAuthenticatedWorkspaceIsolationDevCheck();
+```
+
+Legacy unauthenticated checks:
+
+```js
 await runPushPullDevCheck({
-  authSession: { authToken: 'dev-token-owner', userId: 'owner' },
   groupId: 'your_group_id',
 });
 await runTwoWorkspaceIsolationDevCheck({
@@ -121,14 +134,21 @@ only when its button is pressed.
 Available buttons:
 
 - `Check backend connectivity`
-- `Run auth/workspace dev check`
-- `Run membership sync access check`
-- `Run push/pull dev check`
-- `Run workspace isolation check`
-- `Run all sync dev checks`
+- `Auth workspace check`
+- `Membership access check`
+- `Authenticated push/pull check`
+- `Authenticated workspace isolation check`
+- `Legacy unauthenticated push/pull check`
+- `Legacy unauthenticated workspace isolation check`
+- `Run all authenticated sync checks`
 
 Expected success results have `"ok": true` in the formatted JSON output. Results
 are also written to the console with the `[SyncDiagnostics]` prefix.
+
+After Phase 14, default `Run all authenticated sync checks` uses authenticated
+runners only. Legacy unauthenticated checks are still available as separate
+buttons for debugging old behavior, but they are expected to fail against a
+membership-protected backend unless auth is intentionally disabled.
 
 By default, mutating smoke tests are skipped. To run smoke tests that create
 dev data:
@@ -155,11 +175,14 @@ Mutating manual sync integration checks:
 
 - `runAuthWorkspaceDevCheck()`
 - `runMembershipSyncAccessDevCheck()`
+- `runAuthenticatedPushPullDevCheck()`
+- `runAuthenticatedWorkspaceIsolationDevCheck()`
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
 
 These create records with the `phase_13_sync_dev` prefix so they can be found by
-the dev reset helper.
+the dev reset helper. Authenticated Phase 14 checks also use the
+`phase_14_auth_dev` and `phase_14_auth_sync_dev` prefixes.
 
 Reset helpers never run from `runAllDevChecks()`.
 
