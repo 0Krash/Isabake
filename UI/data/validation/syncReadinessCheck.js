@@ -5,9 +5,12 @@ import {
   getDocumentsMissingGroupId,
 } from '../db/documentStore';
 import {
+  getConflictOutboxCountsByCollection,
+  getConflictOutboxEvents,
   getFailedOutboxCountsByCollection,
   getFailedOutboxEvents,
   getPendingOutboxCountsByCollection,
+  getPendingOutboxEvents,
 } from '../sync/syncOutbox';
 import { getAllSyncStates } from '../sync/syncStateRepository';
 
@@ -31,19 +34,25 @@ export const runSyncReadinessCheck = async () => {
   const checkedAt = new Date().toISOString();
   const [
     blockedMissingGroupIdDocuments,
+    conflictOutboxByCollection,
+    conflictOutboxEvents,
     failedOutboxByCollection,
     failedOutboxEvents,
     localPrivateDocuments,
     pendingOutboxByCollection,
+    pendingOutboxEvents,
     readyToSyncDocuments,
     syncProblemDocuments,
     syncStates,
   ] = await Promise.all([
     getDocumentsMissingGroupId(),
+    getConflictOutboxCountsByCollection(),
+    getConflictOutboxEvents(),
     getFailedOutboxCountsByCollection(),
     getFailedOutboxEvents(),
     getLocalPrivateDocuments(),
     getPendingOutboxCountsByCollection(),
+    getPendingOutboxEvents(),
     getDocumentsReadyToSync(),
     getDocumentsBySyncStatuses(['pending', 'failed', 'conflict']),
     getAllSyncStates(),
@@ -83,6 +92,14 @@ export const runSyncReadinessCheck = async () => {
     });
   }
 
+  if (conflictOutboxEvents.length > 0) {
+    warnings.push({
+      code: 'conflict_outbox_events_present',
+      count: conflictOutboxEvents.length,
+      message: 'Some outbox events are marked as sync conflicts.',
+    });
+  }
+
   return {
     checkedAt,
     blockedFromSyncBecauseGroupIdMissing: blockedMissingGroupIdDocuments.map(
@@ -92,9 +109,28 @@ export const runSyncReadinessCheck = async () => {
       blockedMissingGroupIdDocuments,
     ),
     blockedFromSyncBecauseGroupIdMissingCount: blockedMissingGroupIdDocuments.length,
+    conflictDocuments: syncProblemDocuments
+      .filter((document) => document.syncStatus === 'conflict')
+      .map(summarizeDocument),
+    conflictDocumentsByCollection: summarizeByCollection(
+      syncProblemDocuments.filter((document) => document.syncStatus === 'conflict'),
+    ),
+    conflictDocumentCount: documentsBySyncStatus.conflict || 0,
+    conflictOutboxByCollection,
+    conflictOutboxCount: conflictOutboxEvents.length,
+    conflictOutboxEvents: conflictOutboxEvents.map((event) => ({
+      attempts: event.attempts,
+      collection: event.collection,
+      documentId: event.documentId,
+      eventId: event.id,
+      lastError: event.lastError,
+      operation: event.operation,
+      status: event.status,
+    })),
     documentsMissingGroupId: blockedMissingGroupIdDocuments.map(summarizeDocument),
     documentsMissingGroupIdCount: blockedMissingGroupIdDocuments.length,
     failedOutboxByCollection,
+    failedOutboxCount: failedOutboxEvents.length,
     failedOutboxEvents: failedOutboxEvents.map((event) => ({
       attempts: event.attempts,
       collection: event.collection,
@@ -116,6 +152,16 @@ export const runSyncReadinessCheck = async () => {
     localPrivateDocumentsCount: localPrivateDocuments.length,
     ok: warnings.length === 0,
     pendingOutboxByCollection,
+    pendingOutboxCount: pendingOutboxEvents.length,
+    pendingOutboxEvents: pendingOutboxEvents.map((event) => ({
+      attempts: event.attempts,
+      collection: event.collection,
+      documentId: event.documentId,
+      eventId: event.id,
+      lastError: event.lastError,
+      operation: event.operation,
+      status: event.status,
+    })),
     readyToSyncByCollection: summarizeByCollection(readyToSyncDocuments),
     readyToSyncCount: readyToSyncDocuments.length,
     syncDocumentsByStatus: documentsBySyncStatus,

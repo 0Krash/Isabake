@@ -5,7 +5,9 @@ import {
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictSimulationDevCheck,
   runMembershipSyncAccessDevCheck,
+  runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
@@ -28,7 +30,9 @@ export const createSyncDiagnosticsActions = ({
     runAuthenticatedPushPullDevCheck,
     runAuthenticatedWorkspaceIsolationDevCheck,
     runBackendSyncConnectivityCheck,
+    runConflictSimulationDevCheck,
     runMembershipSyncAccessDevCheck,
+    runPullOverPendingConflictDevCheck,
     runPushPullDevCheck,
     runTwoWorkspaceIsolationDevCheck,
   },
@@ -60,6 +64,16 @@ export const createSyncDiagnosticsActions = ({
     run: () => runners.runAuthenticatedWorkspaceIsolationDevCheck(),
   },
   {
+    key: 'conflictSimulation',
+    label: 'Conflict simulation check',
+    run: () => runners.runConflictSimulationDevCheck({ groupId }),
+  },
+  {
+    key: 'pullOverPendingConflict',
+    label: 'Pull-over-pending conflict check',
+    run: () => runners.runPullOverPendingConflictDevCheck({ groupId }),
+  },
+  {
     key: 'legacyPushPull',
     label: 'Legacy unauthenticated push/pull check',
     run: () =>
@@ -86,12 +100,16 @@ export const createSyncDiagnosticsActions = ({
         membershipAccess,
         authenticatedPushPull,
         authenticatedIsolation,
+        conflictSimulation,
+        pullOverPendingConflict,
       ] =
         await Promise.all([
           runners.runBackendSyncConnectivityCheck({ authSession, groupId }),
           runners.runMembershipSyncAccessDevCheck({ groupId }),
           runners.runAuthenticatedPushPullDevCheck({ authSession, groupId }),
           runners.runAuthenticatedWorkspaceIsolationDevCheck(),
+          runners.runConflictSimulationDevCheck({ groupId }),
+          runners.runPullOverPendingConflictDevCheck({ groupId }),
       ]);
 
       return {
@@ -100,13 +118,17 @@ export const createSyncDiagnosticsActions = ({
         authWorkspace,
         checkedAt: new Date().toISOString(),
         connectivity,
+        conflictSimulation,
         membershipAccess,
         ok:
           authWorkspace.ok &&
           connectivity.ok &&
           membershipAccess.ok &&
           authenticatedPushPull.ok &&
-          authenticatedIsolation.ok,
+          authenticatedIsolation.ok &&
+          conflictSimulation.ok &&
+          pullOverPendingConflict.ok,
+        pullOverPendingConflict,
       };
     },
   },

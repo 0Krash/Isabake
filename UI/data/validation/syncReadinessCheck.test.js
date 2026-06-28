@@ -36,11 +36,36 @@ jest.mock('../db/documentStore', () => ({
 }));
 
 jest.mock('../sync/syncOutbox', () => ({
+  getConflictOutboxCountsByCollection: jest.fn(async () => ({
+    recipes: 1,
+  })),
+  getConflictOutboxEvents: jest.fn(async () => [
+    {
+      attempts: 0,
+      collection: 'recipes',
+      documentId: 'recipe_conflict',
+      id: 'outbox_conflict',
+      lastError: '{"reason":"conflict"}',
+      operation: 'update',
+      status: 'conflict',
+    },
+  ]),
   getFailedOutboxCountsByCollection: jest.fn(async () => ({})),
   getFailedOutboxEvents: jest.fn(async () => []),
   getPendingOutboxCountsByCollection: jest.fn(async () => ({
     recipes: 1,
   })),
+  getPendingOutboxEvents: jest.fn(async () => [
+    {
+      attempts: 0,
+      collection: 'recipes',
+      documentId: 'recipe_ready',
+      id: 'outbox_pending',
+      lastError: null,
+      operation: 'update',
+      status: 'pending',
+    },
+  ]),
 }));
 
 jest.mock('../sync/syncStateRepository', () => ({
@@ -62,6 +87,11 @@ describe('syncReadinessCheck', () => {
 
     expect(result.readyToSyncCount).toBe(1);
     expect(result.readyToSyncByCollection).toEqual({ recipes: 1 });
+    expect(result.conflictDocumentCount).toBe(1);
+    expect(result.conflictDocumentsByCollection).toEqual({ recipes: 1 });
+    expect(result.conflictOutboxCount).toBe(1);
+    expect(result.conflictOutboxByCollection).toEqual({ recipes: 1 });
+    expect(result.pendingOutboxCount).toBe(1);
     expect(result.localPrivateDocumentsCount).toBe(1);
     expect(result.localPrivateDocumentsByCollection).toEqual({
       __local_meta: 1,
@@ -77,6 +107,9 @@ describe('syncReadinessCheck', () => {
         }),
         expect.objectContaining({
           code: 'sync_conflicts_present',
+        }),
+        expect.objectContaining({
+          code: 'conflict_outbox_events_present',
         }),
       ]),
     );

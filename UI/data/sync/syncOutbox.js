@@ -131,6 +131,41 @@ export const getFailedOutboxCountsByCollection = async (options = {}) => {
   );
 };
 
+export const getConflictOutboxEvents = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const events = await db.getAllAsync(
+    `
+      SELECT *
+      FROM sync_outbox
+      WHERE status = 'conflict'
+      ORDER BY createdAt ASC;
+    `,
+  );
+
+  return events.map(parseOutboxEvent);
+};
+
+export const getConflictOutboxCountsByCollection = async (options = {}) => {
+  const db = options.db || (await initDatabase());
+  const rows = await db.getAllAsync(
+    `
+      SELECT collection, COUNT(*) AS count
+      FROM sync_outbox
+      WHERE status = 'conflict'
+      GROUP BY collection
+      ORDER BY collection ASC;
+    `,
+  );
+
+  return rows.reduce(
+    (summary, row) => ({
+      ...summary,
+      [row.collection || 'unknown']: Number(row.count || 0),
+    }),
+    {},
+  );
+};
+
 export const markOutboxEventAsDone = async (id, options = {}) => {
   const db = options.db || (await initDatabase());
 
@@ -162,6 +197,20 @@ export const markOutboxEventAsFailed = async (id, error, options = {}) => {
 };
 
 export const markOutboxEventFailed = markOutboxEventAsFailed;
+
+export const markOutboxEventConflict = async (id, conflict, options = {}) => {
+  const db = options.db || (await initDatabase());
+
+  await db.runAsync(
+    `
+      UPDATE sync_outbox
+      SET status = 'conflict',
+          lastError = ?
+      WHERE id = ?;
+    `,
+    [serializePayload(conflict), id],
+  );
+};
 
 export const incrementOutboxAttempt = async (id, error, options = {}) => {
   const db = options.db || (await initDatabase());

@@ -295,6 +295,43 @@ export const markDocumentConflict = async (
   return getDocument(collection, id, { db, includeDeleted: true });
 };
 
+export const getConflictDocuments = async (options = {}) =>
+  getDocumentsBySyncStatuses('conflict', options);
+
+export const markConflictResolvedManually = async (
+  collection,
+  id,
+  options = {},
+) => updateSyncStatus(collection, id, options.syncStatus || 'pending', options);
+
+export const preferLocalVersion = async (collection, id, options = {}) =>
+  updateSyncStatus(collection, id, 'pending', options);
+
+export const preferRemoteVersion = async (
+  collection,
+  id,
+  remoteDocument,
+  options = {},
+) =>
+  saveRemoteDocument(
+    collection,
+    id,
+    {
+      data: remoteDocument?.document || remoteDocument?.data || {},
+      deletedAt: remoteDocument?.deletedAt || null,
+      deviceId: remoteDocument?.document?.deviceId || null,
+      groupId: remoteDocument?.document?.groupId || options.groupId || null,
+      remoteId: remoteDocument?.remoteId || remoteDocument?.document?.remoteId,
+      serverVersion:
+        remoteDocument?.serverVersion || remoteDocument?.document?.serverVersion,
+      updatedAt: remoteDocument?.updatedAt || nowIso(),
+    },
+    {
+      ...options,
+      skipOutbox: true,
+    },
+  );
+
 export const saveRemoteDocument = async (
   collection,
   localId,

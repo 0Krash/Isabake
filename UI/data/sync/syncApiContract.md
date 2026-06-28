@@ -59,8 +59,10 @@ Response:
   "rejected": [
     {
       "eventId": "outbox_2",
-      "reason": "server_version_conflict",
-      "conflictDocument": {}
+      "reason": "conflict",
+      "conflictDocument": {},
+      "currentServerVersion": 4,
+      "attemptedBaseServerVersion": 2
     }
   ],
   "cursor": "cursor_after_push"
@@ -74,6 +76,8 @@ Server rules:
   member of `groupId`.
 - Detect conflicts when `baseServerVersion` does not match the current server
   document version.
+- Conflict rejections must include `conflictDocument`, `currentServerVersion`,
+  and `attemptedBaseServerVersion`.
 - Return `remoteId`, `serverVersion`, and `syncedAt` only after the server has
   durably stored the accepted change.
 - Treat deletes as soft deletes using `deletedAt`.

@@ -6,8 +6,12 @@ import { createWorkspaceApiClient } from '../workspace/workspaceApiClient';
 const DEV_SYNC_PREFIX = 'phase_13_sync_dev';
 const DEV_AUTH_PREFIX = 'phase_14_auth_dev';
 const DEV_AUTH_SYNC_PREFIX = 'phase_14_auth_sync_dev';
+const DEV_CONFLICT_PREFIX = 'phase_15_conflict_dev';
 
 const nowIso = () => new Date().toISOString();
+
+const createRunId = (prefix) =>
+  `${prefix}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
 const makeResult = ({
   details = {},
@@ -174,6 +178,27 @@ const createDevRecipeDocument = async ({
     document,
     id,
   };
+};
+
+const updateDevRecipeDocument = async ({ groupId, id, nameSuffix }) => {
+  const { saveDocument } = require('../db/documentStore');
+
+  return saveDocument(
+    'recipes',
+    id,
+    {
+      cost: 0,
+      ingredients: [],
+      localId: id,
+      name: `${DEV_CONFLICT_PREFIX}_${nameSuffix}`,
+      servings: 1,
+      steps: [],
+      type: DEV_CONFLICT_PREFIX,
+    },
+    {
+      groupId,
+    },
+  );
 };
 
 const getCreatedEvent = (outboxEvents) =>
@@ -1144,12 +1169,270 @@ export const runAuthenticatedWorkspaceIsolationDevCheck = async (options = {}) =
   });
 };
 
+export const runConflictSimulationDevCheck = async (options = {}) => {
+  const name = 'conflictSimulationDev';
+
+  try {
+    const groupId = options.groupId || `${DEV_CONFLICT_PREFIX}_group`;
+    const userId = options.userId || `${DEV_CONFLICT_PREFIX}_member`;
+
+    await ensureDevWorkspaceMembership({
+      ...options,
+      groupId,
+      role: 'member',
+      status: 'active',
+      userId,
+    });
+
+    const client = createAuthedSyncClient(options, userId);
+    const { pullRemoteChanges, pushPendingChanges } = require('../sync');
+    const { runSyncReadinessCheck } = require('../validation/syncReadinessCheck');
+    const { document: createdDocument, id: localId } =
+      await createDevRecipeDocument({
+        groupId,
+        nameSuffix: `base_${Date.now()}`,
+        prefix: DEV_CONFLICT_PREFIX,
+      });
+    const createdOutbox = await getPendingOutboxForDocument(localId);
+    const createEvent = getCreatedEvent(createdOutbox);
+    const createPush = await pushPendingChanges({
+      client,
+      eventIds: [createEvent.id],
+      groupId,
+      includeDebug: true,
+      limit: options.limit,
+    });
+    const createAccepted = (createPush.accepted || []).find(
+      (event) => event.eventId === createEvent.id,
+    );
+
+    if (!createAccepted) {
+      return makeResult({
+        details: {
+          createPush,
+          localId,
+        },
+        error: 'conflict_simulation_initial_push_failed',
+        failedStep: 'initial_push',
+        name,
+        ok: false,
+      });
+    }
+
+    await client.pushChanges({
+      deviceId: 'dev-conflict-remote-device',
+      events: [
+        {
+          baseServerVersion: createAccepted.serverVersion,
+          collection: 'recipes',
+          createdAt: nowIso(),
+          document: {
+            cost: 0,
+            groupId,
+            ingredients: [],
+            localId,
+            name: `${DEV_CONFLICT_PREFIX}_remote_update`,
+            remoteId: createAccepted.remoteId,
+            servings: 1,
+            steps: [],
+            type: DEV_CONFLICT_PREFIX,
+          },
+          documentId: localId,
+          eventId: `${DEV_CONFLICT_PREFIX}_remote_${Date.now()}`,
+          localVersion: 1,
+          operation: 'update',
+        },
+      ],
+      groupId,
+    });
+
+    await updateDevRecipeDocument({
+      groupId,
+      id: localId,
+      nameSuffix: `local_stale_${Date.now()}`,
+    });
+    const updateOutbox = await getPendingOutboxForDocument(localId);
+    const staleEvent =
+      updateOutbox.find(
+        (event) => event.id !== createEvent.id && event.operation === 'update',
+      ) ||
+      getCreatedEvent(updateOutbox);
+    const stalePush = await pushPendingChanges({
+      client,
+      eventIds: [staleEvent.id],
+      groupId,
+      includeDebug: true,
+      limit: options.limit,
+    });
+    const localDocumentAfterConflict = await getDocumentById('recipes', localId);
+    const outboxAfterConflict = await getOutboxEventsByIds([staleEvent.id]);
+    const readiness = await runSyncReadinessCheck();
+    const conflictRejected = (stalePush.rejected || []).some(
+      (event) => event.eventId === staleEvent.id && event.reason === 'conflict',
+    );
+    const outboxIsConflict = outboxAfterConflict.some(
+      (event) => event?.status === 'conflict',
+    );
+    const documentIsConflict =
+      localDocumentAfterConflict?.syncStatus === 'conflict';
+
+    return makeResult({
+      details: {
+        conflictRejected,
+        createAccepted,
+        createPush,
+        documentIsConflict,
+        groupId,
+        localDocumentAfterConflict,
+        localId,
+        outboxAfterConflict,
+        outboxIsConflict,
+        readinessConflictDocumentCount: readiness.conflictDocumentCount,
+        readinessConflictOutboxCount: readiness.conflictOutboxCount,
+        staleEventId: staleEvent.id,
+        stalePush,
+      },
+      name,
+      ok:
+        conflictRejected &&
+        documentIsConflict &&
+        outboxIsConflict &&
+        readiness.conflictDocumentCount > 0,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runPullOverPendingConflictDevCheck = async (options = {}) => {
+  const name = 'pullOverPendingConflictDev';
+
+  try {
+    const runId = options.runId || createRunId(`${DEV_CONFLICT_PREFIX}_pull`);
+    const baseGroupId = options.groupId || `${DEV_CONFLICT_PREFIX}_pull_group`;
+    const groupId = options.isolate === false ? baseGroupId : `${baseGroupId}_${runId}`;
+    const localId = options.localId || `${runId}_local`;
+    const remoteId = options.remoteId || `${runId}_remote`;
+    const remoteChangeUsed = {
+      collection: 'recipes',
+      document: {
+        groupId,
+        localId,
+        name: `${DEV_CONFLICT_PREFIX}_remote_pull_${runId}`,
+      },
+      remoteId,
+      serverVersion: options.serverVersion || 99,
+      updatedAt: nowIso(),
+    };
+    const { pullRemoteChanges } = require('../sync');
+    const syncStateBeforePull = await getCursor(groupId);
+
+    await ensureDevWorkspaceMembership({
+      ...options,
+      groupId,
+      role: 'member',
+      status: 'active',
+      userId: options.userId || `${DEV_CONFLICT_PREFIX}_pull_member`,
+    });
+
+    await updateDevRecipeDocument({
+      groupId,
+      id: localId,
+      nameSuffix: `pending_${runId}`,
+    });
+    const localDocumentBeforePull = await getDocumentById('recipes', localId);
+    const outboxBeforePull = await getPendingOutboxForDocument(localId);
+    const cursorBeforePull = await getCursor(groupId);
+
+    const pull = await pullRemoteChanges({
+      client: {
+        pullChanges: async () => ({
+          changes: [remoteChangeUsed],
+          cursor: String(remoteChangeUsed.serverVersion),
+          groupId,
+        }),
+      },
+      groupId,
+    });
+    const localDocumentAfterPull = await getDocumentById('recipes', localId);
+    const outboxAfterPull = await getPendingOutboxForDocument(localId);
+    const cursorAfterPull = await getCursor(groupId);
+    const syncStateAfterPull = cursorAfterPull;
+    const conflictCount = pull.conflicts?.length || 0;
+    const noDuplicateOutbox = outboxAfterPull.length <= outboxBeforePull.length;
+    const conflictDetected = (pull.conflicts || []).some(
+      (conflict) =>
+        conflict.localId === localId &&
+        conflict.reason === 'local_pending_or_conflict',
+    );
+    const details = {
+      conflictCount,
+      cursorAfterPull,
+      cursorBeforePull,
+      groupId,
+      localDocumentAfterPull,
+      localDocumentBeforePull,
+      localId,
+      noDuplicateOutbox,
+      outboxAfterPull,
+      outboxBeforePull,
+      pull,
+      remoteChangeUsed,
+      remoteId,
+      runId,
+      syncStateAfterPull,
+      syncStateBeforePull,
+    };
+    const ok =
+      pull.ok === false &&
+      conflictDetected &&
+      localDocumentAfterPull?.syncStatus === 'conflict' &&
+      noDuplicateOutbox;
+
+    if (!ok) {
+      return makeResult({
+        details,
+        error:
+          conflictCount === 0
+            ? 'pull_over_pending_conflict_not_detected'
+            : 'pull_over_pending_conflict_failed',
+        failedStep:
+          conflictCount === 0
+            ? 'pull_over_pending_conflict_missing'
+            : 'pull_over_pending_conflict_validation',
+        name,
+        ok: false,
+      });
+    }
+
+    return makeResult({
+      details,
+      name,
+      ok: true,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
 export default {
   runAuthWorkspaceDevCheck,
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictSimulationDevCheck,
   runMembershipSyncAccessDevCheck,
+  runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 };

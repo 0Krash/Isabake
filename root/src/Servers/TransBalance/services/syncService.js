@@ -163,6 +163,8 @@ class SyncService {
       ) {
         const response = makeRejected(event, 'conflict', {
           conflictDocument: toPullChange(currentDocument),
+          currentServerVersion: currentDocument.serverVersion,
+          attemptedBaseServerVersion: event.baseServerVersion,
         });
 
         await this.repository.saveEvent({

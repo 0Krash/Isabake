@@ -12,6 +12,7 @@ import {
   getPendingOutboxCountsByCollection,
   getPendingOutboxEvents,
   incrementOutboxAttempt,
+  markOutboxEventConflict,
   markOutboxEventFailed,
   markOutboxEventSynced,
 } from './syncOutbox';
@@ -73,8 +74,32 @@ const resolveRejectedReason = (rejection) =>
 const normalizeAcceptedLocalId = (accepted) =>
   accepted?.localId || accepted?.documentId || accepted?.id;
 
+const isConflictRejection = (rejection) => rejection?.reason === 'conflict';
+
+const buildConflictMetadata = ({
+  localDocument,
+  originalEvent,
+  rejectedEvent,
+}) => ({
+  attemptedBaseServerVersion:
+    rejectedEvent?.attemptedBaseServerVersion ??
+    originalEvent?.payload?.baseServerVersion ??
+    localDocument?.serverVersion ??
+    null,
+  conflictDocument: rejectedEvent?.conflictDocument || null,
+  currentServerVersion:
+    rejectedEvent?.currentServerVersion ??
+    rejectedEvent?.conflictDocument?.serverVersion ??
+    null,
+  eventId: rejectedEvent?.eventId || originalEvent?.event?.id || null,
+  localDocument: localDocument || null,
+  reason: rejectedEvent?.reason || 'conflict',
+  rejectedAt: new Date().toISOString(),
+});
+
 export const markOutboxEventSyncedById = markOutboxEventSynced;
 export const markOutboxEventFailedById = markOutboxEventFailed;
+export const markOutboxEventConflictById = markOutboxEventConflict;
 export { storeLastSyncCursor };
 
 export const pushPendingChanges = async ({
@@ -187,14 +212,29 @@ export const pushPendingChanges = async ({
         continue;
       }
 
-      if (rejectedEvent.conflictDocument) {
+      if (isConflictRejection(rejectedEvent)) {
+        const localDocument = await getDocument(
+          originalEvent.event.collection,
+          originalEvent.event.documentId,
+          {
+            includeDeleted: true,
+          },
+        );
+        const conflictMetadata = buildConflictMetadata({
+          localDocument,
+          originalEvent,
+          rejectedEvent,
+        });
+
         await markDocumentConflict(
           originalEvent.event.collection,
           originalEvent.event.documentId,
           {
-            serverVersion: rejectedEvent.conflictDocument.serverVersion,
+            serverVersion: conflictMetadata.currentServerVersion,
           },
         );
+        await markOutboxEventConflict(rejectedEvent.eventId, conflictMetadata);
+        continue;
       }
 
       await markOutboxEventFailed(
@@ -301,8 +341,7 @@ export const pullRemoteChanges = async ({
       });
       const hasLocalConflict =
         existingDocument &&
-        existingDocument.syncStatus === 'pending' &&
-        existingDocument.serverVersion !== null &&
+        ['pending', 'conflict'].includes(existingDocument.syncStatus) &&
         existingDocument.serverVersion !== change.serverVersion;
 
       if (hasLocalConflict) {
@@ -311,8 +350,11 @@ export const pullRemoteChanges = async ({
         });
         conflicts.push({
           collection: change.collection,
+          conflictDocument: change,
           localId,
+          localDocument: existingDocument,
           remoteId: change.remoteId,
+          reason: 'local_pending_or_conflict',
         });
         continue;
       }
@@ -388,6 +430,7 @@ export const getSyncStatus = async () => {
 export default {
   getSyncStatus,
   markOutboxEventFailed: markOutboxEventFailedById,
+  markOutboxEventConflict: markOutboxEventConflictById,
   markOutboxEventSynced: markOutboxEventSyncedById,
   pullRemoteChanges,
   pushPendingChanges,

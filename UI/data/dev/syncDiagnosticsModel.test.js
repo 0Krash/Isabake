@@ -35,19 +35,23 @@ describe('syncDiagnosticsModel', () => {
       runAuthenticatedPushPullDevCheck: jest.fn(),
       runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(),
       runBackendSyncConnectivityCheck: jest.fn(),
+      runConflictSimulationDevCheck: jest.fn(),
       runMembershipSyncAccessDevCheck: jest.fn(),
+      runPullOverPendingConflictDevCheck: jest.fn(),
       runPushPullDevCheck: jest.fn(),
       runTwoWorkspaceIsolationDevCheck: jest.fn(),
     };
 
     const actions = createSyncDiagnosticsActions({ runners });
 
-    expect(actions).toHaveLength(8);
+    expect(actions).toHaveLength(10);
     expect(runners.runAuthWorkspaceDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
     expect(runners.runBackendSyncConnectivityCheck).not.toHaveBeenCalled();
+    expect(runners.runConflictSimulationDevCheck).not.toHaveBeenCalled();
     expect(runners.runMembershipSyncAccessDevCheck).not.toHaveBeenCalled();
+    expect(runners.runPullOverPendingConflictDevCheck).not.toHaveBeenCalled();
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });
@@ -58,7 +62,9 @@ describe('syncDiagnosticsModel', () => {
       runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
       runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
       runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
+      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
       runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
+      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
       runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
     };
@@ -69,6 +75,8 @@ describe('syncDiagnosticsModel', () => {
     await actions.find((action) => action.key === 'connectivity').run();
     await actions.find((action) => action.key === 'authenticatedPushPull').run();
     await actions.find((action) => action.key === 'authenticatedIsolation').run();
+    await actions.find((action) => action.key === 'conflictSimulation').run();
+    await actions.find((action) => action.key === 'pullOverPendingConflict').run();
     await actions.find((action) => action.key === 'legacyPushPull').run();
     await actions.find((action) => action.key === 'legacyIsolation').run();
 
@@ -91,6 +99,12 @@ describe('syncDiagnosticsModel', () => {
       groupId: DEV_AUTH_GROUP_ID,
     });
     expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).toHaveBeenCalledWith();
+    expect(runners.runConflictSimulationDevCheck).toHaveBeenCalledWith({
+      groupId: DEV_AUTH_GROUP_ID,
+    });
+    expect(runners.runPullOverPendingConflictDevCheck).toHaveBeenCalledWith({
+      groupId: DEV_AUTH_GROUP_ID,
+    });
     expect(runners.runPushPullDevCheck).toHaveBeenCalledWith({
       groupId: DEV_AUTH_GROUP_ID,
       legacy: true,
@@ -108,7 +122,9 @@ describe('syncDiagnosticsModel', () => {
         ok: false,
       })),
       runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
+      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
       runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
+      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
       runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
     };
@@ -121,6 +137,31 @@ describe('syncDiagnosticsModel', () => {
     expect(result.membershipAccess.ok).toBe(true);
     expect(result.authenticatedPushPull.ok).toBe(true);
     expect(result.authenticatedIsolation.ok).toBe(false);
+    expect(result.conflictSimulation.ok).toBe(true);
+    expect(result.pullOverPendingConflict.ok).toBe(true);
+    expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
+    expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
+  });
+
+  test('all action passes when authenticated conflict diagnostics pass', async () => {
+    const runners = {
+      runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
+      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({
+        ok: true,
+      })),
+      runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
+      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
+      runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
+      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
+      runPushPullDevCheck: jest.fn(async () => ({ ok: false })),
+      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: false })),
+    };
+    const actions = createSyncDiagnosticsActions({ runners });
+    const result = await actions.find((action) => action.key === 'all').run();
+
+    expect(result.ok).toBe(true);
+    expect(result.pullOverPendingConflict.ok).toBe(true);
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });

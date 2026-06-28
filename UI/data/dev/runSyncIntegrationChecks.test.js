@@ -11,14 +11,26 @@ jest.mock('../db/localIds', () => ({
 
 jest.mock('../db/documentStore', () => ({
   getDocument: jest.fn(async (collection, id) => mockDocuments.get(`${collection}:${id}`)),
+  markDocumentConflict: jest.fn(async (collection, id, { serverVersion } = {}) => {
+    const key = `${collection}:${id}`;
+    const document = mockDocuments.get(key);
+
+    if (document) {
+      document.serverVersion = serverVersion || document.serverVersion;
+      document.syncStatus = 'conflict';
+    }
+
+    return document || null;
+  }),
   saveDocument: jest.fn(async (collection, id, data, options = {}) => {
+    const existingDocument = mockDocuments.get(`${collection}:${id}`);
     const document = {
       collection,
       data,
       groupId: options.groupId,
       id,
-      remoteId: null,
-      serverVersion: null,
+      remoteId: existingDocument?.remoteId || null,
+      serverVersion: existingDocument?.serverVersion || null,
       syncStatus: 'pending',
     };
 
@@ -26,8 +38,8 @@ jest.mock('../db/documentStore', () => ({
     mockOutboxEvents.push({
       collection,
       documentId: id,
-      id: `outbox_${id}`,
-      operation: 'create',
+      id: `outbox_${id}_${mockOutboxEvents.length + 1}`,
+      operation: existingDocument ? 'update' : 'create',
       payload: { id },
       status: 'pending',
     });
@@ -43,6 +55,18 @@ jest.mock('../sync/syncOutbox', () => ({
   getPendingOutboxEvents: jest.fn(async () =>
     mockOutboxEvents.filter((event) => event.status === 'pending'),
   ),
+}));
+
+jest.mock('../validation/syncReadinessCheck', () => ({
+  runSyncReadinessCheck: jest.fn(async () => ({
+    conflictDocumentCount: Array.from(mockDocuments.values()).filter(
+      (document) => document.syncStatus === 'conflict',
+    ).length,
+    conflictOutboxCount: mockOutboxEvents.filter(
+      (event) => event.status === 'conflict',
+    ).length,
+    ok: false,
+  })),
 }));
 
 jest.mock('../sync/syncStateRepository', () => ({
@@ -80,7 +104,9 @@ import {
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictSimulationDevCheck,
   runMembershipSyncAccessDevCheck,
+  runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
@@ -715,5 +741,259 @@ describe('runSyncIntegrationChecks', () => {
     expect(result.ok).toBe(false);
     expect(result.details.memberPushAcceptedCount).toBe(0);
     expect(result.details.checks.memberPushAccepted).toBe(false);
+  });
+
+  test('conflict simulation returns ok only when conflict is detected and preserved', async () => {
+    pushPendingChanges.mockImplementation(async ({ eventIds = [] }) => {
+      const eventId = eventIds[0];
+      const outboxEvent = mockOutboxEvents.find((event) => event.id === eventId);
+
+      if (eventId?.includes('outbox_') && outboxEvent?.operation === 'update') {
+        outboxEvent.status = 'conflict';
+        const document = mockDocuments.get(
+          `${outboxEvent.collection}:${outboxEvent.documentId}`,
+        );
+
+        if (document) {
+          document.syncStatus = 'conflict';
+          document.serverVersion = 2;
+        }
+
+        return {
+          accepted: [],
+          ok: false,
+          rejected: [
+            {
+              attemptedBaseServerVersion: 1,
+              currentServerVersion: 2,
+              eventId,
+              reason: 'conflict',
+            },
+          ],
+          skipped: [],
+        };
+      }
+
+      return acceptPushEvents({ eventIds });
+    });
+    const fetchImpl = jest.fn(async (url, request = {}) => ({
+      ok: true,
+      status: url.includes('/workspaces') && request.method === 'POST' ? 201 : 200,
+      text: async () =>
+        JSON.stringify(
+          url.includes('/sync/push')
+            ? {
+                accepted: [
+                  {
+                    eventId: 'remote_update',
+                    localId: 'remote_update',
+                    remoteId: 'remote_update',
+                    serverVersion: 2,
+                  },
+                ],
+                cursor: '2',
+                rejected: [],
+              }
+            : {
+                membership: { role: 'member' },
+                status: 'success',
+                workspace: {
+                  groupId: 'phase_15_group',
+                  workspaceId: 'phase_15_group',
+                },
+              },
+        ),
+    }));
+
+    const result = await runConflictSimulationDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_15_group',
+      userId: 'phase_15_user',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'conflictSimulationDev',
+        ok: true,
+      }),
+    );
+    expect(result.details.documentIsConflict).toBe(true);
+    expect(result.details.outboxIsConflict).toBe(true);
+    expect(result.details.readinessConflictDocumentCount).toBeGreaterThan(0);
+  });
+
+  test('pull-over-pending conflict check preserves local document', async () => {
+    const { pullRemoteChanges } = require('../sync');
+
+    pullRemoteChanges.mockImplementationOnce(async ({ groupId }) => {
+      const document = Array.from(mockDocuments.values()).find(
+        (item) => item.groupId === groupId,
+      );
+
+      if (document) {
+        document.syncStatus = 'conflict';
+        document.serverVersion = 99;
+      }
+
+      return {
+        applied: [],
+        conflicts: [
+          {
+            collection: 'recipes',
+            localId: document?.id,
+            reason: 'local_pending_or_conflict',
+          },
+        ],
+        cursor: '99',
+        ok: false,
+        skipped: [],
+      };
+    });
+
+    const result = await runPullOverPendingConflictDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl: jest.fn(async () => ({
+        ok: true,
+        status: 201,
+        text: async () =>
+          JSON.stringify({
+            membership: { role: 'member' },
+            status: 'success',
+            workspace: {
+              groupId: 'phase_15_pull_group',
+              workspaceId: 'phase_15_pull_group',
+            },
+          }),
+      })),
+      groupId: 'phase_15_pull_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'pullOverPendingConflictDev',
+        ok: true,
+      }),
+    );
+    expect(result.details.localDocumentAfterPull.syncStatus).toBe('conflict');
+    expect(result.details.noDuplicateOutbox).toBe(true);
+    expect(result.details.localId).toContain('phase_15_conflict_dev_pull');
+    expect(result.details.remoteId).toContain('phase_15_conflict_dev_pull');
+  });
+
+  test('pull-over-pending conflict check uses unique ids and passes twice', async () => {
+    const { pullRemoteChanges } = require('../sync');
+
+    pullRemoteChanges.mockImplementation(async ({ groupId }) => {
+      const document = Array.from(mockDocuments.values()).find(
+        (item) => item.groupId === groupId,
+      );
+
+      if (document) {
+        document.syncStatus = 'conflict';
+        document.serverVersion = 99;
+      }
+
+      return {
+        applied: [],
+        conflicts: [
+          {
+            collection: 'recipes',
+            localId: document?.id,
+            reason: 'local_pending_or_conflict',
+          },
+        ],
+        cursor: '99',
+        ok: false,
+        skipped: [],
+      };
+    });
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      status: 201,
+      text: async () =>
+        JSON.stringify({
+          membership: { role: 'member' },
+          status: 'success',
+          workspace: {
+            groupId: 'phase_15_pull_group',
+            workspaceId: 'phase_15_pull_group',
+          },
+        }),
+    }));
+
+    const first = await runPullOverPendingConflictDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_15_pull_group',
+    });
+    const second = await runPullOverPendingConflictDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_15_pull_group',
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(first.details.runId).not.toBe(second.details.runId);
+    expect(first.details.groupId).not.toBe(second.details.groupId);
+    expect(first.details.localId).not.toBe(second.details.localId);
+    expect(first.details.remoteId).not.toBe(second.details.remoteId);
+  });
+
+  test('pull-over-pending conflict check reports useful debug when conflict count is zero', async () => {
+    const { pullRemoteChanges } = require('../sync');
+
+    pullRemoteChanges.mockResolvedValueOnce({
+      applied: [],
+      conflicts: [],
+      cursor: '99',
+      ok: true,
+      skipped: [],
+    });
+
+    const result = await runPullOverPendingConflictDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl: jest.fn(async () => ({
+        ok: true,
+        status: 201,
+        text: async () =>
+          JSON.stringify({
+            membership: { role: 'member' },
+            status: 'success',
+            workspace: {
+              groupId: 'phase_15_pull_group',
+              workspaceId: 'phase_15_pull_group',
+            },
+          }),
+      })),
+      groupId: 'phase_15_pull_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'pull_over_pending_conflict_not_detected',
+        failedStep: 'pull_over_pending_conflict_missing',
+        ok: false,
+      }),
+    );
+    expect(result.details).toEqual(
+      expect.objectContaining({
+        conflictCount: 0,
+        cursorAfterPull: expect.any(String),
+        cursorBeforePull: expect.any(String),
+        groupId: expect.stringContaining('phase_15_pull_group'),
+        localDocumentAfterPull: expect.any(Object),
+        localDocumentBeforePull: expect.any(Object),
+        localId: expect.any(String),
+        outboxAfterPull: expect.any(Array),
+        outboxBeforePull: expect.any(Array),
+        remoteChangeUsed: expect.any(Object),
+        remoteId: expect.any(String),
+        runId: expect.any(String),
+        syncStateAfterPull: expect.any(String),
+        syncStateBeforePull: expect.any(String),
+      }),
+    );
   });
 });

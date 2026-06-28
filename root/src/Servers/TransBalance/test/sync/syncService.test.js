@@ -156,11 +156,53 @@ describe('SyncService push', () => {
     expect(stale.accepted).toEqual([]);
     expect(stale.rejected[0]).toEqual(
       expect.objectContaining({
+        attemptedBaseServerVersion: 1,
+        currentServerVersion: 2,
         eventId: 'event_3',
         reason: 'conflict',
       }),
     );
     expect(stale.rejected[0].conflictDocument.serverVersion).toBe(2);
+  });
+
+  test('non-conflicting update with current baseServerVersion succeeds', async () => {
+    const repository = new MemorySyncRepository();
+    const service = new SyncService(repository);
+    const created = await push(service, [createEvent()]);
+    const remoteId = created.accepted[0].remoteId;
+
+    await push(service, [
+      createEvent({
+        baseServerVersion: 1,
+        document: {
+          localId: 'recipe_local_1',
+          name: 'Version 2',
+          remoteId,
+        },
+        eventId: 'event_2',
+        operation: 'update',
+      }),
+    ]);
+    const current = await push(service, [
+      createEvent({
+        baseServerVersion: 2,
+        document: {
+          localId: 'recipe_local_1',
+          name: 'Version 3',
+          remoteId,
+        },
+        eventId: 'event_3',
+        operation: 'update',
+      }),
+    ]);
+
+    expect(current.rejected).toEqual([]);
+    expect(current.accepted[0]).toEqual(
+      expect.objectContaining({
+        eventId: 'event_3',
+        serverVersion: 3,
+      }),
+    );
   });
 
   test('one bad event does not fail all valid events', async () => {

@@ -1,5 +1,6 @@
 export {
   getSyncStatus,
+  markOutboxEventConflictById as markOutboxEventConflict,
   markOutboxEventFailedById as markOutboxEventFailed,
   markOutboxEventSyncedById as markOutboxEventSynced,
   pullRemoteChanges,

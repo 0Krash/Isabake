@@ -6,6 +6,7 @@ export const SYNC_STATUS = {
 };
 
 export const OUTBOX_STATUS = {
+  CONFLICT: 'conflict',
   DONE: 'done',
   FAILED: 'failed',
   PENDING: 'pending',

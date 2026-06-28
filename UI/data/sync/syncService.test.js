@@ -15,6 +15,7 @@ jest.mock('./syncOutbox', () => ({
   getPendingOutboxCountsByCollection: jest.fn(async () => ({})),
   getPendingOutboxEvents: jest.fn(async () => []),
   incrementOutboxAttempt: jest.fn(),
+  markOutboxEventConflict: jest.fn(),
   markOutboxEventFailed: jest.fn(),
   markOutboxEventSynced: jest.fn(),
 }));
@@ -33,6 +34,7 @@ import {
 import {
   getPendingOutboxEvents,
   incrementOutboxAttempt,
+  markOutboxEventConflict,
   markOutboxEventFailed,
   markOutboxEventSynced,
 } from './syncOutbox';
@@ -252,8 +254,14 @@ describe('syncService safe failures', () => {
         rejected: [
           {
             conflictDocument: {
+              document: {
+                name: 'Pastel remoto',
+              },
+              remoteId: 'remote_1',
               serverVersion: 2,
             },
+            currentServerVersion: 2,
+            attemptedBaseServerVersion: 1,
             eventId: 'outbox_1',
             reason: 'conflict',
           },
@@ -270,7 +278,16 @@ describe('syncService safe failures', () => {
     expect(markDocumentConflict).toHaveBeenCalledWith('recipes', 'recipe_local_1', {
       serverVersion: 2,
     });
-    expect(markOutboxEventFailed).toHaveBeenCalledWith('outbox_1', 'conflict');
+    expect(markOutboxEventConflict).toHaveBeenCalledWith(
+      'outbox_1',
+      expect.objectContaining({
+        attemptedBaseServerVersion: 1,
+        currentServerVersion: 2,
+        eventId: 'outbox_1',
+        reason: 'conflict',
+      }),
+    );
+    expect(markOutboxEventFailed).not.toHaveBeenCalled();
     expect(markOutboxEventSynced).not.toHaveBeenCalled();
   });
 
@@ -397,6 +414,58 @@ describe('syncService safe failures', () => {
       },
     ]);
     expect(saveRemoteDocument).not.toHaveBeenCalled();
+  });
+
+  test('pullRemoteChanges marks conflict and does not overwrite pending local changes', async () => {
+    getDocument.mockResolvedValue({
+      collection: 'recipes',
+      data: {
+        name: 'Pastel local pendiente',
+      },
+      groupId: 'group_1',
+      id: 'recipe_local_1',
+      remoteId: 'remote_1',
+      serverVersion: 1,
+      syncStatus: 'pending',
+    });
+    const client = {
+      pullChanges: jest.fn(async () => ({
+        changes: [
+          {
+            collection: 'recipes',
+            document: {
+              groupId: 'group_1',
+              localId: 'recipe_local_1',
+              name: 'Pastel remoto',
+            },
+            remoteId: 'remote_1',
+            serverVersion: 2,
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        cursor: '2',
+        groupId: 'group_1',
+      })),
+    };
+
+    const result = await pullRemoteChanges({
+      client,
+      groupId: 'group_1',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        collection: 'recipes',
+        localId: 'recipe_local_1',
+        reason: 'local_pending_or_conflict',
+      }),
+    ]);
+    expect(markDocumentConflict).toHaveBeenCalledWith('recipes', 'recipe_local_1', {
+      serverVersion: 2,
+    });
+    expect(saveRemoteDocument).not.toHaveBeenCalled();
+    expect(storeLastSyncCursor).toHaveBeenCalledWith('group_1', '2');
   });
 
   test('runSync performs push then pull in order', async () => {

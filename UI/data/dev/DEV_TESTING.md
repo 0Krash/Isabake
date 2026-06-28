@@ -54,7 +54,9 @@ These checks use Expo SQLite and must run inside an Expo runtime:
 - `runAuthWorkspaceDevCheck()`
 - `runAuthenticatedPushPullDevCheck()`
 - `runAuthenticatedWorkspaceIsolationDevCheck()`
+- `runConflictSimulationDevCheck()`
 - `runMembershipSyncAccessDevCheck()`
+- `runPullOverPendingConflictDevCheck()`
 
 Import them through the central runner:
 
@@ -71,7 +73,9 @@ import {
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictSimulationDevCheck,
   runMembershipSyncAccessDevCheck,
+  runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './data/dev/runSyncIntegrationChecks';
@@ -99,6 +103,8 @@ await runAuthenticatedPushPullDevCheck({
   userId: 'member',
 });
 await runAuthenticatedWorkspaceIsolationDevCheck();
+await runConflictSimulationDevCheck({ groupId: 'your_group_id' });
+await runPullOverPendingConflictDevCheck({ groupId: 'your_group_id' });
 ```
 
 Legacy unauthenticated checks:
@@ -138,6 +144,8 @@ Available buttons:
 - `Membership access check`
 - `Authenticated push/pull check`
 - `Authenticated workspace isolation check`
+- `Conflict simulation check`
+- `Pull-over-pending conflict check`
 - `Legacy unauthenticated push/pull check`
 - `Legacy unauthenticated workspace isolation check`
 - `Run all authenticated sync checks`
@@ -177,12 +185,61 @@ Mutating manual sync integration checks:
 - `runMembershipSyncAccessDevCheck()`
 - `runAuthenticatedPushPullDevCheck()`
 - `runAuthenticatedWorkspaceIsolationDevCheck()`
+- `runConflictSimulationDevCheck()`
+- `runPullOverPendingConflictDevCheck()`
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
 
 These create records with the `phase_13_sync_dev` prefix so they can be found by
 the dev reset helper. Authenticated Phase 14 checks also use the
-`phase_14_auth_dev` and `phase_14_auth_sync_dev` prefixes.
+`phase_14_auth_dev`, `phase_14_auth_sync_dev`, and `phase_15_conflict_dev`
+prefixes.
+
+## Conflict Diagnostics
+
+Phase 15 makes conflicts explicit but still does not add production conflict UI.
+
+Document statuses:
+
+- `synced`: local record matches a server-accepted version.
+- `pending`: local changes need push.
+- `failed`: sync failed for a non-conflict reason.
+- `conflict`: local changes were preserved but need manual/dev resolution.
+
+Outbox statuses:
+
+- `pending`: event is waiting to push.
+- `done`: event was accepted by the backend.
+- `failed`: event failed for a retryable or non-conflict error.
+- `conflict`: event was rejected because the backend has a newer version.
+
+Conflict rules:
+
+- Backend rejects stale `baseServerVersion` with `reason: "conflict"`.
+- Mobile marks the local document `syncStatus: "conflict"`.
+- Mobile marks the outbox event `status: "conflict"`.
+- Local data is not deleted or overwritten automatically.
+- Pulling over a local pending/conflict document marks conflict instead of
+  blindly overwriting local changes.
+
+Run manual checks from Sync Dev:
+
+- `Conflict simulation check`
+- `Pull-over-pending conflict check`
+
+Or from Expo dev console:
+
+```js
+await runConflictSimulationDevCheck({ groupId: 'your_group_id' });
+await runPullOverPendingConflictDevCheck({ groupId: 'your_group_id' });
+```
+
+`Pull-over-pending conflict check` creates a unique run id, group id, local id,
+and remote id on each execution, even when a base `groupId` is provided. This
+keeps previous sync cursors and older dev records from hiding the simulated
+remote change during `Run all authenticated sync checks`.
+
+Production conflict resolution UI remains pending.
 
 Reset helpers never run from `runAllDevChecks()`.
 
