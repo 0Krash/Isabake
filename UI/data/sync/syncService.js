@@ -80,6 +80,9 @@ export { storeLastSyncCursor };
 export const pushPendingChanges = async ({
   client = defaultSyncClient,
   groupId,
+  documentIds,
+  eventIds,
+  includeDebug = false,
   limit = 50,
 } = {}) => {
   if (!groupId) {
@@ -92,7 +95,12 @@ export const pushPendingChanges = async ({
     };
   }
 
-  const pendingEvents = (await getPendingOutboxEvents()).slice(0, limit);
+  const eventIdSet = eventIds ? new Set(eventIds) : null;
+  const documentIdSet = documentIds ? new Set(documentIds) : null;
+  const pendingEvents = (await getPendingOutboxEvents())
+    .filter((event) => !eventIdSet || eventIdSet.has(event.id))
+    .filter((event) => !documentIdSet || documentIdSet.has(event.documentId))
+    .slice(0, limit);
   const preparedEvents = [];
   const skipped = [];
 
@@ -126,6 +134,15 @@ export const pushPendingChanges = async ({
   if (!preparedEvents.length) {
     return {
       accepted: [],
+      ...(includeDebug
+        ? {
+            debug: {
+              pendingEvents,
+              preparedEvents: [],
+              pushRequestPayload: null,
+            },
+          }
+        : {}),
       ok: true,
       rejected: [],
       skipped,
@@ -133,11 +150,12 @@ export const pushPendingChanges = async ({
   }
 
   try {
-    const response = await client.pushChanges({
+    const pushRequestPayload = {
       deviceId: await getLocalDeviceId(),
       events: preparedEvents.map((event) => event.payload),
       groupId,
-    });
+    };
+    const response = await client.pushChanges(pushRequestPayload);
     const accepted = Array.isArray(response.accepted) ? response.accepted : [];
     const rejected = Array.isArray(response.rejected) ? response.rejected : [];
 
@@ -188,6 +206,16 @@ export const pushPendingChanges = async ({
     return {
       accepted,
       cursor: response.cursor || null,
+      ...(includeDebug
+        ? {
+            debug: {
+              backendResponseRaw: response,
+              pendingEvents,
+              preparedEvents,
+              pushRequestPayload,
+            },
+          }
+        : {}),
       ok: rejected.length === 0,
       rejected,
       skipped,
@@ -199,6 +227,18 @@ export const pushPendingChanges = async ({
 
     return {
       accepted: [],
+      ...(includeDebug
+        ? {
+            debug: {
+              pendingEvents,
+              preparedEvents,
+              pushRequestPayload: {
+                events: preparedEvents.map((event) => event.payload),
+                groupId,
+              },
+            },
+          }
+        : {}),
       error: String(error?.message || error),
       ok: false,
       rejected: [],

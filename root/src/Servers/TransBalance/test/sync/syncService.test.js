@@ -117,7 +117,7 @@ describe('SyncService push', () => {
     expect(result.rejected).toEqual([
       {
         eventId: 'bad_event',
-        reason: 'document_required',
+        reason: 'missing_document',
       },
     ]);
   });

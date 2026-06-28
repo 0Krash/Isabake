@@ -10,6 +10,8 @@ import TransactionBalanceScreen from './screens/TransactionBalance/TransactionBa
 import RecipeBookScreen from './screens/RecipeBook/RecipeBookScreen';
 import RecipeSaleScreen from './screens/RecipeBook/RecipeSaleScreen';
 import InventoryScreen from './screens/Inventory/InventoryScreen';
+import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
+import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
@@ -22,6 +24,7 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
+  const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
   useEffect(() => {
     let isMounted = true;
@@ -68,6 +71,10 @@ export default function App() {
       return <InventoryScreen />;
     }
 
+    if (activeTab === 'dev-sync' && devSyncDiagnosticsEnabled) {
+      return <SyncDiagnosticsScreen />;
+    }
+
     return <TransactionBalanceScreen />;
   };
 
@@ -108,6 +115,11 @@ export default function App() {
         {!saleRecipe && (
           <AppBottomNavigation
             activeTab={activeTab}
+            extraTabs={
+              devSyncDiagnosticsEnabled
+                ? [{ key: 'dev-sync', label: 'Sync Dev' }]
+                : []
+            }
             onTabPress={setActiveTab}
           />
         )}

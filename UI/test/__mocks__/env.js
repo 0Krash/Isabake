@@ -5,4 +5,5 @@ module.exports = {
   URL_Inventory: 'http://localhost:3000/api/v1/inventory',
   URL_Transactions: 'http://localhost:3000/api/v1/transactions',
   URL_Sync: '',
+  EXPO_PUBLIC_ENABLE_DEV_TOOLS: 'false',
 };

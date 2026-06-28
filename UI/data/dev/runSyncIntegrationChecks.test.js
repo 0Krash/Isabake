@@ -1,6 +1,95 @@
-import { runBackendSyncConnectivityCheck } from './runSyncIntegrationChecks';
+const mockDocuments = new Map();
+const mockOutboxEvents = [];
+let mockIdCounter = 0;
+
+jest.mock('../db/localIds', () => ({
+  createLocalId: jest.fn((prefix) => {
+    mockIdCounter += 1;
+    return `${prefix}_${mockIdCounter}`;
+  }),
+}));
+
+jest.mock('../db/documentStore', () => ({
+  getDocument: jest.fn(async (collection, id) => mockDocuments.get(`${collection}:${id}`)),
+  saveDocument: jest.fn(async (collection, id, data, options = {}) => {
+    const document = {
+      collection,
+      data,
+      groupId: options.groupId,
+      id,
+      remoteId: null,
+      serverVersion: null,
+      syncStatus: 'pending',
+    };
+
+    mockDocuments.set(`${collection}:${id}`, document);
+    mockOutboxEvents.push({
+      collection,
+      documentId: id,
+      id: `outbox_${id}`,
+      operation: 'create',
+      payload: { id },
+      status: 'pending',
+    });
+
+    return document;
+  }),
+}));
+
+jest.mock('../sync/syncOutbox', () => ({
+  getOutboxEventById: jest.fn(async (id) =>
+    mockOutboxEvents.find((event) => event.id === id) || null,
+  ),
+  getPendingOutboxEvents: jest.fn(async () =>
+    mockOutboxEvents.filter((event) => event.status === 'pending'),
+  ),
+}));
+
+jest.mock('../sync/syncStateRepository', () => ({
+  getLastSyncCursor: jest.fn(async () => '7'),
+}));
+
+jest.mock('../sync', () => ({
+  pullRemoteChanges: jest.fn(async () => ({
+    applied: [],
+    conflicts: [],
+    cursor: '7',
+    ok: true,
+    skipped: [],
+  })),
+  pushPendingChanges: jest.fn(async ({ eventIds = [], groupId }) => ({
+    accepted: [],
+    debug: {
+      backendResponseRaw: {
+        accepted: [],
+        rejected: [],
+      },
+      pushRequestPayload: {
+        events: eventIds.map((eventId) => ({ eventId, groupId })),
+        groupId,
+      },
+    },
+    ok: true,
+    rejected: [],
+    skipped: [],
+  })),
+}));
+
+import {
+  runBackendSyncConnectivityCheck,
+  runPushPullDevCheck,
+  runTwoWorkspaceIsolationDevCheck,
+} from './runSyncIntegrationChecks';
+import { pushPendingChanges } from '../sync';
 
 describe('runSyncIntegrationChecks', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDocuments.clear();
+    mockOutboxEvents.length = 0;
+    mockIdCounter = 0;
+  });
+
   test('connectivity check reports backend pull result shape', async () => {
     const fetchImpl = jest.fn(async () => ({
       ok: true,
@@ -79,5 +168,71 @@ describe('runSyncIntegrationChecks', () => {
       requestAttempted: false,
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test('push/pull dev check fails with expanded debug when backend accepts zero events', async () => {
+    const result = await runPushPullDevCheck({
+      groupId: 'phase_13_sync_dev_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'push_did_not_accept_dev_event',
+        failedStep: 'push_acceptance',
+        ok: false,
+      }),
+    );
+    expect(result.debug).toEqual(
+      expect.objectContaining({
+        expectedCollection: 'recipes',
+        expectedDocumentId: expect.stringContaining('phase_13_sync_dev_recipe'),
+        expectedEventId: expect.stringContaining('outbox_'),
+        groupId: 'phase_13_sync_dev_group',
+        outboxBeforePushExpanded: expect.arrayContaining([
+          expect.objectContaining({ operation: 'create' }),
+        ]),
+        pushAcceptedExpanded: [],
+        pushRejectedExpanded: [],
+        pushRequestPayload: expect.objectContaining({
+          groupId: 'phase_13_sync_dev_group',
+        }),
+        pushSkippedExpanded: [],
+      }),
+    );
+  });
+
+  test('workspace isolation fails when pulls return zero changes', async () => {
+    pushPendingChanges.mockImplementation(async ({ eventIds = [], groupId }) => ({
+      accepted: eventIds.map((eventId) => ({
+        eventId,
+        localId: eventId.replace('outbox_', ''),
+        remoteId: `remote_${eventId}`,
+        serverVersion: 1,
+      })),
+      ok: true,
+      rejected: [],
+      skipped: [],
+    }));
+    const client = {
+      pullChanges: jest.fn(async ({ groupId }) => ({
+        changes: [],
+        cursor: '1',
+        groupId,
+      })),
+    };
+
+    const result = await runTwoWorkspaceIsolationDevCheck({
+      client,
+      groupA: 'group_a',
+      groupB: 'group_b',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'workspace_isolation_no_changes_pulled',
+        failedStep: 'workspace_isolation_no_changes_pulled',
+        ok: false,
+      }),
+    );
   });
 });

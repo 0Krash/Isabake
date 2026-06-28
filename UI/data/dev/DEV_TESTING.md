@@ -88,6 +88,34 @@ await runTwoWorkspaceIsolationDevCheck({
 });
 ```
 
+## Sync Diagnostics Screen
+
+During development, the app can show a manual `Sync Dev` tab. It is hidden unless
+both conditions are true:
+
+- the build is running with `__DEV__ === true`
+- `.env` has `EXPO_PUBLIC_ENABLE_DEV_TOOLS='true'`
+
+Enable it locally:
+
+```sh
+EXPO_PUBLIC_ENABLE_DEV_TOOLS='true'
+```
+
+Restart Expo after changing `.env`. Open the app and tap the `Sync Dev` tab in
+the bottom navigation. The screen never runs checks on render; each check runs
+only when its button is pressed.
+
+Available buttons:
+
+- `Check backend connectivity`
+- `Run push/pull dev check`
+- `Run workspace isolation check`
+- `Run all sync dev checks`
+
+Expected success results have `"ok": true` in the formatted JSON output. Results
+are also written to the console with the `[SyncDiagnostics]` prefix.
+
 By default, mutating smoke tests are skipped. To run smoke tests that create
 dev data:
 

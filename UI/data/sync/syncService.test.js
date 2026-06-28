@@ -148,6 +148,80 @@ describe('syncService safe failures', () => {
     expect(storeLastSyncCursor).not.toHaveBeenCalled();
   });
 
+  test('pushPendingChanges can target one exact outbox event and exposes debug payload', async () => {
+    getPendingOutboxEvents.mockResolvedValue([
+      {
+        collection: 'recipes',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        documentId: 'old_recipe',
+        id: 'old_outbox',
+        operation: 'create',
+        payload: {},
+      },
+      {
+        collection: 'recipes',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        documentId: 'dev_recipe',
+        id: 'dev_outbox',
+        operation: 'create',
+        payload: {},
+      },
+    ]);
+    getDocument.mockImplementation(async (collection, id) => ({
+      collection,
+      data: {
+        name: id,
+      },
+      groupId: 'group_1',
+      id,
+      localVersion: 1,
+      remoteId: null,
+      serverVersion: null,
+      syncStatus: 'pending',
+    }));
+    const client = {
+      pushChanges: jest.fn(async () => ({
+        accepted: [
+          {
+            collection: 'recipes',
+            eventId: 'dev_outbox',
+            localId: 'dev_recipe',
+            remoteId: 'remote_dev',
+            serverVersion: 1,
+          },
+        ],
+        rejected: [],
+      })),
+    };
+
+    const result = await pushPendingChanges({
+      client,
+      eventIds: ['dev_outbox'],
+      groupId: 'group_1',
+      includeDebug: true,
+    });
+
+    expect(result.accepted).toHaveLength(1);
+    expect(result.debug.pushRequestPayload.events).toEqual([
+      expect.objectContaining({
+        documentId: 'dev_recipe',
+        eventId: 'dev_outbox',
+      }),
+    ]);
+    expect(client.pushChanges).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            documentId: 'dev_recipe',
+            eventId: 'dev_outbox',
+          }),
+        ],
+      }),
+    );
+    expect(markOutboxEventSynced).toHaveBeenCalledWith('dev_outbox');
+    expect(markOutboxEventSynced).not.toHaveBeenCalledWith('old_outbox');
+  });
+
   test('pushPendingChanges handles rejected conflict events', async () => {
     getPendingOutboxEvents.mockResolvedValue([
       {

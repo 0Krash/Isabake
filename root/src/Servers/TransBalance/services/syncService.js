@@ -67,23 +67,23 @@ const validatePushRequest = ({ deviceId, events, groupId }) => {
 
 const validateEvent = (event) => {
   if (!event || typeof event !== 'object') {
-    return 'event_required';
+    return 'invalid_event';
   }
 
   if (!event.eventId) {
-    return 'eventId_required';
+    return 'missing_eventId';
   }
 
   if (!event.collection) {
-    return 'collection_required';
+    return 'missing_collection';
   }
 
   if (!event.operation || !VALID_OPERATIONS.has(event.operation)) {
-    return 'operation_invalid';
+    return 'invalid_operation';
   }
 
   if (!event.document || typeof event.document !== 'object') {
-    return 'document_required';
+    return 'missing_document';
   }
 
   return null;

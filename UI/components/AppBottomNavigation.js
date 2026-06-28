@@ -10,8 +10,13 @@ const tabs = [
   { key: 'inventory', label: 'Inventario' },
 ];
 
-export default function AppBottomNavigation({ activeTab, onTabPress }) {
+export default function AppBottomNavigation({
+  activeTab,
+  extraTabs = [],
+  onTabPress,
+}) {
   const { colors } = useTransactionBalanceTheme();
+  const visibleTabs = [...tabs, ...extraTabs];
 
   return (
     <View
@@ -20,7 +25,7 @@ export default function AppBottomNavigation({ activeTab, onTabPress }) {
         { backgroundColor: colors.surface, borderTopColor: colors.border },
       ]}
     >
-      {tabs.map((tab) => {
+      {visibleTabs.map((tab) => {
         const isActive = tab.key === activeTab;
 
         return (

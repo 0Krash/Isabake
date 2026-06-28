@@ -28,9 +28,7 @@ const getGroupId = async (options, key = 'groupId') => {
     return options[key];
   }
 
-  const { getCurrentGroupId } = await import('../workspace/currentWorkspace');
-
-  return getCurrentGroupId();
+  return require('../workspace/currentWorkspace').getCurrentGroupId();
 };
 
 const getDevGroupId = (options, key = 'groupId') => {
@@ -46,26 +44,24 @@ const getDefaultClient = async (client) => {
     return client;
   }
 
-  const { createSyncClient } = await import('../sync/syncClient');
-
-  return createSyncClient();
+  return require('../sync/syncClient').createSyncClient();
 };
 
 const getDocumentById = async (collection, id) => {
-  const { getDocument } = await import('../db/documentStore');
+  const { getDocument } = require('../db/documentStore');
 
   return getDocument(collection, id, { includeDeleted: true });
 };
 
 const getPendingOutboxForDocument = async (documentId) => {
-  const { getPendingOutboxEvents } = await import('../sync/syncOutbox');
+  const { getPendingOutboxEvents } = require('../sync/syncOutbox');
   const events = await getPendingOutboxEvents();
 
   return events.filter((event) => event.documentId === documentId);
 };
 
 const getOutboxEventsByIds = async (eventIds) => {
-  const { getOutboxEventById } = await import('../sync/syncOutbox');
+  const { getOutboxEventById } = require('../sync/syncOutbox');
   const events = [];
 
   for (const eventId of eventIds) {
@@ -76,7 +72,7 @@ const getOutboxEventsByIds = async (eventIds) => {
 };
 
 const getCursor = async (groupId) => {
-  const { getLastSyncCursor } = await import('../sync/syncStateRepository');
+  const { getLastSyncCursor } = require('../sync/syncStateRepository');
 
   return getLastSyncCursor(groupId);
 };
@@ -87,11 +83,11 @@ const getRemoteLocalIds = (response) =>
   );
 
 const createDevRecipeDocument = async ({ groupId, nameSuffix = Date.now() }) => {
-  const { saveDocument } = await import('../db/documentStore');
-  const { createLocalId } = await import('../db/localIds');
+  const { saveDocument } = require('../db/documentStore');
+  const { createLocalId } = require('../db/localIds');
   const id = createLocalId(`${DEV_SYNC_PREFIX}_recipe`);
 
-  await saveDocument(
+  const document = await saveDocument(
     'recipes',
     id,
     {
@@ -108,8 +104,42 @@ const createDevRecipeDocument = async ({ groupId, nameSuffix = Date.now() }) => 
     },
   );
 
-  return id;
+  return {
+    document,
+    id,
+  };
 };
+
+const getCreatedEvent = (outboxEvents) =>
+  outboxEvents.find((event) => event.operation === 'create') || outboxEvents[0];
+
+const buildPushFailureDebug = ({
+  createdDocument,
+  expectedCollection = 'recipes',
+  expectedDocumentId,
+  expectedEventId,
+  groupId,
+  localDocumentAfterPush = null,
+  outboxAfterPushExpanded = [],
+  outboxBeforePushExpanded = [],
+  push = null,
+  syncStateAfterPush = null,
+}) => ({
+  backendResponseRaw: push?.debug?.backendResponseRaw || null,
+  createdDocument,
+  expectedCollection,
+  expectedDocumentId,
+  expectedEventId,
+  groupId,
+  localDocumentAfterPush,
+  outboxAfterPushExpanded,
+  outboxBeforePushExpanded,
+  pushAcceptedExpanded: push?.accepted || [],
+  pushRejectedExpanded: push?.rejected || [],
+  pushRequestPayload: push?.debug?.pushRequestPayload || null,
+  pushSkippedExpanded: push?.skipped || [],
+  syncStateAfterPush,
+});
 
 export const runBackendSyncConnectivityCheck = async (options = {}) => {
   const name = 'backendSyncConnectivity';
@@ -206,20 +236,62 @@ export const runPushPullDevCheck = async (options = {}) => {
     }
 
     const client = await getDefaultClient(options.client);
-    const localId = await createDevRecipeDocument({ groupId });
+    const { document: createdDocument, id: localId } = await createDevRecipeDocument({
+      groupId,
+    });
     const outboxBeforePush = await getPendingOutboxForDocument(localId);
-    const { pullRemoteChanges, pushPendingChanges } = await import('../sync');
+    const expectedOutboxEvent = getCreatedEvent(outboxBeforePush);
+    const expectedEventId = expectedOutboxEvent?.id || null;
+
+    if (!createdDocument || !expectedOutboxEvent) {
+      return makeResult({
+        debug: buildPushFailureDebug({
+          createdDocument,
+          expectedDocumentId: localId,
+          expectedEventId,
+          groupId,
+          outboxBeforePushExpanded: outboxBeforePush,
+        }),
+        error: 'dev_document_or_outbox_event_missing',
+        failedStep: 'dev_document_created',
+        name,
+        ok: false,
+      });
+    }
+
+    const { pullRemoteChanges, pushPendingChanges } = require('../sync');
     const push = await pushPendingChanges({
       client,
+      eventIds: [expectedEventId],
       groupId,
+      includeDebug: true,
       limit: options.limit,
     });
+    const pushAcceptedForExpectedEvent = (push.accepted || []).find(
+      (event) => event.eventId === expectedEventId,
+    );
+    const localDocumentAfterPush = await getDocumentById('recipes', localId);
+    const outboxAfterPush = await getOutboxEventsByIds([expectedEventId]);
+    const syncStateAfterPush = await getCursor(groupId);
 
-    if (!push.accepted?.length) {
+    if (!pushAcceptedForExpectedEvent) {
       return makeResult({
+        debug: buildPushFailureDebug({
+          createdDocument,
+          expectedDocumentId: localId,
+          expectedEventId,
+          groupId,
+          localDocumentAfterPush,
+          outboxAfterPushExpanded: outboxAfterPush,
+          outboxBeforePushExpanded: outboxBeforePush,
+          push,
+          syncStateAfterPush,
+        }),
         details: {
+          expectedCollection: 'recipes',
+          expectedDocumentId: localId,
+          expectedEventId,
           localId,
-          outboxBeforePush,
           push,
         },
         error: 'push_did_not_accept_dev_event',
@@ -229,8 +301,8 @@ export const runPushPullDevCheck = async (options = {}) => {
       });
     }
 
-    const documentAfterPush = await getDocumentById('recipes', localId);
-    const acceptedEventIds = push.accepted.map((event) => event.eventId);
+    const documentAfterPush = localDocumentAfterPush;
+    const acceptedEventIds = [expectedEventId];
     const acceptedOutboxEvents = await getOutboxEventsByIds(acceptedEventIds);
     const acceptedEventsSynced = acceptedOutboxEvents.every(
       (event) => event?.status === 'done',
@@ -242,10 +314,17 @@ export const runPushPullDevCheck = async (options = {}) => {
       !acceptedEventsSynced
     ) {
       return makeResult({
-        debug: {
-          acceptedOutboxEvents,
-          documentAfterPush,
-        },
+        debug: buildPushFailureDebug({
+          createdDocument,
+          expectedDocumentId: localId,
+          expectedEventId,
+          groupId,
+          localDocumentAfterPush: documentAfterPush,
+          outboxAfterPushExpanded: acceptedOutboxEvents,
+          outboxBeforePushExpanded: outboxBeforePush,
+          push,
+          syncStateAfterPush,
+        }),
         details: {
           localId,
           push,
@@ -264,15 +343,30 @@ export const runPushPullDevCheck = async (options = {}) => {
     });
     const pendingAfterPull = await getPendingOutboxForDocument(localId);
     const cursor = await getCursor(groupId);
+    const pullDidNotCreateDuplicateOutbox =
+      pendingAfterPull.length <= pendingBeforePull.length;
 
     return makeResult({
+      debug: buildPushFailureDebug({
+        createdDocument,
+        expectedDocumentId: localId,
+        expectedEventId,
+        groupId,
+        localDocumentAfterPush: documentAfterPush,
+        outboxAfterPushExpanded: acceptedOutboxEvents,
+        outboxBeforePushExpanded: outboxBeforePush,
+        push,
+        syncStateAfterPush,
+      }),
       details: {
         acceptedEventIds,
         acceptedEventsSynced,
         cursor,
+        expectedEventId,
         localId,
         pendingAfterPullCount: pendingAfterPull.length,
         pendingBeforePullCount: pendingBeforePull.length,
+        pullDidNotCreateDuplicateOutbox,
         pull,
         push,
         remoteId: documentAfterPush.remoteId,
@@ -283,7 +377,7 @@ export const runPushPullDevCheck = async (options = {}) => {
         push.ok &&
         pull.ok &&
         Boolean(cursor) &&
-        pendingAfterPull.length <= pendingBeforePull.length,
+        pullDidNotCreateDuplicateOutbox,
     });
   } catch (error) {
     return makeResult({
@@ -314,25 +408,77 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
     }
 
     const client = await getDefaultClient(options.client);
-    const localIdA = await createDevRecipeDocument({
+    const { id: localIdA } = await createDevRecipeDocument({
       groupId: groupA,
       nameSuffix: `group_a_${Date.now()}`,
     });
-    const localIdB = await createDevRecipeDocument({
+    const { id: localIdB } = await createDevRecipeDocument({
       groupId: groupB,
       nameSuffix: `group_b_${Date.now()}`,
     });
-    const { pushPendingChanges } = await import('../sync');
+    const outboxA = await getPendingOutboxForDocument(localIdA);
+    const outboxB = await getPendingOutboxForDocument(localIdB);
+    const eventA = getCreatedEvent(outboxA);
+    const eventB = getCreatedEvent(outboxB);
+
+    if (!eventA || !eventB) {
+      return makeResult({
+        debug: {
+          groupA,
+          groupB,
+          localIdA,
+          localIdB,
+          outboxA,
+          outboxB,
+        },
+        error: 'workspace_isolation_outbox_event_missing',
+        failedStep: 'workspace_isolation_outbox',
+        name,
+        ok: false,
+      });
+    }
+
+    const { pullRemoteChanges, pushPendingChanges } = require('../sync');
     const pushA = await pushPendingChanges({
       client,
+      eventIds: [eventA.id],
       groupId: groupA,
+      includeDebug: true,
       limit: options.limit,
     });
     const pushB = await pushPendingChanges({
       client,
+      eventIds: [eventB.id],
       groupId: groupB,
+      includeDebug: true,
       limit: options.limit,
     });
+    const acceptedA = (pushA.accepted || []).some(
+      (event) => event.eventId === eventA.id,
+    );
+    const acceptedB = (pushB.accepted || []).some(
+      (event) => event.eventId === eventB.id,
+    );
+
+    if (!acceptedA || !acceptedB) {
+      return makeResult({
+        debug: {
+          eventA,
+          eventB,
+          groupA,
+          groupB,
+          localIdA,
+          localIdB,
+          pushA,
+          pushB,
+        },
+        error: 'workspace_isolation_push_not_accepted',
+        failedStep: 'workspace_isolation_push_acceptance',
+        name,
+        ok: false,
+      });
+    }
+
     const pullA = await client.pullChanges({
       cursor: '0',
       groupId: groupA,
@@ -345,13 +491,38 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
     const changesB = Array.isArray(pullB.changes) ? pullB.changes : [];
     const localIdsA = getRemoteLocalIds(pullA);
     const localIdsB = getRemoteLocalIds(pullB);
+    const groupAOwnDataPulled = localIdsA.includes(localIdA);
+    const groupBOwnDataPulled = localIdsB.includes(localIdB);
+
+    if (!changesA.length || !changesB.length) {
+      return makeResult({
+        debug: {
+          changesA,
+          changesB,
+          eventA,
+          eventB,
+          groupA,
+          groupB,
+          localIdA,
+          localIdB,
+          pullA,
+          pullB,
+          pushA,
+          pushB,
+        },
+        error: 'workspace_isolation_no_changes_pulled',
+        failedStep: 'workspace_isolation_no_changes_pulled',
+        name,
+        ok: false,
+      });
+    }
+
     const hasGroupBLeak = changesA.some(
       (change) => change.document?.groupId && change.document.groupId !== groupA,
     );
     const hasGroupALeak = changesB.some(
       (change) => change.document?.groupId && change.document.groupId !== groupB,
     );
-    const { pullRemoteChanges } = await import('../sync');
     const mismatchedClientResult = await pullRemoteChanges({
       client: {
         pullChanges: async () => ({
@@ -380,7 +551,9 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
         clientIgnoredMismatchedGroup,
         groupA,
         groupB,
+        groupAOwnDataPulled,
         groupAReceivedGroupBLocalId: localIdsA.includes(localIdB),
+        groupBOwnDataPulled,
         groupBReceivedGroupALocalId: localIdsB.includes(localIdA),
         localIdA,
         localIdB,
@@ -395,6 +568,8 @@ export const runTwoWorkspaceIsolationDevCheck = async (options = {}) => {
         pushB.ok &&
         !hasGroupBLeak &&
         !hasGroupALeak &&
+        groupAOwnDataPulled &&
+        groupBOwnDataPulled &&
         !localIdsA.includes(localIdB) &&
         !localIdsB.includes(localIdA) &&
         clientIgnoredMismatchedGroup,
