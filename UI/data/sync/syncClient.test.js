@@ -89,6 +89,57 @@ describe('syncClient', () => {
     );
   });
 
+  test('sends auth headers when authSession is provided', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          accepted: [],
+          cursor: '0',
+          rejected: [],
+        }),
+    });
+    const client = createSyncClient({
+      authSession: {
+        authToken: 'token_user_1',
+        email: 'user@example.test',
+        userId: 'user_1',
+      },
+      baseUrl: 'http://sync.example.test',
+    });
+
+    await client.pushChanges({
+      deviceId: 'device_1',
+      events: [],
+      groupId: 'group_1',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://sync.example.test/sync/push',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token_user_1',
+          'x-dev-user-email': 'user@example.test',
+          'x-dev-user-id': 'user_1',
+        }),
+      }),
+    );
+  });
+
+  test('fails safely when auth is required and missing', async () => {
+    const client = createSyncClient({
+      baseUrl: 'http://sync.example.test',
+      requireAuth: true,
+    });
+
+    await expect(
+      client.pullChanges({
+        groupId: 'group_1',
+      }),
+    ).rejects.toThrow('Sesion auth requerida para sync remoto');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   test('consumes backend push response shape', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,

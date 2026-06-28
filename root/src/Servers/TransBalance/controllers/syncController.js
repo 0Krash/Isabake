@@ -1,7 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { SyncService } = require('../services/syncService');
+const { WorkspaceService } = require('../services/workspaceService');
 
 const syncService = new SyncService();
+const workspaceService = new WorkspaceService();
 
 const getDeviceId = (req) =>
   req.body?.deviceId || req.get('x-device-id') || req.get('x-dev-user-id');
@@ -17,8 +19,6 @@ exports.pushChanges = asyncHandler(async (req, res) => {
   const groupId = req.body?.groupId;
   const deviceId = getDeviceId(req);
 
-  // TODO: replace this dev boundary with real auth/group membership checks.
-  // Every operation below is still scoped by groupId to avoid cross-group sync.
   if (!groupId) {
     return sendBadRequest(res, 'groupId_required');
   }
@@ -30,6 +30,12 @@ exports.pushChanges = asyncHandler(async (req, res) => {
   if (!Array.isArray(req.body?.events)) {
     return sendBadRequest(res, 'events_array_required');
   }
+
+  await workspaceService.assertCanSyncWorkspace({
+    action: 'push',
+    groupId,
+    userId: req.user?.userId,
+  });
 
   const result = await syncService.pushChanges({
     deviceId,
@@ -43,11 +49,15 @@ exports.pushChanges = asyncHandler(async (req, res) => {
 exports.pullChanges = asyncHandler(async (req, res) => {
   const groupId = req.query?.groupId;
 
-  // TODO: replace this dev boundary with real auth/group membership checks.
-  // Pulls are restricted to the requested groupId only.
   if (!groupId) {
     return sendBadRequest(res, 'groupId_required');
   }
+
+  await workspaceService.assertCanSyncWorkspace({
+    action: 'pull',
+    groupId,
+    userId: req.user?.userId,
+  });
 
   const result = await syncService.pullChanges({
     cursor: req.query?.cursor,

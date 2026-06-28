@@ -76,8 +76,98 @@ jest.mock('../../models/syncEventModel', () => {
   };
 });
 
+jest.mock('../../models/userModel', () => {
+  const store = [];
+
+  return {
+    __store: store,
+    findOne: jest.fn(async ({ userId }) =>
+      store.find((user) => user.userId === userId && !user.deletedAt) || null,
+    ),
+    findOneAndUpdate: jest.fn(async (query, update) => {
+      const index = store.findIndex((user) => user.userId === query.userId);
+      const user = {
+        createdAt: index >= 0 ? store[index].createdAt : '2026-01-01T00:00:00.000Z',
+        deletedAt: null,
+        updatedAt: '2026-01-01T00:00:01.000Z',
+        ...update,
+      };
+
+      if (index >= 0) {
+        store[index] = user;
+      } else {
+        store.push(user);
+      }
+
+      return user;
+    }),
+  };
+});
+
+jest.mock('../../models/workspaceModel', () => {
+  const store = [];
+
+  return {
+    __store: store,
+    create: jest.fn(async (workspace) => {
+      store.push(workspace);
+      return workspace;
+    }),
+    findOne: jest.fn(async (query) =>
+      store.find(
+        (workspace) =>
+          (!query.groupId || workspace.groupId === query.groupId) &&
+          (!query.workspaceId || workspace.workspaceId === query.workspaceId) &&
+          !workspace.deletedAt,
+      ) || null,
+    ),
+  };
+});
+
+jest.mock('../../models/workspaceMembershipModel', () => {
+  const store = [];
+
+  return {
+    __store: store,
+    find: jest.fn((query) => ({
+      sort: jest.fn(async () =>
+        store.filter(
+          (membership) =>
+            (!query.groupId || membership.groupId === query.groupId) &&
+            (!query.userId || membership.userId === query.userId) &&
+            (!query.status || membership.status === query.status),
+        ),
+      ),
+    })),
+    findOne: jest.fn(async ({ groupId, userId }) =>
+      store.find(
+        (membership) =>
+          membership.groupId === groupId && membership.userId === userId,
+      ) || null,
+    ),
+    findOneAndUpdate: jest.fn(async (query, update) => {
+      const index = store.findIndex(
+        (membership) =>
+          membership.groupId === query.groupId &&
+          membership.userId === query.userId,
+      );
+
+      if (index >= 0) {
+        store[index] = update;
+      } else {
+        store.push(update);
+      }
+
+      return update;
+    }),
+  };
+});
+
 const SyncDocument = require('../../models/syncDocumentModel');
 const SyncEvent = require('../../models/syncEventModel');
+const User = require('../../models/userModel');
+const Workspace = require('../../models/workspaceModel');
+const WorkspaceMembership = require('../../models/workspaceMembershipModel');
 const app = require('../../app');
 
 const eventPayload = (eventId = 'event_1') => ({
@@ -96,11 +186,29 @@ describe('sync routes contract', () => {
     jest.clearAllMocks();
     SyncDocument.__store.length = 0;
     SyncEvent.__store.length = 0;
+    User.__store.length = 0;
+    Workspace.__store.length = 0;
+    WorkspaceMembership.__store.length = 0;
+    Workspace.__store.push({
+      groupId: 'group_a',
+      name: 'Workspace A',
+      ownerUserId: 'user_owner',
+      workspaceId: 'group_a',
+    });
+    WorkspaceMembership.__store.push({
+      groupId: 'group_a',
+      role: 'owner',
+      status: 'active',
+      userId: 'user_owner',
+      workspaceId: 'group_a',
+    });
   });
 
   test('POST /sync/push response shape matches client contract', async () => {
     const response = await request(app)
       .post('/sync/push')
+      .set('authorization', 'Bearer token_owner')
+      .set('x-dev-user-id', 'user_owner')
       .send({
         deviceId: 'device_1',
         events: [eventPayload()],
@@ -127,13 +235,18 @@ describe('sync routes contract', () => {
   test('GET /sync/pull response shape matches client contract', async () => {
     await request(app)
       .post('/sync/push')
+      .set('authorization', 'Bearer token_owner')
+      .set('x-dev-user-id', 'user_owner')
       .send({
         deviceId: 'device_1',
         events: [eventPayload()],
         groupId: 'group_a',
       });
 
-    const response = await request(app).get('/sync/pull?groupId=group_a');
+    const response = await request(app)
+      .get('/sync/pull?groupId=group_a')
+      .set('authorization', 'Bearer token_owner')
+      .set('x-dev-user-id', 'user_owner');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -160,6 +273,8 @@ describe('sync routes contract', () => {
   test('validates push request payload', async () => {
     const response = await request(app)
       .post('/sync/push')
+      .set('authorization', 'Bearer token_owner')
+      .set('x-dev-user-id', 'user_owner')
       .send({
         deviceId: 'device_1',
         groupId: 'group_a',
@@ -170,5 +285,36 @@ describe('sync routes contract', () => {
       message: 'events_array_required',
       status: 'failed',
     });
+  });
+
+  test('rejects unauthenticated push and pull', async () => {
+    const pushResponse = await request(app)
+      .post('/sync/push')
+      .send({
+        deviceId: 'device_1',
+        events: [],
+        groupId: 'group_a',
+      });
+    const pullResponse = await request(app).get('/sync/pull?groupId=group_a');
+
+    expect(pushResponse.status).toBe(401);
+    expect(pushResponse.body.message).toBe('auth_required');
+    expect(pullResponse.status).toBe(401);
+    expect(pullResponse.body.message).toBe('auth_required');
+  });
+
+  test('rejects authenticated non-member push', async () => {
+    const response = await request(app)
+      .post('/sync/push')
+      .set('authorization', 'Bearer token_other')
+      .set('x-dev-user-id', 'user_other')
+      .send({
+        deviceId: 'device_1',
+        events: [eventPayload()],
+        groupId: 'group_a',
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toBe('workspace_membership_required');
   });
 });

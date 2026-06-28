@@ -50,6 +50,7 @@ import {
   assignUngroupedLocalDataToCurrentWorkspace,
   getCurrentGroupId,
 } from './currentWorkspace';
+import { getCurrentWorkspace, setCurrentWorkspace } from './workspaceRepository';
 
 describe('currentWorkspace', () => {
   beforeEach(() => {
@@ -115,5 +116,30 @@ describe('currentWorkspace', () => {
         id: 'inventory_2',
       },
     ]);
+  });
+
+  test('stores remote workspace metadata as current workspace', async () => {
+    await setCurrentWorkspace({
+      groupId: 'remote_group_1',
+      isRemote: true,
+      name: 'Workspace remoto',
+      ownerUserId: 'user_owner',
+      remoteGroupId: 'remote_group_1',
+      syncStatus: 'remote',
+      workspaceId: 'remote_group_1',
+      workspaceRole: 'admin',
+    });
+
+    await expect(getCurrentGroupId()).resolves.toBe('remote_group_1');
+    await expect(getCurrentWorkspace()).resolves.toEqual(
+      expect.objectContaining({
+        groupId: 'remote_group_1',
+        isRemote: true,
+        ownerUserId: 'user_owner',
+        remoteGroupId: 'remote_group_1',
+        syncStatus: 'remote',
+        workspaceRole: 'admin',
+      }),
+    );
   });
 });

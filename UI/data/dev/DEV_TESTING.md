@@ -51,6 +51,8 @@ These checks use Expo SQLite and must run inside an Expo runtime:
 - `runBackendSyncConnectivityCheck()`
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
+- `runAuthWorkspaceDevCheck()`
+- `runMembershipSyncAccessDevCheck()`
 
 Import them through the central runner:
 
@@ -63,7 +65,9 @@ import {
   runSyncDevChecks,
 } from './data/dev/runDevChecks';
 import {
+  runAuthWorkspaceDevCheck,
   runBackendSyncConnectivityCheck,
+  runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './data/dev/runSyncIntegrationChecks';
@@ -80,8 +84,16 @@ await runAllDevChecks();
 Manual sync integration checks:
 
 ```js
-await runBackendSyncConnectivityCheck({ groupId: 'your_group_id' });
-await runPushPullDevCheck({ groupId: 'your_group_id' });
+await runAuthWorkspaceDevCheck({ groupId: 'your_group_id' });
+await runMembershipSyncAccessDevCheck({ groupId: 'your_group_id' });
+await runBackendSyncConnectivityCheck({
+  authSession: { authToken: 'dev-token-owner', userId: 'owner' },
+  groupId: 'your_group_id',
+});
+await runPushPullDevCheck({
+  authSession: { authToken: 'dev-token-owner', userId: 'owner' },
+  groupId: 'your_group_id',
+});
 await runTwoWorkspaceIsolationDevCheck({
   groupA: 'your_group_id',
   groupB: 'other_dev_group_id',
@@ -109,6 +121,8 @@ only when its button is pressed.
 Available buttons:
 
 - `Check backend connectivity`
+- `Run auth/workspace dev check`
+- `Run membership sync access check`
 - `Run push/pull dev check`
 - `Run workspace isolation check`
 - `Run all sync dev checks`
@@ -139,6 +153,8 @@ Mutating checks, skipped unless `includeMutatingChecks: true`:
 
 Mutating manual sync integration checks:
 
+- `runAuthWorkspaceDevCheck()`
+- `runMembershipSyncAccessDevCheck()`
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
 
@@ -184,8 +200,27 @@ npm start
 
 The mobile sync client calls:
 
+- `POST /workspaces`
+- `GET /workspaces`
+- `GET /workspaces/:groupId`
+- `GET /workspaces/:groupId/members`
+- `POST /workspaces/:groupId/members`
 - `POST /sync/push`
 - `GET /sync/pull?groupId=...&cursor=...`
+
+Phase 14 sync endpoints require temporary dev auth headers. Anonymous push/pull
+is rejected.
+
+Temporary dev auth headers:
+
+```sh
+Authorization: Bearer dev-token-owner
+x-dev-user-id: owner
+x-dev-user-email: owner@example.test
+```
+
+The bearer token is not production auth. It exists only so sync can enforce
+workspace membership while real login/session work is still pending.
 
 Configure the mobile sync base URL with `URL_Sync` in `.env`. The value should be
 the backend host root, not `/sync`, because the client appends `/sync/push` and
@@ -230,3 +265,70 @@ npm run check:sync-config
 
 This check fails when `URL_Sync` is missing, invalid, or still uses unsupported
 interpolation.
+
+## Phase 14 Auth And Workspace Examples
+
+Create or upsert a dev user implicitly by sending auth headers. No separate
+signup is required in Phase 14.
+
+Create workspace:
+
+```sh
+curl -X POST "$URL_Sync/workspaces" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner" \
+  -H "x-dev-user-email: owner@example.test" \
+  -H "Content-Type: application/json" \
+  -d '{"groupId":"demo_group","name":"Demo workspace"}'
+```
+
+List current user's workspaces:
+
+```sh
+curl "$URL_Sync/workspaces" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner"
+```
+
+Add a member:
+
+```sh
+curl -X POST "$URL_Sync/workspaces/demo_group/members" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"member","role":"member","status":"active"}'
+```
+
+Authenticated push:
+
+```sh
+curl -X POST "$URL_Sync/sync/push" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner" \
+  -H "Content-Type: application/json" \
+  -d '{"groupId":"demo_group","deviceId":"device_1","events":[]}'
+```
+
+Authenticated pull:
+
+```sh
+curl "$URL_Sync/sync/pull?groupId=demo_group&cursor=0" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner"
+```
+
+Role rules:
+
+- `owner`, `admin`, and `member` can push and pull.
+- `viewer` can pull but cannot push.
+- `invited`, `removed`, and non-members cannot push or pull.
+- `owner` and `admin` can add members.
+
+Temporary limitations before production:
+
+- Dev auth headers are not secure production authentication.
+- There is no password login UI or token refresh.
+- Workspace invitations do not send email.
+- No WebSockets/realtime sync.
+- Sync is still manual; it does not run on startup or every local write.

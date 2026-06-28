@@ -6,6 +6,12 @@ export {
   setCurrentWorkspace,
 } from './workspaceRepository';
 export {
+  createRemoteWorkspace,
+  listRemoteWorkspaces,
+  selectRemoteWorkspace,
+} from './remoteWorkspaceService';
+export { createWorkspaceApiClient } from './workspaceApiClient';
+export {
   assignUngroupedLocalDataToCurrentWorkspace,
   ensureDefaultWorkspace,
   getCurrentGroupId,

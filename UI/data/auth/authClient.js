@@ -1,18 +1,12 @@
-import { getSyncBaseUrl } from './syncConfig';
-import { DEFAULT_SYNC_ENDPOINTS } from './syncTypes';
-import { getAuthHeaders } from '../auth/authSession';
+import { getSyncBaseUrl } from '../sync/syncConfig';
+import { getAuthHeaders } from './authSession';
 
 const parseJsonResponse = async (response) => {
   const text = await response.text();
-
-  if (!text) {
-    return {};
-  }
-
-  return JSON.parse(text);
+  return text ? JSON.parse(text) : {};
 };
 
-const requestJson = async (path, options = {}) => {
+export const requestAuthenticatedJson = async (path, options = {}) => {
   const baseUrl = getSyncBaseUrl(options);
 
   if (!baseUrl) {
@@ -23,7 +17,7 @@ const requestJson = async (path, options = {}) => {
     options.authHeaders ||
     getAuthHeaders(options.authSession || (await options.getAuthSession?.()));
 
-  if (options.requireAuth === true && !authHeaders.Authorization) {
+  if (options.requireAuth !== false && !authHeaders.Authorization) {
     throw new Error('Sesion auth requerida para sync remoto');
   }
 
@@ -48,26 +42,6 @@ const requestJson = async (path, options = {}) => {
   return payload;
 };
 
-export const createSyncClient = (options = {}) => ({
-  pullChanges: ({ cursor, groupId }) => {
-    const query = new URLSearchParams({
-      groupId,
-      ...(cursor ? { cursor } : {}),
-    }).toString();
-
-    return requestJson(`${DEFAULT_SYNC_ENDPOINTS.PULL}?${query}`, {
-      ...options,
-      method: 'GET',
-    });
-  },
-  pushChanges: (payload) =>
-    requestJson(DEFAULT_SYNC_ENDPOINTS.PUSH, {
-      ...options,
-      body: payload,
-      method: 'POST',
-    }),
-});
-
-const defaultSyncClient = createSyncClient();
-
-export default defaultSyncClient;
+export default {
+  requestAuthenticatedJson,
+};

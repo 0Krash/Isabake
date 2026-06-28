@@ -17,10 +17,14 @@ const documentToWorkspace = (document) =>
         ...document.data,
         createdAt: document.createdAt,
         groupId: document.groupId || document.data?.groupId,
+        isRemote: Boolean(document.data?.isRemote),
         ownerDeviceId: document.deviceId || document.data?.ownerDeviceId,
+        ownerUserId: document.data?.ownerUserId || null,
+        remoteGroupId: document.data?.remoteGroupId || null,
         syncStatus: document.syncStatus,
         updatedAt: document.updatedAt,
         workspaceId: document.id,
+        workspaceRole: document.data?.workspaceRole || null,
       }
     : null;
 
@@ -63,9 +67,13 @@ export const setCurrentWorkspace = async (workspace, options = {}) => {
     workspaceId,
     {
       groupId,
+      isRemote: Boolean(workspace.isRemote),
       name: workspace.name || 'Workspace local',
       ownerDeviceId,
+      ownerUserId: workspace.ownerUserId || null,
+      remoteGroupId: workspace.remoteGroupId || null,
       workspaceId,
+      workspaceRole: workspace.workspaceRole || null,
     },
     {
       createdAt: workspace.createdAt || timestamp,

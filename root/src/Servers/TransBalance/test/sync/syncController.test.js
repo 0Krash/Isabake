@@ -1,10 +1,17 @@
 const mockPushChanges = jest.fn();
 const mockPullChanges = jest.fn();
+const mockAssertCanSyncWorkspace = jest.fn();
 
 jest.mock('../../services/syncService', () => ({
   SyncService: jest.fn(() => ({
     pullChanges: mockPullChanges,
     pushChanges: mockPushChanges,
+  })),
+}));
+
+jest.mock('../../services/workspaceService', () => ({
+  WorkspaceService: jest.fn(() => ({
+    assertCanSyncWorkspace: mockAssertCanSyncWorkspace,
   })),
 }));
 
@@ -36,6 +43,9 @@ const invoke = (handler, req, res) =>
 describe('syncController direct handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAssertCanSyncWorkspace.mockResolvedValue({
+      role: 'member',
+    });
   });
 
   test('pushChanges validates events array without opening an HTTP listener', async () => {
@@ -49,6 +59,9 @@ describe('syncController direct handlers', () => {
           groupId: 'group_1',
         },
         get: jest.fn(),
+        user: {
+          userId: 'user_1',
+        },
       },
       res,
     );
@@ -78,10 +91,18 @@ describe('syncController direct handlers', () => {
           groupId: 'group_1',
         },
         get: jest.fn(),
+        user: {
+          userId: 'user_1',
+        },
       },
       res,
     );
 
+    expect(mockAssertCanSyncWorkspace).toHaveBeenCalledWith({
+      action: 'push',
+      groupId: 'group_1',
+      userId: 'user_1',
+    });
     expect(mockPushChanges).toHaveBeenCalledWith({
       deviceId: 'device_1',
       events: [],
@@ -110,10 +131,18 @@ describe('syncController direct handlers', () => {
           cursor: '4',
           groupId: 'group_1',
         },
+        user: {
+          userId: 'user_1',
+        },
       },
       res,
     );
 
+    expect(mockAssertCanSyncWorkspace).toHaveBeenCalledWith({
+      action: 'pull',
+      groupId: 'group_1',
+      userId: 'user_1',
+    });
     expect(mockPullChanges).toHaveBeenCalledWith({
       cursor: '4',
       groupId: 'group_1',

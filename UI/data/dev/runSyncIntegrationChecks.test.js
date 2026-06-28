@@ -76,7 +76,9 @@ jest.mock('../sync', () => ({
 }));
 
 import {
+  runAuthWorkspaceDevCheck,
   runBackendSyncConnectivityCheck,
+  runMembershipSyncAccessDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
@@ -233,6 +235,175 @@ describe('runSyncIntegrationChecks', () => {
         failedStep: 'workspace_isolation_no_changes_pulled',
         ok: false,
       }),
+    );
+  });
+
+  test('auth/workspace dev check creates workspace and member through API', async () => {
+    const fetchImpl = jest.fn(async (url) => {
+      if (url.endsWith('/workspaces') && fetchImpl.mock.calls.length === 1) {
+        return {
+          ok: true,
+          status: 201,
+          text: async () =>
+            JSON.stringify({
+              status: 'success',
+              workspace: {
+                groupId: 'phase_14_group',
+                name: 'Auth workspace',
+                ownerUserId: 'phase_14_auth_dev_owner',
+                workspaceId: 'phase_14_group',
+              },
+            }),
+        };
+      }
+
+      if (url.endsWith('/workspaces/phase_14_group/members')) {
+        return {
+          ok: true,
+          status: 201,
+          text: async () =>
+            JSON.stringify({
+              membership: {
+                groupId: 'phase_14_group',
+                role: 'member',
+                status: 'active',
+                userId: 'phase_14_auth_dev_member',
+              },
+              status: 'success',
+            }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            status: 'success',
+            workspaces: [
+              {
+                groupId: 'phase_14_group',
+              },
+            ],
+          }),
+      };
+    });
+
+    const result = await runAuthWorkspaceDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_14_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'authWorkspaceDev',
+        ok: true,
+      }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://sync.example.test/workspaces',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: expect.stringContaining('Bearer '),
+          'x-dev-user-id': 'phase_14_auth_dev_owner',
+        }),
+      }),
+    );
+  });
+
+  test('membership sync access check validates viewer and non-member failures', async () => {
+    pushPendingChanges.mockImplementation(async ({ eventIds = [] }) => ({
+      accepted: eventIds.map((eventId) => ({
+        eventId,
+        localId: eventId.replace('outbox_', ''),
+        remoteId: `remote_${eventId}`,
+        serverVersion: 1,
+      })),
+      ok: true,
+      rejected: [],
+      skipped: [],
+    }));
+    const fetchImpl = jest.fn(async (url, request) => {
+      const headers = request.headers || {};
+      const userId = headers['x-dev-user-id'];
+
+      if (url.includes('/workspaces')) {
+        return {
+          ok: true,
+          status: request.method === 'POST' ? 201 : 200,
+          text: async () =>
+            JSON.stringify({
+              membership: {
+                role: 'member',
+              },
+              status: 'success',
+              workspace: {
+                groupId: 'phase_14_group',
+                workspaceId: 'phase_14_group',
+              },
+            }),
+        };
+      }
+
+      if (url.includes('/sync/pull')) {
+        if (userId.includes('non_member')) {
+          return {
+            ok: false,
+            status: 403,
+            text: async () =>
+              JSON.stringify({ message: 'workspace_membership_required' }),
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              changes: [],
+              cursor: '1',
+              groupId: 'phase_14_group',
+            }),
+        };
+      }
+
+      if (url.includes('/sync/push') && userId.includes('viewer')) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () =>
+            JSON.stringify({ message: 'workspace_role_cannot_sync' }),
+        };
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            accepted: [],
+            cursor: '1',
+            rejected: [],
+          }),
+      };
+    });
+
+    const result = await runMembershipSyncAccessDevCheck({
+      baseUrl: 'http://sync.example.test',
+      fetchImpl,
+      groupId: 'phase_14_group',
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        name: 'membershipSyncAccessDev',
+        ok: true,
+      }),
+    );
+    expect(result.details.viewerPushError).toBe('workspace_role_cannot_sync');
+    expect(result.details.nonMemberPullError).toBe(
+      'workspace_membership_required',
     );
   });
 });
