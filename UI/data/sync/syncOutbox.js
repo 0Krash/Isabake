@@ -61,6 +61,27 @@ export const getPendingOutboxEvents = async (options = {}) => {
   return events.map(parseOutboxEvent);
 };
 
+export const getPendingOutboxEventsForDocument = async (
+  collection,
+  documentId,
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+  const events = await db.getAllAsync(
+    `
+      SELECT *
+      FROM sync_outbox
+      WHERE status = 'pending'
+        AND collection = ?
+        AND documentId = ?
+      ORDER BY createdAt ASC;
+    `,
+    [collection, documentId],
+  );
+
+  return events.map(parseOutboxEvent);
+};
+
 export const getOutboxEventById = async (id, options = {}) => {
   const db = options.db || (await initDatabase());
   const event = await db.getFirstAsync(
@@ -209,6 +230,30 @@ export const markOutboxEventConflict = async (id, conflict, options = {}) => {
       WHERE id = ?;
     `,
     [serializePayload(conflict), id],
+  );
+};
+
+export const markOutboxEventResolved = async (
+  id,
+  resolution = {},
+  options = {},
+) => {
+  const db = options.db || (await initDatabase());
+
+  await db.runAsync(
+    `
+      UPDATE sync_outbox
+      SET status = 'done',
+          lastError = ?
+      WHERE id = ?;
+    `,
+    [
+      serializePayload({
+        ...resolution,
+        resolvedAt: resolution.resolvedAt || nowIso(),
+      }),
+      id,
+    ],
   );
 };
 

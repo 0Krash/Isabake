@@ -88,6 +88,7 @@ describe('syncReadinessCheck', () => {
     expect(result.readyToSyncCount).toBe(1);
     expect(result.readyToSyncByCollection).toEqual({ recipes: 1 });
     expect(result.conflictDocumentCount).toBe(1);
+    expect(result.resolvableConflictCount).toBe(1);
     expect(result.conflictDocumentsByCollection).toEqual({ recipes: 1 });
     expect(result.conflictOutboxCount).toBe(1);
     expect(result.conflictOutboxByCollection).toEqual({ recipes: 1 });

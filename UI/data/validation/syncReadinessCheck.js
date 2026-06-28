@@ -164,6 +164,7 @@ export const runSyncReadinessCheck = async () => {
     })),
     readyToSyncByCollection: summarizeByCollection(readyToSyncDocuments),
     readyToSyncCount: readyToSyncDocuments.length,
+    resolvableConflictCount: documentsBySyncStatus.conflict || 0,
     syncDocumentsByStatus: documentsBySyncStatus,
     syncProblemDocuments: syncProblemDocuments.map(summarizeDocument),
     warningCount: warnings.length,

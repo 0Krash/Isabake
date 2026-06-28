@@ -1425,14 +1425,303 @@ export const runPullOverPendingConflictDevCheck = async (options = {}) => {
   }
 };
 
+const getLatestConflict = async () => {
+  const { getConflictSummary } = require('../sync/conflictService');
+  const summary = await getConflictSummary();
+
+  return {
+    conflict: summary.documents[0] || null,
+    summary,
+  };
+};
+
+export const runConflictSummaryDevCheck = async () => {
+  const name = 'conflictSummaryDev';
+
+  try {
+    const { getConflictSummary } = require('../sync/conflictService');
+    const summary = await getConflictSummary();
+
+    return makeResult({
+      details: summary,
+      name,
+      ok: true,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runListConflictsDevCheck = async () => {
+  const name = 'listConflictsDev';
+
+  try {
+    const { getConflictDocuments } = require('../sync/conflictService');
+    const documents = await getConflictDocuments();
+
+    return makeResult({
+      details: {
+        count: documents.length,
+        documents,
+      },
+      name,
+      ok: true,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runResolveLatestConflictPreferRemoteDevCheck = async () => {
+  const name = 'resolveLatestConflictPreferRemoteDev';
+
+  try {
+    const { getConflictDetails, resolveConflictPreferRemote } = require(
+      '../sync/conflictService',
+    );
+    const { conflict, summary } = await getLatestConflict();
+
+    if (!conflict) {
+      return makeResult({
+        details: summary,
+        error: 'no_conflict_available',
+        failedStep: 'find_latest_conflict',
+        name,
+        ok: false,
+      });
+    }
+
+    const before = await getConflictDetails({
+      collection: conflict.collection,
+      documentId: conflict.localId,
+    });
+    const resolution = await resolveConflictPreferRemote({
+      collection: conflict.collection,
+      documentId: conflict.localId,
+    });
+    const after = await getDocumentById(conflict.collection, conflict.localId);
+
+    return makeResult({
+      details: {
+        after,
+        before,
+        conflict,
+        resolution,
+      },
+      name,
+      ok: after?.syncStatus === 'synced',
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runResolveLatestConflictPreferLocalDevCheck = async () => {
+  const name = 'resolveLatestConflictPreferLocalDev';
+
+  try {
+    const { getConflictDetails, resolveConflictPreferLocal } = require(
+      '../sync/conflictService',
+    );
+    const { conflict, summary } = await getLatestConflict();
+
+    if (!conflict) {
+      return makeResult({
+        details: summary,
+        error: 'no_conflict_available',
+        failedStep: 'find_latest_conflict',
+        name,
+        ok: false,
+      });
+    }
+
+    const before = await getConflictDetails({
+      collection: conflict.collection,
+      documentId: conflict.localId,
+    });
+    const resolution = await resolveConflictPreferLocal({
+      collection: conflict.collection,
+      documentId: conflict.localId,
+    });
+    const after = await getDocumentById(conflict.collection, conflict.localId);
+
+    return makeResult({
+      details: {
+        after,
+        before,
+        conflict,
+        resolution,
+      },
+      name,
+      ok: after?.syncStatus === 'pending',
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runConflictResolutionDevCheck = async (options = {}) => {
+  const name = 'conflictResolutionDev';
+
+  try {
+    const { getConflictSummary, resolveConflictPreferRemote } = require(
+      '../sync/conflictService',
+    );
+    const conflictCheck = await runConflictSimulationDevCheck(options);
+
+    if (!conflictCheck.ok) {
+      return makeResult({
+        details: {
+          conflictCheck,
+        },
+        error: 'conflict_creation_failed',
+        failedStep: 'create_conflict',
+        name,
+        ok: false,
+      });
+    }
+
+    const beforeSummary = await getConflictSummary();
+    const { localId } = conflictCheck.details;
+    const resolution = await resolveConflictPreferRemote({
+      collection: 'recipes',
+      documentId: localId,
+    });
+    const afterDocument = await getDocumentById('recipes', localId);
+    const afterSummary = await getConflictSummary();
+    const conflictCountDecreased =
+      afterSummary.conflictDocumentCount < beforeSummary.conflictDocumentCount;
+
+    return makeResult({
+      details: {
+        afterDocument,
+        afterSummary,
+        beforeSummary,
+        conflictCheck,
+        conflictCountDecreased,
+        resolution,
+      },
+      name,
+      ok:
+        afterDocument?.syncStatus === 'synced' &&
+        resolution.resolution === 'preferRemote' &&
+        conflictCountDecreased,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runConflictPreferLocalDevCheck = async (options = {}) => {
+  const name = 'conflictPreferLocalDev';
+
+  try {
+    const { resolveConflictPreferLocal } = require('../sync/conflictService');
+    const { getPendingOutboxEvents } = require('../sync/syncOutbox');
+    const { pushPendingChanges } = require('../sync');
+    const conflictCheck = await runConflictSimulationDevCheck(options);
+
+    if (!conflictCheck.ok) {
+      return makeResult({
+        details: {
+          conflictCheck,
+        },
+        error: 'conflict_creation_failed',
+        failedStep: 'create_conflict',
+        name,
+        ok: false,
+      });
+    }
+
+    const { groupId, localId } = conflictCheck.details;
+    const localBefore = await getDocumentById('recipes', localId);
+    const resolution = await resolveConflictPreferLocal({
+      collection: 'recipes',
+      documentId: localId,
+    });
+    const localAfter = await getDocumentById('recipes', localId);
+    const pendingOutbox = (await getPendingOutboxEvents()).filter(
+      (event) => event.documentId === localId,
+    );
+    const client = createAuthedSyncClient(
+      options,
+      options.userId || `${DEV_CONFLICT_PREFIX}_member`,
+    );
+    const retryPush = await pushPendingChanges({
+      client,
+      eventIds: pendingOutbox.map((event) => event.id),
+      groupId,
+      includeDebug: true,
+      limit: options.limit,
+    });
+
+    return makeResult({
+      details: {
+        conflictCheck,
+        localAfter,
+        localBefore,
+        pendingOutbox,
+        resolution,
+        retryPush,
+      },
+      name,
+      ok:
+        localAfter?.syncStatus === 'pending' &&
+        localAfter?.data?.name === localBefore?.data?.name &&
+        pendingOutbox.length > 0 &&
+        (retryPush.ok === true ||
+          retryPush.rejected?.some((event) => event.reason === 'conflict') ||
+          retryPush.error),
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'unexpected_exception',
+      name,
+      ok: false,
+    });
+  }
+};
+
 export default {
   runAuthWorkspaceDevCheck,
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictPreferLocalDevCheck,
+  runConflictResolutionDevCheck,
   runConflictSimulationDevCheck,
+  runConflictSummaryDevCheck,
+  runListConflictsDevCheck,
   runMembershipSyncAccessDevCheck,
   runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
+  runResolveLatestConflictPreferLocalDevCheck,
+  runResolveLatestConflictPreferRemoteDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 };

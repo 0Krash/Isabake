@@ -55,8 +55,14 @@ These checks use Expo SQLite and must run inside an Expo runtime:
 - `runAuthenticatedPushPullDevCheck()`
 - `runAuthenticatedWorkspaceIsolationDevCheck()`
 - `runConflictSimulationDevCheck()`
+- `runConflictResolutionDevCheck()`
+- `runConflictPreferLocalDevCheck()`
+- `runConflictSummaryDevCheck()`
+- `runListConflictsDevCheck()`
 - `runMembershipSyncAccessDevCheck()`
 - `runPullOverPendingConflictDevCheck()`
+- `runResolveLatestConflictPreferLocalDevCheck()`
+- `runResolveLatestConflictPreferRemoteDevCheck()`
 
 Import them through the central runner:
 
@@ -73,9 +79,15 @@ import {
   runAuthenticatedPushPullDevCheck,
   runAuthenticatedWorkspaceIsolationDevCheck,
   runBackendSyncConnectivityCheck,
+  runConflictPreferLocalDevCheck,
+  runConflictResolutionDevCheck,
   runConflictSimulationDevCheck,
+  runConflictSummaryDevCheck,
+  runListConflictsDevCheck,
   runMembershipSyncAccessDevCheck,
   runPullOverPendingConflictDevCheck,
+  runResolveLatestConflictPreferLocalDevCheck,
+  runResolveLatestConflictPreferRemoteDevCheck,
   runPushPullDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './data/dev/runSyncIntegrationChecks';
@@ -105,6 +117,12 @@ await runAuthenticatedPushPullDevCheck({
 await runAuthenticatedWorkspaceIsolationDevCheck();
 await runConflictSimulationDevCheck({ groupId: 'your_group_id' });
 await runPullOverPendingConflictDevCheck({ groupId: 'your_group_id' });
+await runConflictSummaryDevCheck();
+await runListConflictsDevCheck();
+await runResolveLatestConflictPreferLocalDevCheck();
+await runResolveLatestConflictPreferRemoteDevCheck();
+await runConflictResolutionDevCheck({ groupId: 'your_group_id' });
+await runConflictPreferLocalDevCheck({ groupId: 'your_group_id' });
 ```
 
 Legacy unauthenticated checks:
@@ -146,6 +164,12 @@ Available buttons:
 - `Authenticated workspace isolation check`
 - `Conflict simulation check`
 - `Pull-over-pending conflict check`
+- `List conflicts`
+- `Show conflict summary`
+- `Resolve latest conflict: prefer local`
+- `Resolve latest conflict: prefer remote`
+- `Conflict resolution end-to-end check`
+- `Conflict prefer-local check`
 - `Legacy unauthenticated push/pull check`
 - `Legacy unauthenticated workspace isolation check`
 - `Run all authenticated sync checks`
@@ -187,6 +211,8 @@ Mutating manual sync integration checks:
 - `runAuthenticatedWorkspaceIsolationDevCheck()`
 - `runConflictSimulationDevCheck()`
 - `runPullOverPendingConflictDevCheck()`
+- `runConflictResolutionDevCheck()`
+- `runConflictPreferLocalDevCheck()`
 - `runPushPullDevCheck()`
 - `runTwoWorkspaceIsolationDevCheck()`
 
@@ -240,6 +266,44 @@ keeps previous sync cursors and older dev records from hiding the simulated
 remote change during `Run all authenticated sync checks`.
 
 Production conflict resolution UI remains pending.
+
+## Conflict Resolution Dev Flow
+
+Phase 16 adds dev/internal conflict inspection and resolution helpers. These are
+manual tools only; they are not wired to startup and are not production conflict
+UI.
+
+Inspection APIs:
+
+- `getConflictSummary()`
+- `getConflictDetails({ collection, documentId })`
+- `getConflictDocuments()`
+- `getConflictOutboxEvents()`
+- `getConflictsByCollection()`
+
+Resolution APIs:
+
+- `resolveConflictPreferLocal({ collection, documentId })`
+- `resolveConflictPreferRemote({ collection, documentId })`
+- `markConflictResolvedManually({ collection, documentId, notes })`
+
+Prefer local:
+
+- Keeps local document data.
+- Sets the document back to `pending`.
+- Creates or reuses a pending outbox event.
+- Does not mark the document as `synced` before the backend accepts it.
+
+Prefer remote:
+
+- Applies the remote/conflict document.
+- Sets the document to `synced`.
+- Marks related conflict outbox events resolved.
+- Does not create a new outbox event.
+
+Manual resolution requires explicit notes or a final document. Do not use these
+helpers to silently discard data. Production conflict resolution UX is still
+pending.
 
 Reset helpers never run from `runAllDevChecks()`.
 
