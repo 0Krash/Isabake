@@ -10,6 +10,7 @@
     "test": "jest --runInBand",
     "check:syntax": "node scripts/checkSyntax.js",
     "check:no-startup-test-wiring": "node scripts/checkNoStartupTestWiring.js",
+    "check:sync-config": "node scripts/checkSyncConfig.js",
     "test:unit": "jest --runInBand",
     "test:local": "jest --runInBand data/workspace data/dev",
     "test:sync": "jest --runInBand data/sync data/validation",

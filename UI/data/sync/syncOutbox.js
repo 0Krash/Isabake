@@ -61,6 +61,20 @@ export const getPendingOutboxEvents = async (options = {}) => {
   return events.map(parseOutboxEvent);
 };
 
+export const getOutboxEventById = async (id, options = {}) => {
+  const db = options.db || (await initDatabase());
+  const event = await db.getFirstAsync(
+    `
+      SELECT *
+      FROM sync_outbox
+      WHERE id = ?;
+    `,
+    [id],
+  );
+
+  return parseOutboxEvent(event);
+};
+
 export const getPendingOutboxCountsByCollection = async (options = {}) => {
   const db = options.db || (await initDatabase());
   const rows = await db.getAllAsync(

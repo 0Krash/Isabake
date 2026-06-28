@@ -22,6 +22,7 @@ npm run test:sync
 npm run test:dev
 npm run check:syntax
 npm run check:no-startup-test-wiring
+npm run check:sync-config
 ```
 
 Jest tests cover:
@@ -160,27 +161,44 @@ The mobile sync client calls:
 
 Configure the mobile sync base URL with `URL_Sync` in `.env`. The value should be
 the backend host root, not `/sync`, because the client appends `/sync/push` and
-`/sync/pull`.
+`/sync/pull`. Keep `URL_Sync` explicit; do not rely on `.env` interpolation for
+this value.
 
 Examples:
 
 ```sh
-URL_Sync=`${API_HOST}`
+URL_Sync='http://192.168.1.87:3000'
 ```
 
 Android emulator:
 
 ```sh
 API_HOST='http://10.0.2.2:3000'
-URL_Sync=`${API_HOST}`
+URL_Sync='http://10.0.2.2:3000'
+```
+
+iOS simulator:
+
+```sh
+API_HOST='http://localhost:3000'
+URL_Sync='http://localhost:3000'
 ```
 
 Physical device:
 
 ```sh
 API_HOST='http://YOUR_LAN_IP:3000'
-URL_Sync=`${API_HOST}`
+URL_Sync='http://YOUR_LAN_IP:3000'
 ```
 
 The phone and backend machine must be on the same network, and the backend port
 must be reachable from the device.
+
+Validate local sync configuration:
+
+```sh
+npm run check:sync-config
+```
+
+This check fails when `URL_Sync` is missing, invalid, or still uses unsupported
+interpolation.
