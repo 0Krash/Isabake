@@ -3,6 +3,7 @@ class MemoryWorkspaceRepository {
     this.users = [];
     this.workspaces = [];
     this.memberships = [];
+    this.invitations = [];
   }
 
   async upsertUser(user) {
@@ -25,6 +26,10 @@ class MemoryWorkspaceRepository {
 
   async findUserByUserId(userId) {
     return this.users.find((user) => user.userId === userId && !user.deletedAt) || null;
+  }
+
+  async findUserByEmail(email) {
+    return this.users.find((user) => user.email === email && !user.deletedAt) || null;
   }
 
   async createWorkspace(workspace) {
@@ -115,6 +120,64 @@ class MemoryWorkspaceRepository {
       (membership) =>
         membership.userId === userId && membership.status === 'active',
     );
+  }
+
+  async createInvitation(invitation) {
+    const nextInvitation = {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...invitation,
+    };
+
+    this.invitations.push(nextInvitation);
+    return nextInvitation;
+  }
+
+  async findInvitationById(invitationId) {
+    return (
+      this.invitations.find(
+        (invitation) => invitation.invitationId === invitationId,
+      ) || null
+    );
+  }
+
+  async findInvitationsByGroupId(groupId) {
+    return this.invitations.filter(
+      (invitation) => invitation.groupId === groupId,
+    );
+  }
+
+  async findInvitationsByEmail(email) {
+    return this.invitations.filter((invitation) => invitation.email === email);
+  }
+
+  async findActiveInvitationByEmail({ email, groupId }) {
+    return (
+      this.invitations.find(
+        (invitation) =>
+          invitation.email === email &&
+          invitation.groupId === groupId &&
+          invitation.status === 'invited',
+      ) || null
+    );
+  }
+
+  async updateInvitation(invitationId, update) {
+    const index = this.invitations.findIndex(
+      (invitation) => invitation.invitationId === invitationId,
+    );
+
+    if (index < 0) {
+      return null;
+    }
+
+    this.invitations[index] = {
+      ...this.invitations[index],
+      ...update,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return this.invitations[index];
   }
 }
 

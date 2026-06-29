@@ -147,6 +147,27 @@ describe('authApiClient', () => {
       userId: 'user_2',
     });
     await client.leaveWorkspace({ authHeaders, groupId: 'group_1' });
+    await client.createWorkspaceInvitation({
+      authHeaders,
+      email: 'invitee@example.test',
+      groupId: 'group_1',
+      role: 'member',
+    });
+    await client.listWorkspaceInvitations({ authHeaders, groupId: 'group_1' });
+    await client.listMyWorkspaceInvitations({ authHeaders });
+    await client.acceptWorkspaceInvitation({
+      authHeaders,
+      invitationId: 'invitation_1',
+    });
+    await client.declineWorkspaceInvitation({
+      authHeaders,
+      invitationId: 'invitation_1',
+    });
+    await client.revokeWorkspaceInvitation({
+      authHeaders,
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
+    });
 
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://api.example.test/workspaces',
@@ -180,6 +201,30 @@ describe('authApiClient', () => {
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://api.example.test/workspaces/group_1/leave',
       expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1/invitations',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1/invitations',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/mine',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/invitation_1/accept',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/invitation_1/decline',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1/invitations/invitation_1',
+      expect.objectContaining({ method: 'DELETE' }),
     );
   });
 });

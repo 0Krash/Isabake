@@ -12,3 +12,14 @@ export const sanitizeMemberForDisplay = (member = {}) => ({
   status: member.status || 'active',
   userId: member.userId || member.email || 'sin_usuario',
 });
+
+export const isValidInvitationEmail = (email = '') =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+
+export const sanitizeInvitationForDisplay = (invitation = {}) => ({
+  email: invitation.email || 'sin_correo',
+  groupId: invitation.groupId || null,
+  invitationId: invitation.invitationId || null,
+  role: invitation.role || 'member',
+  status: invitation.status || 'invited',
+});

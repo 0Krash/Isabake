@@ -1,6 +1,7 @@
 const User = require('../models/userModel');
 const AuthSession = require('../models/authSessionModel');
 const Workspace = require('../models/workspaceModel');
+const WorkspaceInvitation = require('../models/workspaceInvitationModel');
 const WorkspaceMembership = require('../models/workspaceMembershipModel');
 
 const toPlainObject = (document) =>
@@ -145,6 +146,53 @@ class MongooseWorkspaceRepository {
         userId,
       }).sort({ createdAt: 1 })
     ).map(toPlainObject);
+  }
+
+  async createInvitation(invitation) {
+    return toPlainObject(await WorkspaceInvitation.create(invitation));
+  }
+
+  async findInvitationById(invitationId) {
+    return toPlainObject(await WorkspaceInvitation.findOne({ invitationId }));
+  }
+
+  async findInvitationsByGroupId(groupId) {
+    return (
+      await WorkspaceInvitation.find({
+        groupId,
+      }).sort({ createdAt: -1 })
+    ).map(toPlainObject);
+  }
+
+  async findInvitationsByEmail(email) {
+    return (
+      await WorkspaceInvitation.find({
+        email,
+      }).sort({ createdAt: -1 })
+    ).map(toPlainObject);
+  }
+
+  async findActiveInvitationByEmail({ email, groupId }) {
+    return toPlainObject(
+      await WorkspaceInvitation.findOne({
+        email,
+        groupId,
+        status: 'invited',
+      }),
+    );
+  }
+
+  async updateInvitation(invitationId, update) {
+    return toPlainObject(
+      await WorkspaceInvitation.findOneAndUpdate(
+        { invitationId },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        },
+      ),
+    );
   }
 }
 

@@ -61,6 +61,19 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'POST',
     }),
+  createWorkspaceInvitation: ({ authHeaders, email, groupId, role }) =>
+    requestJson(`/workspaces/${groupId}/invitations`, {
+      ...options,
+      body: { email, role },
+      headers: authHeaders,
+      method: 'POST',
+    }),
+  declineWorkspaceInvitation: ({ authHeaders, invitationId }) =>
+    requestJson(`/workspaces/invitations/${invitationId}/decline`, {
+      ...options,
+      headers: authHeaders,
+      method: 'POST',
+    }),
   leaveWorkspace: ({ authHeaders, groupId }) =>
     requestJson(`/workspaces/${groupId}/leave`, {
       ...options,
@@ -75,6 +88,18 @@ export const createAuthApiClient = (options = {}) => ({
     }),
   listWorkspaceMembers: ({ authHeaders, groupId }) =>
     requestJson(`/workspaces/${groupId}/members`, {
+      ...options,
+      headers: authHeaders,
+      method: 'GET',
+    }),
+  listMyWorkspaceInvitations: ({ authHeaders } = {}) =>
+    requestJson('/workspaces/invitations/mine', {
+      ...options,
+      headers: authHeaders,
+      method: 'GET',
+    }),
+  listWorkspaceInvitations: ({ authHeaders, groupId }) =>
+    requestJson(`/workspaces/${groupId}/invitations`, {
       ...options,
       headers: authHeaders,
       method: 'GET',
@@ -124,6 +149,18 @@ export const createAuthApiClient = (options = {}) => ({
     }),
   removeWorkspaceMember: ({ authHeaders, groupId, userId }) =>
     requestJson(`/workspaces/${groupId}/members/${userId}`, {
+      ...options,
+      headers: authHeaders,
+      method: 'DELETE',
+    }),
+  acceptWorkspaceInvitation: ({ authHeaders, invitationId }) =>
+    requestJson(`/workspaces/invitations/${invitationId}/accept`, {
+      ...options,
+      headers: authHeaders,
+      method: 'POST',
+    }),
+  revokeWorkspaceInvitation: ({ authHeaders, groupId, invitationId }) =>
+    requestJson(`/workspaces/${groupId}/invitations/${invitationId}`, {
       ...options,
       headers: authHeaders,
       method: 'DELETE',

@@ -53,9 +53,15 @@ jest.mock('./workspaceRepository', () => ({
 }));
 
 import {
+  acceptWorkspaceInvitation,
   createRemoteWorkspace,
+  createWorkspaceInvitation,
+  declineWorkspaceInvitation,
   disconnectLocalWorkspace,
+  loadMyWorkspaceInvitations,
+  loadWorkspaceInvitations,
   refreshWorkspaceState,
+  revokeWorkspaceInvitation,
   selectWorkspace,
   toRemoteWorkspaceMetadata,
 } from './workspaceService';
@@ -250,5 +256,63 @@ describe('workspaceService', () => {
       groupId: 'group_1',
     });
     expect(mockSetCurrentWorkspaceCalls[0].groupId).toBe('local_1');
+  });
+
+  test('invitation APIs call backend with auth headers', async () => {
+    const client = {
+      acceptWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
+      createWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
+      declineWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
+      listMyWorkspaceInvitations: jest.fn(async () => ({
+        invitations: [{ invitationId: 'invitation_1' }],
+      })),
+      listWorkspaceInvitations: jest.fn(async () => ({
+        invitations: [{ invitationId: 'invitation_2' }],
+      })),
+      revokeWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
+    };
+
+    await createWorkspaceInvitation({
+      client,
+      email: 'invitee@example.test',
+      groupId: 'group_1',
+      role: 'member',
+    });
+    await loadWorkspaceInvitations({ client, groupId: 'group_1' });
+    await loadMyWorkspaceInvitations({ client });
+    await acceptWorkspaceInvitation({ client, invitationId: 'invitation_1' });
+    await declineWorkspaceInvitation({ client, invitationId: 'invitation_1' });
+    await revokeWorkspaceInvitation({
+      client,
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
+    });
+
+    expect(client.createWorkspaceInvitation).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      email: 'invitee@example.test',
+      groupId: 'group_1',
+      role: 'member',
+    });
+    expect(client.listWorkspaceInvitations).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      groupId: 'group_1',
+    });
+    expect(client.listMyWorkspaceInvitations).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+    });
+    expect(client.acceptWorkspaceInvitation).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      invitationId: 'invitation_1',
+    });
+    expect(client.declineWorkspaceInvitation).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      invitationId: 'invitation_1',
+    });
+    expect(client.revokeWorkspaceInvitation).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
+    });
   });
 });

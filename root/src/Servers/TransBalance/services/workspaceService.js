@@ -6,6 +6,8 @@ const { MongooseWorkspaceRepository } = require('./workspaceRepository');
 const ACTIVE_STATUS = 'active';
 const VALID_ROLES = new Set(['owner', 'admin', 'member', 'viewer']);
 const VALID_STATUSES = new Set(['active', 'invited', 'removed']);
+const VALID_INVITATION_ROLES = new Set(['admin', 'member', 'viewer']);
+const ACTIVE_INVITATION_STATUS = 'invited';
 const PUSH_ROLES = new Set(['owner', 'admin', 'member']);
 const PULL_ROLES = new Set(['owner', 'admin', 'member', 'viewer']);
 const ADMIN_ROLES = new Set(['owner', 'admin']);
@@ -18,7 +20,13 @@ const normalizeRole = (role = 'member') =>
 const normalizeStatus = (status = ACTIVE_STATUS) =>
   VALID_STATUSES.has(status) ? status : ACTIVE_STATUS;
 
+const normalizeEmail = (email = '') => String(email || '').trim().toLowerCase();
+
+const normalizeInvitationRole = (role = 'member') =>
+  VALID_INVITATION_ROLES.has(role) ? role : 'member';
+
 const createGroupId = () => `workspace_${randomUUID()}`;
+const createInvitationId = () => `invitation_${randomUUID()}`;
 
 class WorkspaceService {
   constructor(repository = new MongooseWorkspaceRepository()) {
@@ -264,6 +272,186 @@ class WorkspaceService {
     );
   }
 
+  async createInvitation({
+    email,
+    expiresAt,
+    groupId,
+    requesterUserId,
+    role = 'member',
+  }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (!ADMIN_ROLES.has(requesterRole)) {
+      throw createHttpError(403, 'workspace_admin_required');
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail) {
+      throw createHttpError(400, 'invitation_email_required');
+    }
+
+    const workspace = await this.repository.findWorkspaceByGroupId(groupId);
+
+    if (!workspace) {
+      throw createHttpError(404, 'workspace_not_found');
+    }
+
+    const existingInvitation =
+      await this.repository.findActiveInvitationByEmail({
+        email: normalizedEmail,
+        groupId,
+      });
+
+    if (existingInvitation) {
+      return existingInvitation;
+    }
+
+    const existingUser = await this.repository.findUserByEmail(normalizedEmail);
+
+    return this.repository.createInvitation({
+      email: normalizedEmail,
+      expiresAt: expiresAt || null,
+      groupId,
+      invitationId: createInvitationId(),
+      invitedByUserId: requesterUserId,
+      invitedUserId: existingUser?.userId || null,
+      role: normalizeInvitationRole(role),
+      status: ACTIVE_INVITATION_STATUS,
+      workspaceId: workspace.workspaceId,
+    });
+  }
+
+  async listWorkspaceInvitations({ groupId, requesterUserId }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (!ADMIN_ROLES.has(requesterRole)) {
+      throw createHttpError(403, 'workspace_admin_required');
+    }
+
+    return this.repository.findInvitationsByGroupId(groupId);
+  }
+
+  async listMyInvitations({ email, userId }) {
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail && !userId) {
+      throw createHttpError(401, 'auth_required');
+    }
+
+    const invitations = normalizedEmail
+      ? await this.repository.findInvitationsByEmail(normalizedEmail)
+      : [];
+
+    return invitations.filter(
+      (invitation) =>
+        invitation.status === ACTIVE_INVITATION_STATUS ||
+        invitation.invitedUserId === userId,
+    );
+  }
+
+  async assertInvitationCanBeAccepted(invitation) {
+    if (!invitation) {
+      throw createHttpError(404, 'invitation_not_found');
+    }
+
+    if (invitation.status !== ACTIVE_INVITATION_STATUS) {
+      throw createHttpError(409, 'invitation_not_active');
+    }
+
+    if (invitation.expiresAt && new Date(invitation.expiresAt) <= new Date()) {
+      await this.repository.updateInvitation(invitation.invitationId, {
+        ...invitation,
+        status: 'expired',
+      });
+      throw createHttpError(409, 'invitation_expired');
+    }
+  }
+
+  async acceptInvitation({ email, invitationId, userId }) {
+    const invitation = await this.repository.findInvitationById(invitationId);
+
+    await this.assertInvitationCanBeAccepted(invitation);
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (normalizeEmail(invitation.email) !== normalizedEmail) {
+      throw createHttpError(403, 'invitation_email_mismatch');
+    }
+
+    await this.repository.upsertMembership({
+      groupId: invitation.groupId,
+      role: normalizeInvitationRole(invitation.role),
+      status: ACTIVE_STATUS,
+      userId,
+      workspaceId: invitation.workspaceId,
+    });
+
+    return this.repository.updateInvitation(invitation.invitationId, {
+      ...invitation,
+      acceptedAt: nowIso(),
+      invitedUserId: userId,
+      status: 'accepted',
+    });
+  }
+
+  async declineInvitation({ email, invitationId, userId }) {
+    const invitation = await this.repository.findInvitationById(invitationId);
+
+    if (!invitation) {
+      throw createHttpError(404, 'invitation_not_found');
+    }
+
+    const normalizedEmail = normalizeEmail(email);
+
+    if (normalizeEmail(invitation.email) !== normalizedEmail) {
+      throw createHttpError(403, 'invitation_email_mismatch');
+    }
+
+    if (invitation.status !== ACTIVE_INVITATION_STATUS) {
+      throw createHttpError(409, 'invitation_not_active');
+    }
+
+    return this.repository.updateInvitation(invitation.invitationId, {
+      ...invitation,
+      declinedAt: nowIso(),
+      invitedUserId: userId,
+      status: 'declined',
+    });
+  }
+
+  async revokeInvitation({ groupId, invitationId, requesterUserId }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (!ADMIN_ROLES.has(requesterRole)) {
+      throw createHttpError(403, 'workspace_admin_required');
+    }
+
+    const invitation = await this.repository.findInvitationById(invitationId);
+
+    if (!invitation || invitation.groupId !== groupId) {
+      throw createHttpError(404, 'invitation_not_found');
+    }
+
+    if (invitation.status !== ACTIVE_INVITATION_STATUS) {
+      return invitation;
+    }
+
+    return this.repository.updateInvitation(invitation.invitationId, {
+      ...invitation,
+      status: 'revoked',
+    });
+  }
+
   async getUserWorkspaceRole(groupId, userId) {
     if (!groupId) {
       throw createHttpError(400, 'groupId_required');
@@ -320,5 +508,6 @@ module.exports = {
   PUSH_ROLES,
   VALID_ROLES,
   VALID_STATUSES,
+  VALID_INVITATION_ROLES,
   WorkspaceService,
 };

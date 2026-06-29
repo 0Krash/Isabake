@@ -276,6 +276,38 @@ Still missing:
 - realtime/WebSocket notifications
 - email invitations
 
+## Workspace Invitations
+
+Phase 23 adds invitation records for workspace onboarding.
+
+Flow:
+
+1. Owner/admin opens `Workspace`.
+2. Selects a shared workspace.
+3. Enters an email, chooses `admin`, `member`, or `viewer`, and creates an
+   invitation.
+4. The invited user logs in/registers with that email.
+5. The invited user opens `Workspace`, presses `Ver mis invitaciones`, then
+   accepts or declines.
+
+Rules:
+
+- invitation emails are normalized to lowercase
+- `owner` is not an invitation role
+- duplicate active invitations for the same workspace/email are reused safely
+- accepting an invitation creates or activates membership
+- declining does not create active membership
+- revoked/expired invitations cannot be accepted
+- accepting an invitation does not run sync
+- selecting the accepted workspace does not run sync
+- Sync Center remains manual
+
+Still missing:
+
+- real email delivery
+- realtime invitation notifications
+- polished onboarding UX
+
 ## Data Safety
 
 Read-only/safe checks by default:

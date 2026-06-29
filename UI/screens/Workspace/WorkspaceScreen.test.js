@@ -2,6 +2,8 @@ import {
   dedupeWorkspaces,
   getWorkspaceListKey,
   getWorkspaceModeLabel,
+  isValidInvitationEmail,
+  sanitizeInvitationForDisplay,
   sanitizeMemberForDisplay,
 } from './workspaceUiModel';
 
@@ -39,5 +41,26 @@ describe('WorkspaceScreen model helpers', () => {
 
     expect(keys).toEqual(['local:local_1', 'remote:group_1', 'remote:group_2']);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('validates invitation email and sanitizes invitation display', () => {
+    expect(isValidInvitationEmail('invitee@example.test')).toBe(true);
+    expect(isValidInvitationEmail('not-an-email')).toBe(false);
+    expect(
+      sanitizeInvitationForDisplay({
+        accessToken: 'secret',
+        email: 'invitee@example.test',
+        invitationId: 'invitation_1',
+        refreshToken: 'secret',
+        role: 'viewer',
+        status: 'invited',
+      }),
+    ).toEqual({
+      email: 'invitee@example.test',
+      groupId: null,
+      invitationId: 'invitation_1',
+      role: 'viewer',
+      status: 'invited',
+    });
   });
 });

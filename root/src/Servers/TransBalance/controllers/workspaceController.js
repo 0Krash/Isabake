@@ -108,3 +108,81 @@ exports.leaveWorkspace = asyncHandler(async (req, res) => {
     status: 'success',
   });
 });
+
+exports.createInvitation = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.createInvitation({
+    email: req.body?.email,
+    expiresAt: req.body?.expiresAt,
+    groupId: req.params.groupId,
+    requesterUserId: req.user.userId,
+    role: req.body?.role,
+  });
+
+  res.status(201).json({
+    invitation,
+    status: 'success',
+  });
+});
+
+exports.listWorkspaceInvitations = asyncHandler(async (req, res) => {
+  const invitations = await workspaceService.listWorkspaceInvitations({
+    groupId: req.params.groupId,
+    requesterUserId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitations,
+    status: 'success',
+  });
+});
+
+exports.listMyInvitations = asyncHandler(async (req, res) => {
+  const invitations = await workspaceService.listMyInvitations({
+    email: req.user.email,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitations,
+    status: 'success',
+  });
+});
+
+exports.acceptInvitation = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.acceptInvitation({
+    email: req.user.email,
+    invitationId: req.params.invitationId,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});
+
+exports.declineInvitation = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.declineInvitation({
+    email: req.user.email,
+    invitationId: req.params.invitationId,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});
+
+exports.revokeInvitation = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.revokeInvitation({
+    groupId: req.params.groupId,
+    invitationId: req.params.invitationId,
+    requesterUserId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});

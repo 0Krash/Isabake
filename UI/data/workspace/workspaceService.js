@@ -175,6 +175,105 @@ export const removeWorkspaceMember = async ({
   });
 };
 
+export const createWorkspaceInvitation = async ({
+  client,
+  email,
+  groupId,
+  role,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.createWorkspaceInvitation({
+    authHeaders,
+    email,
+    groupId,
+    role,
+  });
+};
+
+export const loadWorkspaceInvitations = async ({
+  client,
+  groupId,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+  const response = await authClient.listWorkspaceInvitations({
+    authHeaders,
+    groupId,
+  });
+
+  return response.invitations || [];
+};
+
+export const loadMyWorkspaceInvitations = async ({ client, session } = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+  const response = await authClient.listMyWorkspaceInvitations({
+    authHeaders,
+  });
+
+  return response.invitations || [];
+};
+
+export const acceptWorkspaceInvitation = async ({
+  client,
+  invitationId,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.acceptWorkspaceInvitation({
+    authHeaders,
+    invitationId,
+  });
+};
+
+export const declineWorkspaceInvitation = async ({
+  client,
+  invitationId,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.declineWorkspaceInvitation({
+    authHeaders,
+    invitationId,
+  });
+};
+
+export const revokeWorkspaceInvitation = async ({
+  client,
+  groupId,
+  invitationId,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.revokeWorkspaceInvitation({
+    authHeaders,
+    groupId,
+    invitationId,
+  });
+};
+
 export const disconnectLocalWorkspace = async ({
   client,
   leaveRemote = false,
@@ -202,11 +301,17 @@ export const disconnectLocalWorkspace = async ({
 
 export default {
   addWorkspaceMember,
+  acceptWorkspaceInvitation,
   createRemoteWorkspace,
+  createWorkspaceInvitation,
+  declineWorkspaceInvitation,
   disconnectLocalWorkspace,
+  loadMyWorkspaceInvitations,
   loadWorkspaceMembers,
+  loadWorkspaceInvitations,
   refreshWorkspaceState,
   removeWorkspaceMember,
+  revokeWorkspaceInvitation,
   selectRemoteWorkspace,
   selectWorkspace,
   toRemoteWorkspaceMetadata,

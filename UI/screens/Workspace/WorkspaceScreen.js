@@ -14,6 +14,8 @@ import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
   getWorkspaceListKey,
   getWorkspaceModeLabel,
+  isValidInvitationEmail,
+  sanitizeInvitationForDisplay,
   sanitizeMemberForDisplay,
 } from './workspaceUiModel';
 
@@ -28,6 +30,8 @@ export default function WorkspaceScreen({ onOpenAccount }) {
   const [memberUserId, setMemberUserId] = useState('');
   const [message, setMessage] = useState(null);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
   const [role, setRole] = useState('member');
   const [status, setStatus] = useState('active');
   const currentWorkspace = workspaceState.currentWorkspace;
@@ -35,6 +39,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
   useEffect(() => {
     if (currentWorkspace?.isRemote) {
       workspaceState.refreshMembers(currentWorkspace).catch(() => {});
+      workspaceState.refreshInvitations(currentWorkspace).catch(() => {});
     }
   }, [currentWorkspace?.groupId]);
 
@@ -72,6 +77,22 @@ export default function WorkspaceScreen({ onOpenAccount }) {
         }),
       'Miembro actualizado.',
     );
+
+  const createInvitation = () => {
+    if (!isValidInvitationEmail(inviteEmail)) {
+      setMessage('Correo de invitacion invalido.');
+      return null;
+    }
+
+    return runAction(
+      () =>
+        workspaceState.createInvitation({
+          email: inviteEmail,
+          role: inviteRole,
+        }),
+      'Invitacion creada.',
+    );
+  };
 
   return (
     <ScrollView
@@ -208,7 +229,95 @@ export default function WorkspaceScreen({ onOpenAccount }) {
             Actualizar lista
           </Text>
         </Pressable>
+        <Pressable
+          disabled={workspaceState.loading}
+          onPress={() =>
+            runAction(
+              workspaceState.refreshMyInvitations,
+              'Invitaciones personales actualizadas.',
+            )
+          }
+          style={[styles.secondaryButton, { borderColor: colors.border }]}
+        >
+          <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+            Ver mis invitaciones
+          </Text>
+        </Pressable>
       </View>
+
+      {workspaceState.myInvitations.length ? (
+        <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            Mis invitaciones
+          </Text>
+          {workspaceState.myInvitations.map((rawInvitation) => {
+            const invitation = sanitizeInvitationForDisplay(rawInvitation);
+
+            return (
+              <View
+                key={invitation.invitationId}
+                style={[styles.row, { borderColor: colors.border }]}
+              >
+                <View style={styles.rowText}>
+                  <Text style={[styles.body, { color: colors.textPrimary }]}>
+                    {invitation.email}
+                  </Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    {invitation.groupId} · {invitation.role} ·{' '}
+                    {invitation.status}
+                  </Text>
+                </View>
+                <View style={styles.inlineActions}>
+                  <Pressable
+                    disabled={workspaceState.loading}
+                    onPress={() =>
+                      runAction(
+                        () =>
+                          workspaceState.acceptInvitation(
+                            invitation.invitationId,
+                          ),
+                        'Invitacion aceptada. Sync sigue manual.',
+                      )
+                    }
+                    style={[styles.smallButton, { borderColor: colors.border }]}
+                  >
+                    <Text
+                      style={[
+                        styles.secondaryText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Aceptar
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={workspaceState.loading}
+                    onPress={() =>
+                      runAction(
+                        () =>
+                          workspaceState.declineInvitation(
+                            invitation.invitationId,
+                          ),
+                        'Invitacion rechazada.',
+                      )
+                    }
+                    style={[styles.smallButton, { borderColor: colors.border }]}
+                  >
+                    <Text
+                      style={[
+                        styles.secondaryText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Rechazar
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       {currentWorkspace?.isRemote ? (
         <View style={[styles.panel, { backgroundColor: colors.surface }]}>
@@ -216,6 +325,103 @@ export default function WorkspaceScreen({ onOpenAccount }) {
             Miembros
           </Text>
           <View style={styles.memberForm}>
+            <TextInput
+              autoCapitalize="none"
+              keyboardType="email-address"
+              onChangeText={setInviteEmail}
+              placeholder="Correo para invitar"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                { borderColor: colors.border, color: colors.textPrimary },
+              ]}
+              value={inviteEmail}
+            />
+            <View style={styles.optionRow}>
+              {roleOptions
+                .filter((option) => option !== 'owner')
+                .map((option) => (
+                  <Pressable
+                    key={option}
+                    onPress={() => setInviteRole(option)}
+                    style={[
+                      styles.option,
+                      {
+                        backgroundColor:
+                          inviteRole === option
+                            ? colors.primary
+                            : colors.surfaceMuted,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        {
+                          color:
+                            inviteRole === option
+                              ? colors.textInverse
+                              : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </Pressable>
+                ))}
+            </View>
+            <Pressable
+              disabled={workspaceState.loading || !inviteEmail}
+              onPress={createInvitation}
+              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+                Invitar por correo
+              </Text>
+            </Pressable>
+
+            {workspaceState.invitations.map((rawInvitation) => {
+              const invitation = sanitizeInvitationForDisplay(rawInvitation);
+
+              return (
+                <View
+                  key={invitation.invitationId}
+                  style={[styles.row, { borderColor: colors.border }]}
+                >
+                  <View style={styles.rowText}>
+                    <Text style={[styles.body, { color: colors.textPrimary }]}>
+                      {invitation.email}
+                    </Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      {invitation.role} · {invitation.status}
+                    </Text>
+                  </View>
+                  <Pressable
+                    disabled={workspaceState.loading}
+                    onPress={() =>
+                      runAction(
+                        () =>
+                          workspaceState.revokeInvitation(
+                            invitation.invitationId,
+                          ),
+                        'Invitacion revocada.',
+                      )
+                    }
+                    style={[styles.smallButton, { borderColor: colors.border }]}
+                  >
+                    <Text
+                      style={[
+                        styles.secondaryText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Revocar
+                    </Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+
             <TextInput
               autoCapitalize="none"
               onChangeText={setMemberUserId}
@@ -400,6 +606,9 @@ const styles = StyleSheet.create({
   },
   memberForm: {
     gap: 10,
+  },
+  inlineActions: {
+    gap: 8,
   },
   message: {
     fontSize: typography.sizes.bodySmall,
