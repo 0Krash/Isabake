@@ -189,6 +189,93 @@ dev data:
 await runAllDevChecks({ includeMutatingChecks: true });
 ```
 
+## Workspace Management UI
+
+Phase 21 adds a production-safe Workspace screen. It is available from the
+bottom navigation as `Workspace` and can also be opened from `Cuenta` when a
+session exists.
+
+Local-only mode:
+
+- works without login
+- remains available when the backend is offline
+- does not run push/pull automatically
+- is restored by `Desconectar localmente` without deleting local documents
+
+Shared workspace flow:
+
+1. Open `Cuenta` and login/register.
+2. Open `Workspace`.
+3. Create a shared workspace with `Crear y seleccionar`, or press
+   `Actualizar lista` and select an existing workspace.
+4. Selecting a workspace only updates the local current workspace metadata; it
+   does not auto-sync.
+
+Member management:
+
+- owners/admins can add members and set role/status
+- owners/admins can remove members by marking membership `removed`
+- members/viewers cannot manage members
+- a user can leave a workspace unless they are the only active owner
+- removing/leaving does not delete local device data
+
+Roles:
+
+- `owner`
+- `admin`
+- `member`
+- `viewer`
+
+Statuses:
+
+- `active`
+- `invited`
+- `removed`
+
+Still missing:
+
+- email invitations
+- realtime membership updates
+- polished account/workspace settings UX
+- automatic sync scheduling
+
+## Sync Center
+
+Phase 22 adds a production-safe `Sync` tab for manual sync.
+
+Use it like this:
+
+1. Keep using local-only mode normally when no account/workspace is selected.
+2. Login/register from `Cuenta`.
+3. Create or select a shared workspace from `Workspace`.
+4. Open `Sync`.
+5. Press `Actualizar` to refresh local sync status.
+6. Press `Push local changes`, `Pull remote changes`, or `Run full sync`
+   manually.
+
+Behavior:
+
+- opening the screen reads local status only
+- selecting a workspace does not run sync
+- push only sends the active shared workspace `groupId`
+- pull only requests the active shared workspace `groupId`
+- full sync runs push then pull for the active shared workspace
+- local-only mode disables shared sync actions
+- unauthenticated shared mode reports `auth_required`
+- expired sessions report `session_expired`
+- backend/network issues report a safe unavailable message
+- conflicts are shown as warnings and are never auto-resolved
+
+The `Open Conflicts` button navigates to the conflict UI. Use that screen for
+manual conflict handling before retrying sync.
+
+Still missing:
+
+- background sync
+- scheduled sync
+- realtime/WebSocket notifications
+- email invitations
+
 ## Data Safety
 
 Read-only/safe checks by default:

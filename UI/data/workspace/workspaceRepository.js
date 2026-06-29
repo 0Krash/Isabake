@@ -51,6 +51,26 @@ export const getCurrentWorkspace = async (options = {}) => {
   return documentToWorkspace(workspaceDocument);
 };
 
+export const getLocalWorkspaces = async (options = {}) => {
+  const workspaces = await getCollection(WORKSPACE_COLLECTION, {
+    db: options.db,
+    includeDeleted: true,
+    order: 'ASC',
+  });
+
+  return workspaces.map(documentToWorkspace).filter(Boolean);
+};
+
+export const getFirstLocalOnlyWorkspace = async (options = {}) => {
+  const workspaces = await getLocalWorkspaces(options);
+
+  return (
+    workspaces.find((workspace) => !workspace.isRemote) ||
+    workspaces.find((workspace) => workspace.syncStatus === 'local') ||
+    null
+  );
+};
+
 export const setCurrentWorkspace = async (workspace, options = {}) => {
   if (!workspace?.workspaceId && !workspace?.groupId) {
     throw new Error('workspaceId o groupId requerido');
@@ -128,12 +148,7 @@ export const getOrCreateDefaultLocalWorkspace = async (options = {}) => {
     return currentWorkspace;
   }
 
-  const workspaces = await getCollection(WORKSPACE_COLLECTION, {
-    db: options.db,
-    includeDeleted: true,
-    order: 'ASC',
-  });
-  const firstWorkspace = workspaces.map(documentToWorkspace).find(Boolean);
+  const firstWorkspace = await getFirstLocalOnlyWorkspace(options);
 
   if (firstWorkspace) {
     return setCurrentWorkspace(firstWorkspace, options);
@@ -162,6 +177,8 @@ export default {
   clearCurrentWorkspace,
   createLocalWorkspace,
   getCurrentWorkspace,
+  getFirstLocalOnlyWorkspace,
+  getLocalWorkspaces,
   getOrCreateDefaultLocalWorkspace,
   setCurrentWorkspace,
 };

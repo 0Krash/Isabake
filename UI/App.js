@@ -12,7 +12,9 @@ import RecipeSaleScreen from './screens/RecipeBook/RecipeSaleScreen';
 import InventoryScreen from './screens/Inventory/InventoryScreen';
 import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
 import ConflictResolutionScreen from './screens/Sync/ConflictResolutionScreen';
+import SyncCenterScreen from './screens/Sync/SyncCenterScreen';
 import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
+import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
@@ -77,8 +79,16 @@ export default function App() {
       return <ConflictResolutionScreen />;
     }
 
+    if (activeTab === 'sync') {
+      return <SyncCenterScreen onOpenConflicts={() => setActiveTab('conflicts')} />;
+    }
+
     if (activeTab === 'account') {
-      return <AuthStatusScreen />;
+      return <AuthStatusScreen onOpenWorkspaces={() => setActiveTab('workspace')} />;
+    }
+
+    if (activeTab === 'workspace') {
+      return <WorkspaceScreen onOpenAccount={() => setActiveTab('account')} />;
     }
 
     if (activeTab === 'dev-sync' && devSyncDiagnosticsEnabled) {
@@ -127,6 +137,8 @@ export default function App() {
             activeTab={activeTab}
             accountTabEnabled
             conflictTabEnabled
+            syncTabEnabled
+            workspaceTabEnabled
             extraTabs={
               devSyncDiagnosticsEnabled
                 ? [{ key: 'dev-sync', label: 'Sync Dev' }]

@@ -68,3 +68,43 @@ exports.addMember = asyncHandler(async (req, res) => {
     status: 'success',
   });
 });
+
+exports.updateMember = asyncHandler(async (req, res) => {
+  const membership = await workspaceService.updateMember({
+    groupId: req.params.groupId,
+    requesterUserId: req.user.userId,
+    role: req.body?.role,
+    status: req.body?.status,
+    userId: req.params.userId,
+  });
+
+  res.status(200).json({
+    membership,
+    status: 'success',
+  });
+});
+
+exports.removeMember = asyncHandler(async (req, res) => {
+  const membership = await workspaceService.removeMember({
+    groupId: req.params.groupId,
+    requesterUserId: req.user.userId,
+    userId: req.params.userId,
+  });
+
+  res.status(200).json({
+    membership,
+    status: 'success',
+  });
+});
+
+exports.leaveWorkspace = asyncHandler(async (req, res) => {
+  const membership = await workspaceService.leaveWorkspace({
+    groupId: req.params.groupId,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    membership,
+    status: 'success',
+  });
+});

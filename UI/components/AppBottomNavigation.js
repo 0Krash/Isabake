@@ -16,11 +16,15 @@ export default function AppBottomNavigation({
   conflictTabEnabled = false,
   extraTabs = [],
   onTabPress,
+  syncTabEnabled = false,
+  workspaceTabEnabled = false,
 }) {
   const { colors } = useTransactionBalanceTheme();
   const visibleTabs = [
     ...tabs,
     ...(conflictTabEnabled ? [{ key: 'conflicts', label: 'Conflictos' }] : []),
+    ...(syncTabEnabled ? [{ key: 'sync', label: 'Sync' }] : []),
+    ...(workspaceTabEnabled ? [{ key: 'workspace', label: 'Workspace' }] : []),
     ...(accountTabEnabled ? [{ key: 'account', label: 'Cuenta' }] : []),
     ...extraTabs,
   ];

@@ -165,6 +165,105 @@ class WorkspaceService {
     });
   }
 
+  async countActiveOwners(groupId) {
+    const memberships = await this.repository.findMembershipsByGroupId(groupId);
+
+    return memberships.filter(
+      (membership) =>
+        membership.role === 'owner' && membership.status === ACTIVE_STATUS,
+    ).length;
+  }
+
+  async assertNotLastOwnerChange({ groupId, nextRole, nextStatus, target }) {
+    if (target.role !== 'owner' || target.status !== ACTIVE_STATUS) {
+      return;
+    }
+
+    const keepsOwner =
+      normalizeRole(nextRole || target.role) === 'owner' &&
+      normalizeStatus(nextStatus || target.status) === ACTIVE_STATUS;
+
+    if (keepsOwner) {
+      return;
+    }
+
+    const activeOwnerCount = await this.countActiveOwners(groupId);
+
+    if (activeOwnerCount <= 1) {
+      throw createHttpError(409, 'last_owner_required');
+    }
+  }
+
+  async updateMember({
+    groupId,
+    requesterUserId,
+    role,
+    status,
+    userId,
+  }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (!ADMIN_ROLES.has(requesterRole)) {
+      throw createHttpError(403, 'workspace_admin_required');
+    }
+
+    const target = await this.repository.findMembership({ groupId, userId });
+
+    if (!target) {
+      throw createHttpError(404, 'workspace_member_not_found');
+    }
+
+    await this.assertNotLastOwnerChange({
+      groupId,
+      nextRole: role,
+      nextStatus: status,
+      target,
+    });
+
+    return this.repository.updateMembership(
+      { groupId, userId },
+      {
+        ...target,
+        role: role ? normalizeRole(role) : target.role,
+        status: status ? normalizeStatus(status) : target.status,
+      },
+    );
+  }
+
+  async removeMember({ groupId, requesterUserId, userId }) {
+    return this.updateMember({
+      groupId,
+      requesterUserId,
+      status: 'removed',
+      userId,
+    });
+  }
+
+  async leaveWorkspace({ groupId, userId }) {
+    const target = await this.repository.findMembership({ groupId, userId });
+
+    if (!target || target.status !== ACTIVE_STATUS) {
+      throw createHttpError(403, 'workspace_membership_required');
+    }
+
+    await this.assertNotLastOwnerChange({
+      groupId,
+      nextStatus: 'removed',
+      target,
+    });
+
+    return this.repository.updateMembership(
+      { groupId, userId },
+      {
+        ...target,
+        status: 'removed',
+      },
+    );
+  }
+
   async getUserWorkspaceRole(groupId, userId) {
     if (!groupId) {
       throw createHttpError(400, 'groupId_required');

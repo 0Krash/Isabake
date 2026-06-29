@@ -244,4 +244,113 @@ describe('workspace routes', () => {
     expect(response.status).toBe(403);
     expect(response.body.message).toBe('workspace_membership_required');
   });
+
+  test('owner/admin can update member and member/viewer cannot', async () => {
+    seedWorkspace();
+    WorkspaceMembership.__store.push(
+      {
+        groupId: 'group_a',
+        role: 'admin',
+        status: 'active',
+        userId: 'admin',
+        workspaceId: 'group_a',
+      },
+      {
+        groupId: 'group_a',
+        role: 'member',
+        status: 'active',
+        userId: 'member',
+        workspaceId: 'group_a',
+      },
+      {
+        groupId: 'group_a',
+        role: 'viewer',
+        status: 'active',
+        userId: 'viewer',
+        workspaceId: 'group_a',
+      },
+    );
+
+    const ownerResponse = await request(app)
+      .patch('/workspaces/group_a/members/member')
+      .set(auth('owner'))
+      .send({ role: 'viewer' });
+    const adminResponse = await request(app)
+      .patch('/workspaces/group_a/members/viewer')
+      .set(auth('admin'))
+      .send({ role: 'member' });
+    const memberResponse = await request(app)
+      .patch('/workspaces/group_a/members/viewer')
+      .set(auth('member'))
+      .send({ role: 'admin' });
+    const viewerResponse = await request(app)
+      .patch('/workspaces/group_a/members/member')
+      .set(auth('viewer'))
+      .send({ role: 'admin' });
+
+    expect(ownerResponse.status).toBe(200);
+    expect(ownerResponse.body.membership.role).toBe('viewer');
+    expect(adminResponse.status).toBe(200);
+    expect(adminResponse.body.membership.role).toBe('member');
+    expect(memberResponse.status).toBe(403);
+    expect(viewerResponse.status).toBe(403);
+  });
+
+  test('owner/admin can remove members but cannot remove last owner', async () => {
+    seedWorkspace();
+    WorkspaceMembership.__store.push({
+      groupId: 'group_a',
+      role: 'admin',
+      status: 'active',
+      userId: 'admin',
+      workspaceId: 'group_a',
+    });
+
+    const removedResponse = await request(app)
+      .delete('/workspaces/group_a/members/admin')
+      .set(auth('owner'));
+    const lastOwnerResponse = await request(app)
+      .delete('/workspaces/group_a/members/owner')
+      .set(auth('owner'));
+
+    expect(removedResponse.status).toBe(200);
+    expect(removedResponse.body.membership.status).toBe('removed');
+    expect(lastOwnerResponse.status).toBe(409);
+    expect(lastOwnerResponse.body.message).toBe('last_owner_required');
+  });
+
+  test('user can leave workspace unless they are the only owner', async () => {
+    seedWorkspace();
+    WorkspaceMembership.__store.push({
+      groupId: 'group_a',
+      role: 'member',
+      status: 'active',
+      userId: 'member',
+      workspaceId: 'group_a',
+    });
+
+    const memberLeaveResponse = await request(app)
+      .post('/workspaces/group_a/leave')
+      .set(auth('member'));
+    const ownerLeaveResponse = await request(app)
+      .post('/workspaces/group_a/leave')
+      .set(auth('owner'));
+
+    expect(memberLeaveResponse.status).toBe(200);
+    expect(memberLeaveResponse.body.membership.status).toBe('removed');
+    expect(ownerLeaveResponse.status).toBe(409);
+    expect(ownerLeaveResponse.body.message).toBe('last_owner_required');
+  });
+
+  test('non-member cannot access member management', async () => {
+    seedWorkspace();
+
+    const response = await request(app)
+      .patch('/workspaces/group_a/members/owner')
+      .set(auth('outsider'))
+      .send({ role: 'viewer' });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toBe('workspace_membership_required');
+  });
 });

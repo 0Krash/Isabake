@@ -91,6 +91,25 @@ class MemoryWorkspaceRepository {
     );
   }
 
+  async updateMembership({ groupId, userId }, update) {
+    const index = this.memberships.findIndex(
+      (membership) =>
+        membership.groupId === groupId && membership.userId === userId,
+    );
+
+    if (index < 0) {
+      return null;
+    }
+
+    this.memberships[index] = {
+      ...this.memberships[index],
+      ...update,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return this.memberships[index];
+  }
+
   async findActiveMembershipsByUserId(userId) {
     return this.memberships.filter(
       (membership) =>

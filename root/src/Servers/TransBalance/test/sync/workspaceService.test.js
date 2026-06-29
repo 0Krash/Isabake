@@ -215,4 +215,121 @@ describe('WorkspaceService', () => {
       }),
     );
   });
+
+  test('owner/admin can update and remove members', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'admin',
+      userId: 'admin',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+      userId: 'member',
+    });
+
+    await expect(
+      service.updateMember({
+        groupId: 'group_a',
+        requesterUserId: 'admin',
+        role: 'viewer',
+        userId: 'member',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ role: 'viewer' }));
+    await expect(
+      service.removeMember({
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+        userId: 'member',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: 'removed' }));
+  });
+
+  test('member/viewer cannot manage members', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+      userId: 'member',
+    });
+
+    await expect(
+      service.updateMember({
+        groupId: 'group_a',
+        requesterUserId: 'member',
+        role: 'admin',
+        userId: 'member',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_admin_required',
+      statusCode: 403,
+    });
+  });
+
+  test('cannot remove or demote the last owner', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+
+    await expect(
+      service.removeMember({
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+        userId: 'owner',
+      }),
+    ).rejects.toMatchObject({
+      message: 'last_owner_required',
+      statusCode: 409,
+    });
+    await expect(
+      service.updateMember({
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+        role: 'admin',
+        userId: 'owner',
+      }),
+    ).rejects.toMatchObject({
+      message: 'last_owner_required',
+      statusCode: 409,
+    });
+  });
+
+  test('user can leave workspace when another owner remains', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner_a',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner_a',
+      role: 'owner',
+      userId: 'owner_b',
+    });
+
+    await expect(
+      service.leaveWorkspace({
+        groupId: 'group_a',
+        userId: 'owner_a',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: 'removed' }));
+  });
 });

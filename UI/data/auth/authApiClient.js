@@ -39,8 +39,48 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'GET',
     }),
+  addWorkspaceMember: ({
+    authHeaders,
+    displayName,
+    email,
+    groupId,
+    role,
+    status,
+    userId,
+  }) =>
+    requestJson(`/workspaces/${groupId}/members`, {
+      ...options,
+      body: { displayName, email, role, status, userId },
+      headers: authHeaders,
+      method: 'POST',
+    }),
+  createWorkspace: ({ authHeaders, groupId, name, workspaceId }) =>
+    requestJson('/workspaces', {
+      ...options,
+      body: { groupId, name, workspaceId },
+      headers: authHeaders,
+      method: 'POST',
+    }),
+  leaveWorkspace: ({ authHeaders, groupId }) =>
+    requestJson(`/workspaces/${groupId}/leave`, {
+      ...options,
+      headers: authHeaders,
+      method: 'POST',
+    }),
   listSessions: ({ authHeaders } = {}) =>
     requestJson('/auth/sessions', {
+      ...options,
+      headers: authHeaders,
+      method: 'GET',
+    }),
+  listWorkspaceMembers: ({ authHeaders, groupId }) =>
+    requestJson(`/workspaces/${groupId}/members`, {
+      ...options,
+      headers: authHeaders,
+      method: 'GET',
+    }),
+  listWorkspaces: ({ authHeaders } = {}) =>
+    requestJson('/workspaces', {
       ...options,
       headers: authHeaders,
       method: 'GET',
@@ -81,6 +121,19 @@ export const createAuthApiClient = (options = {}) => ({
       ...options,
       headers: authHeaders,
       method: 'DELETE',
+    }),
+  removeWorkspaceMember: ({ authHeaders, groupId, userId }) =>
+    requestJson(`/workspaces/${groupId}/members/${userId}`, {
+      ...options,
+      headers: authHeaders,
+      method: 'DELETE',
+    }),
+  updateWorkspaceMember: ({ authHeaders, groupId, role, status, userId }) =>
+    requestJson(`/workspaces/${groupId}/members/${userId}`, {
+      ...options,
+      body: { role, status },
+      headers: authHeaders,
+      method: 'PATCH',
     }),
 });
 

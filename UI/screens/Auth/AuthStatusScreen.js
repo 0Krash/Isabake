@@ -19,7 +19,7 @@ import {
 
 export { createAuthModeCopy, createAuthStatusDisplay, sanitizeSessionForDisplay };
 
-export default function AuthStatusScreen() {
+export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const auth = useAuthSession();
   const [displayName, setDisplayName] = useState('');
@@ -87,6 +87,31 @@ export default function AuthStatusScreen() {
           {status.detail}
         </Text>
       </View>
+
+      {auth.session ? (
+        <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
+            Workspace activo
+          </Text>
+          <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+            Administra workspaces compartidos sin borrar datos locales ni
+            ejecutar sync automatico.
+          </Text>
+          {onOpenWorkspaces ? (
+            <Pressable
+              disabled={auth.loading || auth.refreshing}
+              onPress={onOpenWorkspaces}
+              style={[styles.secondaryButton, { borderColor: colors.border }]}
+            >
+              <Text
+                style={[styles.secondaryText, { color: colors.textPrimary }]}
+              >
+                Administrar workspaces
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {auth.session ? (
         <>

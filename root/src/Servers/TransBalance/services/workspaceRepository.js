@@ -122,6 +122,22 @@ class MongooseWorkspaceRepository {
     ).map(toPlainObject);
   }
 
+  async updateMembership({ groupId, userId }, update) {
+    return toPlainObject(
+      await WorkspaceMembership.findOneAndUpdate(
+        {
+          groupId,
+          userId,
+        },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        },
+      ),
+    );
+  }
+
   async findActiveMembershipsByUserId(userId) {
     return (
       await WorkspaceMembership.find({

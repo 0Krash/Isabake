@@ -19,4 +19,11 @@ router
   .get(workspaceController.getMembers)
   .post(workspaceController.addMember);
 
+router.route('/:groupId/leave').post(workspaceController.leaveWorkspace);
+
+router
+  .route('/:groupId/members/:userId')
+  .patch(workspaceController.updateMember)
+  .delete(workspaceController.removeMember);
+
 module.exports = router;
