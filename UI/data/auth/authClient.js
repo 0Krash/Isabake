@@ -1,5 +1,5 @@
 import { getSyncBaseUrl } from '../sync/syncConfig';
-import { getCurrentSession } from './authService';
+import { getFreshAuthHeaders } from './authService';
 import { getAuthHeaders } from './authSession';
 
 const parseJsonResponse = async (response) => {
@@ -14,16 +14,26 @@ export const requestAuthenticatedJson = async (path, options = {}) => {
     throw new Error('Sync API URL no configurada');
   }
 
-  const authHeaders =
-    options.authHeaders ||
-    getAuthHeaders(
-      options.authSession ||
-        (await options.getAuthSession?.()) ||
-        (await getCurrentSession()),
-    );
+  const authHeaders = options.authHeaders
+    ? options.authHeaders
+    : options.authSession
+      ? await getFreshAuthHeaders({
+          client: options.authClient,
+          session: options.authSession,
+        })
+    : await getFreshAuthHeaders({
+        client: options.authClient,
+        session: await options.getAuthSession?.(),
+      }).catch((error) => {
+          if (options.requireAuth === false) {
+            return {};
+          }
+
+          throw error;
+        });
 
   if (options.requireAuth !== false && !authHeaders.Authorization) {
-    throw new Error('Sesion auth requerida para sync remoto');
+    throw new Error('auth_required');
   }
 
   const response = await (options.fetchImpl || fetch)(`${baseUrl}${path}`, {

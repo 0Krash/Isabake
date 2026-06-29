@@ -13,6 +13,7 @@ import {
   runMembershipSyncAccessDevCheck,
   runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
+  runRealAuthSessionDevCheck,
   runResolveLatestConflictPreferLocalDevCheck,
   runResolveLatestConflictPreferRemoteDevCheck,
   runTwoWorkspaceIsolationDevCheck,
@@ -44,6 +45,7 @@ export const createSyncDiagnosticsActions = ({
     runMembershipSyncAccessDevCheck,
     runPullOverPendingConflictDevCheck,
     runPushPullDevCheck,
+    runRealAuthSessionDevCheck,
     runResolveLatestConflictPreferLocalDevCheck,
     runResolveLatestConflictPreferRemoteDevCheck,
     runTwoWorkspaceIsolationDevCheck,
@@ -74,6 +76,11 @@ export const createSyncDiagnosticsActions = ({
     key: 'authenticatedIsolation',
     label: 'Authenticated workspace isolation check',
     run: () => runners.runAuthenticatedWorkspaceIsolationDevCheck(),
+  },
+  {
+    key: 'realAuthSession',
+    label: 'Real auth session check',
+    run: () => runners.runRealAuthSessionDevCheck(),
   },
   {
     key: 'conflictSimulation',

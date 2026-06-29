@@ -11,9 +11,12 @@ import {
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useAuthSession from '../../hooks/auth/useAuthSession';
-import { createAuthModeCopy } from './authStatusModel';
+import {
+  createAuthModeCopy,
+  createAuthStatusDisplay,
+} from './authStatusModel';
 
-export { createAuthModeCopy };
+export { createAuthModeCopy, createAuthStatusDisplay };
 
 export default function AuthStatusScreen() {
   const { colors } = useTransactionBalanceTheme();
@@ -24,6 +27,11 @@ export default function AuthStatusScreen() {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState(null);
   const copy = createAuthModeCopy(mode);
+  const status = createAuthStatusDisplay({
+    loading: auth.loading,
+    refreshing: auth.refreshing,
+    session: auth.session,
+  });
 
   const submit = async () => {
     setMessage(null);
@@ -43,6 +51,12 @@ export default function AuthStatusScreen() {
     setMessage('Sesion cerrada. Los datos locales permanecen en el dispositivo.');
   };
 
+  const verifySession = async () => {
+    setMessage(null);
+    await auth.verifySession();
+    setMessage('Sesion verificada.');
+  };
+
   return (
     <ScrollView
       contentContainerStyle={[
@@ -60,25 +74,34 @@ export default function AuthStatusScreen() {
 
       <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
         <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
-          {auth.session ? 'Sync compartido activo' : 'Modo local'}
+          {status.title}
         </Text>
         <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-          {auth.session
-            ? auth.session.email
-            : 'Puedes seguir usando inventario, recetas y ventas locales.'}
+          {status.detail}
         </Text>
       </View>
 
       {auth.session ? (
-        <Pressable
-          disabled={auth.loading}
-          onPress={logout}
-          style={[styles.primaryButton, { backgroundColor: colors.danger }]}
-        >
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-            Cerrar sesion
-          </Text>
-        </Pressable>
+        <>
+          <Pressable
+            disabled={auth.loading || auth.refreshing}
+            onPress={verifySession}
+            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+              Verificar sesion
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={auth.loading || auth.refreshing}
+            onPress={logout}
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+              Cerrar sesion
+            </Text>
+          </Pressable>
+        </>
       ) : (
         <View style={styles.form}>
           <Text style={[styles.formTitle, { color: colors.textPrimary }]}>

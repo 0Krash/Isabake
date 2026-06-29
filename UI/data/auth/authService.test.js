@@ -19,12 +19,21 @@ import {
   saveAuthSession,
 } from './authTokenStore';
 import {
+  getFreshAuthHeaders,
   getAuthHeaders,
   getCurrentSession,
+  isAccessTokenNearExpiry,
   login,
   logout,
   register,
 } from './authService';
+
+const createJwt = (payload) => {
+  const encode = (value) =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.sig`;
+};
 
 const authResponse = {
   session: {
@@ -107,5 +116,77 @@ describe('authService', () => {
 
     await logout();
     await expect(getCurrentSession()).resolves.toBeNull();
+  });
+
+  test('detects near-expired access tokens', () => {
+    expect(
+      isAccessTokenNearExpiry({
+        accessTokenExpiresAt: Date.now() + 30 * 1000,
+      }),
+    ).toBe(true);
+  });
+
+  test('expired access token refreshes before shared sync headers are returned', async () => {
+    const client = {
+      refresh: jest.fn(async () => ({
+        session: {
+          accessToken: createJwt({
+            exp: Math.floor(Date.now() / 1000) + 3600,
+          }),
+          refreshToken: 'next_refresh',
+        },
+        user: {
+          authProvider: 'password',
+          email: 'ana@example.test',
+          userId: 'user_1',
+        },
+      })),
+    };
+
+    await expect(
+      getFreshAuthHeaders({
+        client,
+        session: {
+          accessToken: createJwt({
+            exp: Math.floor(Date.now() / 1000) - 10,
+          }),
+          accessTokenExpiresAt: Date.now() - 10,
+          authProvider: 'password',
+          refreshToken: 'old_refresh',
+          temporary: false,
+          userId: 'user_1',
+        },
+      }),
+    ).resolves.toEqual({
+      Authorization: expect.stringMatching(/^Bearer /),
+    });
+    expect(client.refresh).toHaveBeenCalledWith({
+      refreshToken: 'old_refresh',
+    });
+  });
+
+  test('failed refresh clears tokens and returns session_expired', async () => {
+    const client = {
+      refresh: jest.fn(async () => {
+        throw new Error('invalid_token');
+      }),
+    };
+
+    await expect(
+      getFreshAuthHeaders({
+        client,
+        session: {
+          accessToken: createJwt({
+            exp: Math.floor(Date.now() / 1000) - 10,
+          }),
+          accessTokenExpiresAt: Date.now() - 10,
+          authProvider: 'password',
+          refreshToken: 'old_refresh',
+          temporary: false,
+          userId: 'user_1',
+        },
+      }),
+    ).rejects.toThrow('session_expired');
+    expect(clearStoredAuthSession).toHaveBeenCalled();
   });
 });

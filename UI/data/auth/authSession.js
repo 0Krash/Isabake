@@ -14,11 +14,14 @@ const normalizeSession = (session = {}) => {
   }
 
   return {
+    accessTokenExpiresAt: session.accessTokenExpiresAt || null,
     authProvider: session.authProvider || 'dev-header',
     authToken,
     displayName: session.displayName || user.displayName || null,
     email: session.email || user.email || `${userId}@dev.local`,
     refreshToken: session.refreshToken || null,
+    restored: Boolean(session.restored),
+    sessionState: session.sessionState || 'authenticated',
     temporary:
       session.temporary !== undefined
         ? session.temporary
@@ -67,6 +70,23 @@ export const getAuthHeaders = (session = currentAuthSession) => {
   };
 };
 
+export const getSafeSessionView = (session = currentAuthSession) => {
+  const normalizedSession = normalizeSession(session);
+
+  if (!normalizedSession) {
+    return null;
+  }
+
+  return {
+    displayName: normalizedSession.displayName,
+    email: normalizedSession.email,
+    restored: normalizedSession.restored,
+    sessionState: normalizedSession.sessionState,
+    temporary: normalizedSession.temporary,
+    userId: normalizedSession.userId,
+  };
+};
+
 export const requireAuthHeaders = (session = currentAuthSession) => {
   const headers = getAuthHeaders(session);
 
@@ -97,6 +117,7 @@ export default {
   createDevAuthSession,
   getAuthHeaders,
   getAuthSession,
+  getSafeSessionView,
   requireAuthHeaders,
   setAuthSession,
 };

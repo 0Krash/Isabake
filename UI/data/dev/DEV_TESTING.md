@@ -478,10 +478,45 @@ Mobile app:
 - Local-only mode remains available without login.
 - Logout clears only the auth session; it does not delete local data.
 
-The mobile token store currently uses an in-memory/test-safe fallback because
-`expo-secure-store` is not installed in this project. Add SecureStore later and
-wire it through the auth token store adapter before treating mobile persistence
-as production hardened.
+Phase 19 stores mobile auth state with `expo-secure-store` on supported native
+runtimes.
+
+Storage shape:
+
+- access token: secure item
+- refresh token: secure item
+- user/session metadata: secure item without raw tokens
+
+Jest uses `test/__mocks__/expoSecureStore.js`. Unsupported environments keep a
+memory-only fallback for tests and development, not for production security.
+
+Session boot:
+
+- `Cuenta` loads any stored session locally.
+- Startup does not require network.
+- Restored sessions are marked locally restored until verified.
+- Local-only mode remains available without login.
+
+Refresh:
+
+- Shared sync requests ask auth for fresh headers before network access.
+- Near-expired or expired access tokens refresh through `/auth/refresh`.
+- Failed refresh clears stored auth tokens and returns `session_expired`.
+- Logout clears secure auth tokens only; it does not delete local SQLite data.
+
+Manual session validation:
+
+- Open `Cuenta`.
+- Tap `Verificar sesion`.
+- The app calls auth/session verification without showing raw JWT values.
+
+Sync Dev also includes `Real auth session check`, which registers a unique dev
+test user, stores tokens, refreshes, and logs out. It is manual and does not run
+from startup or default Run All.
+
+Backend caveat: refresh tokens are still stateless JWTs in Phase 19. Logout
+clears mobile tokens, but server-side refresh-token revocation/audit is still
+pending.
 
 Create workspace with JWT:
 
@@ -572,7 +607,7 @@ Temporary limitations before broader production sync:
 - Dev auth headers are not production authentication and are disabled in
   production unless `ENABLE_DEV_AUTH=true`.
 - Auth UI is intentionally minimal.
-- Mobile secure persistent storage still needs SecureStore wiring.
+- Backend refresh-token revocation/audit is still pending.
 - Workspace invitations do not send email.
 - No WebSockets/realtime sync.
 - Sync is still manual; it does not run on startup or every local write.

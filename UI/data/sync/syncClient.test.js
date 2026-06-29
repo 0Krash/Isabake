@@ -7,6 +7,13 @@ const realAuthSession = {
   userId: 'user_1',
 };
 
+const createJwt = (payload) => {
+  const encode = (value) =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.sig`;
+};
+
 describe('syncClient', () => {
   const originalEnv = process.env;
   const originalFetch = global.fetch;
@@ -154,6 +161,58 @@ describe('syncClient', () => {
       }),
     ).rejects.toThrow('auth_required');
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('uses refreshed access token before sync request', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          changes: [],
+          cursor: '1',
+          groupId: 'group_1',
+        }),
+    });
+    const nextAccessToken = createJwt({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const client = createSyncClient({
+      authClient: {
+        refresh: jest.fn(async () => ({
+          session: {
+            accessToken: nextAccessToken,
+            refreshToken: 'next_refresh',
+          },
+          user: {
+            authProvider: 'password',
+            email: 'ana@example.test',
+            userId: 'user_1',
+          },
+        })),
+      },
+      authSession: {
+        accessToken: createJwt({
+          exp: Math.floor(Date.now() / 1000) - 30,
+        }),
+        accessTokenExpiresAt: Date.now() - 1000,
+        authProvider: 'password',
+        refreshToken: 'old_refresh',
+        temporary: false,
+        userId: 'user_1',
+      },
+      baseUrl: 'http://sync.example.test',
+    });
+
+    await client.pullChanges({ groupId: 'group_1' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://sync.example.test/sync/pull?groupId=group_1',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${nextAccessToken}`,
+        }),
+      }),
+    );
   });
 
   test('consumes backend push response shape', async () => {

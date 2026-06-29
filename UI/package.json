@@ -21,6 +21,7 @@
     "@react-native-picker/picker": "2.11.1",
     "axios": "^1.6.7",
     "expo": "~54.0.35",
+    "expo-secure-store": "~15.0.8",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",

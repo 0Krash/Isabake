@@ -1,5 +1,13 @@
 import { getSyncBaseUrl, validateSyncConfig } from '../sync/syncConfig';
 import { createDevAuthSession, getAuthHeaders } from '../auth/authSession';
+import { createAuthApiClient } from '../auth/authApiClient';
+import {
+  getCurrentSession,
+  login,
+  logout,
+  refreshSession,
+  register,
+} from '../auth/authService';
 import { createSyncClient } from '../sync/syncClient';
 import { createWorkspaceApiClient } from '../workspace/workspaceApiClient';
 
@@ -365,6 +373,78 @@ export const runBackendSyncConnectivityCheck = async (options = {}) => {
     return makeResult({
       error: String(error?.message || error),
       failedStep: 'request',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runRealAuthSessionDevCheck = async (options = {}) => {
+  const name = 'realAuthSession';
+
+  try {
+    const config = validateSyncConfig(options);
+
+    if (!config.ok) {
+      return makeResult({
+        error: config.error,
+        failedStep: 'sync_config',
+        name,
+        ok: false,
+      });
+    }
+
+    const runId = createRunId('phase_19_real_auth');
+    const email = `${runId}@example.test`;
+    const password = `Password-${runId}`;
+    const client = options.client || createAuthApiClient(options);
+    const registered = await register({
+      client,
+      displayName: 'Phase 19 Auth Dev',
+      email,
+      password,
+    });
+    const storedAfterRegister = await getCurrentSession();
+
+    await logout({ session: registered });
+
+    const loggedIn = await login({
+      client,
+      email,
+      password,
+    });
+    const refreshed = await refreshSession({
+      client,
+      session: loggedIn,
+    });
+    const storedAfterRefresh = await getCurrentSession();
+
+    await logout({ session: refreshed });
+
+    const storedAfterLogout = await getCurrentSession();
+
+    return makeResult({
+      details: {
+        email,
+        refreshedAccessTokenPresent: Boolean(refreshed?.accessToken),
+        registeredUserId: registered?.userId || null,
+        storedAfterLogout: Boolean(storedAfterLogout),
+        storedAfterRefresh: Boolean(storedAfterRefresh?.accessToken),
+        storedAfterRegister: Boolean(storedAfterRegister?.accessToken),
+      },
+      name,
+      ok:
+        Boolean(registered?.accessToken) &&
+        Boolean(loggedIn?.accessToken) &&
+        Boolean(refreshed?.accessToken) &&
+        Boolean(storedAfterRegister?.accessToken) &&
+        Boolean(storedAfterRefresh?.accessToken) &&
+        !storedAfterLogout,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'real_auth_session',
       name,
       ok: false,
     });

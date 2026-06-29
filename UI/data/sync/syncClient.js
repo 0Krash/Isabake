@@ -1,7 +1,7 @@
 import { getSyncBaseUrl } from './syncConfig';
 import { DEFAULT_SYNC_ENDPOINTS } from './syncTypes';
 import { getAuthHeaders } from '../auth/authSession';
-import { getCurrentSession } from '../auth/authService';
+import { getFreshAuthHeaders } from '../auth/authService';
 
 const parseJsonResponse = async (response) => {
   const text = await response.text();
@@ -20,13 +20,23 @@ const requestJson = async (path, options = {}) => {
     throw new Error('Sync API URL no configurada');
   }
 
-  const authHeaders =
-    options.authHeaders ||
-    getAuthHeaders(
-      options.authSession ||
-        (await options.getAuthSession?.()) ||
-        (await getCurrentSession()),
-    );
+  const authHeaders = options.authHeaders
+    ? options.authHeaders
+    : options.authSession
+      ? await getFreshAuthHeaders({
+          client: options.authClient,
+          session: options.authSession,
+        })
+    : await getFreshAuthHeaders({
+        client: options.authClient,
+        session: await options.getAuthSession?.(),
+      }).catch((error) => {
+          if (options.requireAuth === false) {
+            return {};
+          }
+
+          throw error;
+        });
 
   if (
     (options.requireAuth === true || options.requireAuth !== false) &&
