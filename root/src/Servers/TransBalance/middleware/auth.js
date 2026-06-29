@@ -55,9 +55,11 @@ const requireAuth = async (req, res, next) => {
     }
 
     try {
-      req.user = await authService.getUserFromAccessToken(token);
+      const authResult = await authService.authenticateAccessToken(token);
+      req.user = authResult.user;
       req.auth = {
         authProvider: 'password',
+        sessionId: authResult.payload.sessionId || null,
         temporary: false,
       };
       return next();

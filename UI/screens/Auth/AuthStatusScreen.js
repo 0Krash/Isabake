@@ -14,9 +14,10 @@ import useAuthSession from '../../hooks/auth/useAuthSession';
 import {
   createAuthModeCopy,
   createAuthStatusDisplay,
+  sanitizeSessionForDisplay,
 } from './authStatusModel';
 
-export { createAuthModeCopy, createAuthStatusDisplay };
+export { createAuthModeCopy, createAuthStatusDisplay, sanitizeSessionForDisplay };
 
 export default function AuthStatusScreen() {
   const { colors } = useTransactionBalanceTheme();
@@ -57,6 +58,12 @@ export default function AuthStatusScreen() {
     setMessage('Sesion verificada.');
   };
 
+  const loadSessions = async () => {
+    setMessage(null);
+    await auth.loadSessions();
+    setMessage('Sesiones actualizadas.');
+  };
+
   return (
     <ScrollView
       contentContainerStyle={[
@@ -94,6 +101,15 @@ export default function AuthStatusScreen() {
           </Pressable>
           <Pressable
             disabled={auth.loading || auth.refreshing}
+            onPress={loadSessions}
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+              Ver sesiones
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={auth.loading || auth.refreshing}
             onPress={logout}
             style={[styles.secondaryButton, { borderColor: colors.border }]}
           >
@@ -101,6 +117,33 @@ export default function AuthStatusScreen() {
               Cerrar sesion
             </Text>
           </Pressable>
+          {auth.sessions.length ? (
+            <View style={styles.sessionsList}>
+              {auth.sessions.map((rawSession) => {
+                const item = sanitizeSessionForDisplay({
+                  ...rawSession,
+                  isCurrent: rawSession.sessionId === auth.session?.sessionId,
+                });
+
+                return (
+                  <View
+                    key={item.sessionId}
+                    style={[styles.sessionItem, { borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>
+                      {item.deviceName}
+                    </Text>
+                    <Text style={[styles.statusText, { color: colors.textMuted }]}>
+                      {item.isCurrent ? 'Esta sesion' : item.revokedAt ? 'Revocada' : 'Activa'}
+                    </Text>
+                    <Text style={[styles.statusText, { color: colors.textMuted }]}>
+                      {item.lastUsedAt || 'Sin uso reciente'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </>
       ) : (
         <View style={styles.form}>
@@ -225,6 +268,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryText: {
+    fontSize: typography.sizes.bodySmall,
+    fontWeight: typography.weights.semibold,
+  },
+  sessionItem: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+  },
+  sessionsList: {
+    gap: 10,
+    marginTop: 14,
+  },
+  sessionTitle: {
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
   },

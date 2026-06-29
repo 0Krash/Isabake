@@ -510,13 +510,49 @@ Manual session validation:
 - Tap `Verificar sesion`.
 - The app calls auth/session verification without showing raw JWT values.
 
-Sync Dev also includes `Real auth session check`, which registers a unique dev
-test user, stores tokens, refreshes, and logs out. It is manual and does not run
-from startup or default Run All.
+Sync Dev also includes manual auth checks:
 
-Backend caveat: refresh tokens are still stateless JWTs in Phase 19. Logout
-clears mobile tokens, but server-side refresh-token revocation/audit is still
-pending.
+- `Real auth session check`
+- `Server session revocation check`
+
+They do not run from startup or default Run All.
+
+Phase 20 adds server-side auth sessions. Refresh tokens are JWTs, but the raw
+refresh token is never stored. The backend stores only a SHA-256 hash in
+`auth_sessions`.
+
+Refresh rotation:
+
+- `/auth/login` and `/auth/register` create an auth session row.
+- `/auth/refresh` verifies the refresh token signature, compares its hash
+  against the active session, revokes the old session as `rotated`, creates a
+  replacement session, and returns a new access/refresh pair.
+- Reusing an old refresh token fails.
+- Deleted users, expired sessions, and revoked sessions cannot refresh.
+
+Logout/revocation:
+
+- `/auth/logout` revokes the current matching auth session when a refresh token
+  or session id is available.
+- Access tokens can remain valid until their short expiration; there is no
+  access-token denylist yet.
+- Mobile logout clears SecureStore even when the backend is offline. Local data
+  is never deleted.
+
+Session endpoints:
+
+```sh
+curl "$URL_Sync/auth/sessions" \
+  -H "Authorization: Bearer <accessToken>"
+
+curl -X DELETE "$URL_Sync/auth/sessions/<sessionId>" \
+  -H "Authorization: Bearer <accessToken>"
+
+curl -X DELETE "$URL_Sync/auth/sessions" \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+Session API responses never include `refreshTokenHash`.
 
 Create workspace with JWT:
 
@@ -607,7 +643,8 @@ Temporary limitations before broader production sync:
 - Dev auth headers are not production authentication and are disabled in
   production unless `ENABLE_DEV_AUTH=true`.
 - Auth UI is intentionally minimal.
-- Backend refresh-token revocation/audit is still pending.
+- Full account/session audit UI is still pending.
+- Access token denylisting is not implemented.
 - Workspace invitations do not send email.
 - No WebSockets/realtime sync.
 - Sync is still manual; it does not run on startup or every local write.

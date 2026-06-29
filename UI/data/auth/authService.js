@@ -66,9 +66,16 @@ const toStoredSession = (payload = {}) =>
   email: payload.user?.email || null,
   refreshToken: payload.session?.refreshToken || null,
   restored: false,
+  sessionId: payload.session?.sessionId || payload.sessionMetadata?.sessionId || null,
+  sessionMetadata: payload.sessionMetadata || null,
   temporary: false,
   user: payload.user || null,
   userId: payload.user?.userId,
+});
+
+const getDeviceMetadata = (payload = {}) => ({
+  deviceId: payload.deviceId || 'mobile_device',
+  deviceName: payload.deviceName || 'Mobile device',
 });
 
 export const getCurrentSession = async () => {
@@ -89,7 +96,10 @@ export const getCurrentSession = async () => {
 
 export const register = async ({ client, ...payload } = {}) => {
   const authClient = client || createAuthApiClient(payload);
-  const response = await authClient.register(payload);
+  const response = await authClient.register({
+    ...getDeviceMetadata(payload),
+    ...payload,
+  });
   const session = toStoredSession(response);
 
   await saveAuthSession(session);
@@ -99,7 +109,10 @@ export const register = async ({ client, ...payload } = {}) => {
 
 export const login = async ({ client, ...payload } = {}) => {
   const authClient = client || createAuthApiClient(payload);
-  const response = await authClient.login(payload);
+  const response = await authClient.login({
+    ...getDeviceMetadata(payload),
+    ...payload,
+  });
   const session = toStoredSession(response);
 
   await saveAuthSession(session);
@@ -176,12 +189,35 @@ export const logout = async ({ client, session } = {}) => {
   const authHeaders = getAuthHeaders(currentSession);
 
   if (client && authHeaders.Authorization) {
-    await client.logout({ authHeaders }).catch(() => {});
+    await client.logout({
+      authHeaders,
+      refreshToken: currentSession?.refreshToken,
+      sessionId: currentSession?.sessionId,
+    }).catch(() => {});
   }
 
   await clearStoredAuthSession();
   await clearAuthSession();
   return null;
+};
+
+export const listSessions = async ({ client, session } = {}) => {
+  const currentSession = await getFreshAuthSession({ client, session });
+  const authClient = client || createAuthApiClient();
+
+  return authClient.listSessions({
+    authHeaders: getAuthHeaders(currentSession),
+  });
+};
+
+export const revokeSession = async ({ client, session, sessionId } = {}) => {
+  const currentSession = await getFreshAuthSession({ client, session });
+  const authClient = client || createAuthApiClient();
+
+  return authClient.revokeSession({
+    authHeaders: getAuthHeaders(currentSession),
+    sessionId,
+  });
 };
 
 export { getAuthHeaders };
@@ -196,7 +232,9 @@ export default {
   getFreshAuthSession,
   isAccessTokenNearExpiry,
   login,
+  listSessions,
   logout,
   refreshSession,
   register,
+  revokeSession,
 };

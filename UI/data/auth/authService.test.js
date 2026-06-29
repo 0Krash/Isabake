@@ -23,9 +23,11 @@ import {
   getAuthHeaders,
   getCurrentSession,
   isAccessTokenNearExpiry,
+  listSessions,
   login,
   logout,
   register,
+  revokeSession,
 } from './authService';
 
 const createJwt = (payload) => {
@@ -39,6 +41,11 @@ const authResponse = {
   session: {
     accessToken: 'jwt_access',
     refreshToken: 'jwt_refresh',
+    sessionId: 'session_1',
+  },
+  sessionMetadata: {
+    deviceName: 'Mobile device',
+    sessionId: 'session_1',
   },
   user: {
     authProvider: 'password',
@@ -76,6 +83,8 @@ describe('authService', () => {
     );
 
     expect(client.register).toHaveBeenCalledWith({
+      deviceId: 'mobile_device',
+      deviceName: 'Mobile device',
       displayName: 'Ana',
       email: 'ANA@EXAMPLE.TEST',
       password: 'password123',
@@ -95,6 +104,12 @@ describe('authService', () => {
 
     expect(getAuthHeaders(session)).toEqual({
       Authorization: 'Bearer jwt_access',
+    });
+    expect(client.login).toHaveBeenCalledWith({
+      deviceId: 'mobile_device',
+      deviceName: 'Mobile device',
+      email: 'ana@example.test',
+      password: 'password123',
     });
   });
 
@@ -116,6 +131,35 @@ describe('authService', () => {
 
     await logout();
     await expect(getCurrentSession()).resolves.toBeNull();
+  });
+
+  test('logout calls backend when possible and still clears tokens when request fails', async () => {
+    const client = {
+      logout: jest.fn(async () => {
+        throw new Error('offline');
+      }),
+    };
+
+    await logout({
+      client,
+      session: {
+        accessToken: 'jwt_access',
+        authProvider: 'password',
+        refreshToken: 'jwt_refresh',
+        sessionId: 'session_1',
+        temporary: false,
+        userId: 'user_1',
+      },
+    });
+
+    expect(client.logout).toHaveBeenCalledWith({
+      authHeaders: {
+        Authorization: 'Bearer jwt_access',
+      },
+      refreshToken: 'jwt_refresh',
+      sessionId: 'session_1',
+    });
+    expect(clearStoredAuthSession).toHaveBeenCalled();
   });
 
   test('detects near-expired access tokens', () => {
@@ -188,5 +232,35 @@ describe('authService', () => {
       }),
     ).rejects.toThrow('session_expired');
     expect(clearStoredAuthSession).toHaveBeenCalled();
+  });
+
+  test('lists and revokes sessions through auth client', async () => {
+    const client = {
+      listSessions: jest.fn(async () => ({
+        sessions: [{ sessionId: 'session_1' }],
+      })),
+      revokeSession: jest.fn(async () => ({
+        session: { sessionId: 'session_1' },
+      })),
+    };
+    const session = {
+      accessToken: createJwt({
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      }),
+      accessTokenExpiresAt: Date.now() + 3600 * 1000,
+      authProvider: 'password',
+      sessionId: 'session_1',
+      temporary: false,
+      userId: 'user_1',
+    };
+
+    await expect(listSessions({ client, session })).resolves.toEqual({
+      sessions: [{ sessionId: 'session_1' }],
+    });
+    await expect(
+      revokeSession({ client, session, sessionId: 'session_1' }),
+    ).resolves.toEqual({
+      session: { sessionId: 'session_1' },
+    });
   });
 });

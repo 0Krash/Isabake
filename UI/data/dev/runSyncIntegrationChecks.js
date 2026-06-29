@@ -3,10 +3,12 @@ import { createDevAuthSession, getAuthHeaders } from '../auth/authSession';
 import { createAuthApiClient } from '../auth/authApiClient';
 import {
   getCurrentSession,
+  getFreshAuthHeaders,
   login,
   logout,
   refreshSession,
   register,
+  revokeSession,
 } from '../auth/authService';
 import { createSyncClient } from '../sync/syncClient';
 import { createWorkspaceApiClient } from '../workspace/workspaceApiClient';
@@ -445,6 +447,98 @@ export const runRealAuthSessionDevCheck = async (options = {}) => {
     return makeResult({
       error: String(error?.message || error),
       failedStep: 'real_auth_session',
+      name,
+      ok: false,
+    });
+  }
+};
+
+export const runServerSessionRevocationDevCheck = async (options = {}) => {
+  const name = 'serverSessionRevocation';
+
+  try {
+    const config = validateSyncConfig(options);
+
+    if (!config.ok) {
+      return makeResult({
+        error: config.error,
+        failedStep: 'sync_config',
+        name,
+        ok: false,
+      });
+    }
+
+    const runId = createRunId('phase_20_session_revocation');
+    const email = `${runId}@example.test`;
+    const password = `Password-${runId}`;
+    const client = options.client || createAuthApiClient(options);
+    const registered = await register({
+      client,
+      displayName: 'Phase 20 Session Dev',
+      email,
+      password,
+    });
+    const listed = client.listSessions
+      ? await client.listSessions({
+          authHeaders: getAuthHeaders(registered),
+        })
+      : { sessions: [] };
+    const refreshed = await refreshSession({
+      client,
+      session: registered,
+    });
+
+    await revokeSession({
+      client,
+      session: refreshed,
+      sessionId: refreshed.sessionId,
+    });
+
+    let refreshFailed = false;
+    let syncAuthFailed = false;
+
+    try {
+      await refreshSession({
+        client,
+        session: refreshed,
+      });
+    } catch (error) {
+      refreshFailed = String(error?.message || error) === 'session_expired';
+    }
+
+    try {
+      await getFreshAuthHeaders({
+        client,
+        session: {
+          ...refreshed,
+          accessTokenExpiresAt: Date.now() - 1000,
+        },
+      });
+    } catch (error) {
+      syncAuthFailed = String(error?.message || error) === 'session_expired';
+    }
+
+    await logout({ session: refreshed });
+
+    return makeResult({
+      details: {
+        email,
+        listedSessionCount: listed.sessions?.length || 0,
+        refreshFailed,
+        sessionId: refreshed.sessionId,
+        syncAuthFailed,
+      },
+      name,
+      ok:
+        Boolean(registered?.sessionId) &&
+        Boolean(refreshed?.sessionId) &&
+        refreshFailed &&
+        syncAuthFailed,
+    });
+  } catch (error) {
+    return makeResult({
+      error: String(error?.message || error),
+      failedStep: 'server_session_revocation',
       name,
       ok: false,
     });

@@ -1,4 +1,5 @@
 const User = require('../models/userModel');
+const AuthSession = require('../models/authSessionModel');
 const Workspace = require('../models/workspaceModel');
 const WorkspaceMembership = require('../models/workspaceMembershipModel');
 
@@ -31,6 +32,45 @@ class MongooseWorkspaceRepository {
 
   async findUserByEmail(email) {
     return toPlainObject(await User.findOne({ email, deletedAt: null }));
+  }
+
+  async createAuthSession(session) {
+    return toPlainObject(await AuthSession.create(session));
+  }
+
+  async findAuthSessionBySessionId(sessionId) {
+    return toPlainObject(await AuthSession.findOne({ sessionId }));
+  }
+
+  async findAuthSessionsByUserId(userId) {
+    return (
+      await AuthSession.find({
+        userId,
+      }).sort({ createdAt: -1 })
+    ).map(toPlainObject);
+  }
+
+  async updateAuthSession(sessionId, update) {
+    return toPlainObject(
+      await AuthSession.findOneAndUpdate(
+        { sessionId },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        },
+      ),
+    );
+  }
+
+  async revokeAuthSessionsByUserId(userId, update) {
+    return AuthSession.updateMany(
+      {
+        revokedAt: null,
+        userId,
+      },
+      update,
+    );
   }
 
   async createWorkspace(workspace) {

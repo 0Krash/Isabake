@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getCurrentSession,
   checkSession,
+  listSessions,
   login,
   logout,
   register,
   refreshSession,
+  revokeSession,
 } from '../../data/auth/authService';
 
 export default function useAuthSession({ autoLoad = true } = {}) {
@@ -14,6 +16,7 @@ export default function useAuthSession({ autoLoad = true } = {}) {
   const [loading, setLoading] = useState(Boolean(autoLoad));
   const [refreshing, setRefreshing] = useState(false);
   const [session, setSession] = useState(null);
+  const [sessions, setSessions] = useState([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -108,6 +111,40 @@ export default function useAuthSession({ autoLoad = true } = {}) {
     }
   }, [session]);
 
+  const loadSessions = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+
+    try {
+      const response = await listSessions({ session });
+      setSessions(response.sessions || []);
+      return response.sessions || [];
+    } catch (nextError) {
+      setError(String(nextError?.message || nextError));
+      throw nextError;
+    } finally {
+      setRefreshing(false);
+    }
+  }, [session]);
+
+  const revokeRemoteSession = useCallback(
+    async (sessionId) => {
+      setRefreshing(true);
+      setError(null);
+
+      try {
+        await revokeSession({ session, sessionId });
+        return loadSessions();
+      } catch (nextError) {
+        setError(String(nextError?.message || nextError));
+        throw nextError;
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [loadSessions, session],
+  );
+
   useEffect(() => {
     if (autoLoad) {
       refresh();
@@ -124,6 +161,9 @@ export default function useAuthSession({ autoLoad = true } = {}) {
     refresh,
     register: registerWithPassword,
     session,
+    sessions,
+    loadSessions,
+    revokeSession: revokeRemoteSession,
     verifySession,
   };
 }

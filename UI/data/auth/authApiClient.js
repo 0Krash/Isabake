@@ -39,15 +39,22 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'GET',
     }),
-  login: ({ email, password }) =>
+  listSessions: ({ authHeaders } = {}) =>
+    requestJson('/auth/sessions', {
+      ...options,
+      headers: authHeaders,
+      method: 'GET',
+    }),
+  login: ({ deviceId, deviceName, email, password }) =>
     requestJson('/auth/login', {
       ...options,
-      body: { email, password },
+      body: { deviceId, deviceName, email, password },
       method: 'POST',
     }),
-  logout: ({ authHeaders } = {}) =>
+  logout: ({ authHeaders, refreshToken, sessionId } = {}) =>
     requestJson('/auth/logout', {
       ...options,
+      body: { refreshToken, sessionId },
       headers: authHeaders,
       method: 'POST',
     }),
@@ -57,11 +64,23 @@ export const createAuthApiClient = (options = {}) => ({
       body: { refreshToken },
       method: 'POST',
     }),
-  register: ({ displayName, email, password }) =>
+  register: ({ deviceId, deviceName, displayName, email, password }) =>
     requestJson('/auth/register', {
       ...options,
-      body: { displayName, email, password },
+      body: { deviceId, deviceName, displayName, email, password },
       method: 'POST',
+    }),
+  revokeAllSessions: ({ authHeaders } = {}) =>
+    requestJson('/auth/sessions', {
+      ...options,
+      headers: authHeaders,
+      method: 'DELETE',
+    }),
+  revokeSession: ({ authHeaders, sessionId }) =>
+    requestJson(`/auth/sessions/${sessionId}`, {
+      ...options,
+      headers: authHeaders,
+      method: 'DELETE',
     }),
 });
 

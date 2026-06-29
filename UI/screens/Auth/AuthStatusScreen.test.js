@@ -1,6 +1,7 @@
 import {
   createAuthModeCopy,
   createAuthStatusDisplay,
+  sanitizeSessionForDisplay,
 } from './authStatusModel';
 
 describe('AuthStatusScreen helpers', () => {
@@ -47,5 +48,22 @@ describe('AuthStatusScreen helpers', () => {
         },
       }).state,
     ).toBe('expired');
+  });
+
+  test('session display does not expose token hashes', () => {
+    const display = sanitizeSessionForDisplay({
+      deviceName: 'iPhone',
+      refreshTokenHash: 'hash_secret',
+      sessionId: 'session_1',
+    });
+
+    expect(display).toEqual({
+      deviceName: 'iPhone',
+      isCurrent: false,
+      lastUsedAt: null,
+      revokedAt: null,
+      sessionId: 'session_1',
+    });
+    expect(JSON.stringify(display)).not.toContain('hash_secret');
   });
 });

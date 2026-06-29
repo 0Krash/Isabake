@@ -3,7 +3,12 @@ const { randomUUID } = require('crypto');
 const createHttpError = require('../utils/httpError');
 const { MongooseWorkspaceRepository } = require('./workspaceRepository');
 const { hashPassword, verifyPassword } = require('./passwordService');
-const { issueTokenPair, verifyJwt } = require('./authTokenService');
+const {
+  getRefreshTokenExpiresAt,
+  hashRefreshToken,
+  issueTokenPair,
+  verifyJwt,
+} = require('./authTokenService');
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -23,12 +28,34 @@ const sanitizeUser = (user) => {
   };
 };
 
+const sanitizeSession = (session) => {
+  if (!session) {
+    return null;
+  }
+
+  return {
+    createdAt: session.createdAt,
+    deviceId: session.deviceId || null,
+    deviceName: session.deviceName || null,
+    expiresAt: session.expiresAt,
+    ipAddress: session.ipAddress || null,
+    lastUsedAt: session.lastUsedAt || null,
+    replacedBySessionId: session.replacedBySessionId || null,
+    revokedAt: session.revokedAt || null,
+    revokedReason: session.revokedReason || null,
+    sessionId: session.sessionId,
+    updatedAt: session.updatedAt,
+    userAgent: session.userAgent || null,
+    userId: session.userId,
+  };
+};
+
 class AuthService {
   constructor(repository = new MongooseWorkspaceRepository()) {
     this.repository = repository;
   }
 
-  async register({ displayName, email, password }) {
+  async register({ displayName, email, password, ...sessionMetadata }) {
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedEmail) {
@@ -49,10 +76,10 @@ class AuthService {
       userId: `user_${randomUUID()}`,
     });
 
-    return this.createAuthResponse(user);
+    return this.createAuthResponse(user, sessionMetadata);
   }
 
-  async login({ email, password }) {
+  async login({ email, password, ...sessionMetadata }) {
     const normalizedEmail = normalizeEmail(email);
     const user = await this.repository.findUserByEmail(normalizedEmail);
 
@@ -66,7 +93,7 @@ class AuthService {
       throw createHttpError(401, 'invalid_credentials');
     }
 
-    return this.createAuthResponse(user);
+    return this.createAuthResponse(user, sessionMetadata);
   }
 
   async refresh(refreshToken) {
@@ -76,16 +103,48 @@ class AuthService {
       throw createHttpError(401, 'invalid_token');
     }
 
+    const session = await this.repository.findAuthSessionBySessionId(
+      payload.sessionId,
+    );
+
+    if (!session) {
+      throw createHttpError(401, 'invalid_token');
+    }
+
+    if (
+      session.revokedAt ||
+      new Date(session.expiresAt).getTime() <= Date.now() ||
+      session.refreshTokenHash !== hashRefreshToken(refreshToken)
+    ) {
+      throw createHttpError(401, 'invalid_token');
+    }
+
     const user = await this.repository.findUserByUserId(payload.sub);
 
     if (!user || user.deletedAt) {
       throw createHttpError(401, 'invalid_token');
     }
 
-    return this.createAuthResponse(user);
+    const result = await this.createAuthResponse(user, {
+      deviceId: session.deviceId,
+      deviceName: session.deviceName,
+      ipAddress: session.ipAddress,
+      refreshTokenFamilyId: session.refreshTokenFamilyId,
+      userAgent: session.userAgent,
+    });
+
+    await this.repository.updateAuthSession(session.sessionId, {
+      ...session,
+      lastUsedAt: new Date(),
+      replacedBySessionId: result.session.sessionId,
+      revokedAt: new Date(),
+      revokedReason: 'rotated',
+    });
+
+    return result;
   }
 
-  async getUserFromAccessToken(accessToken) {
+  async authenticateAccessToken(accessToken) {
     const payload = verifyJwt(accessToken);
 
     if (payload.tokenUse !== 'access') {
@@ -98,12 +157,106 @@ class AuthService {
       throw createHttpError(401, 'invalid_token');
     }
 
+    return { payload, user };
+  }
+
+  async getUserFromAccessToken(accessToken) {
+    const { user } = await this.authenticateAccessToken(accessToken);
+
     return user;
   }
 
-  createAuthResponse(user) {
+  async logout({ refreshToken, sessionId, userId }) {
+    let targetSessionId = sessionId;
+
+    if (refreshToken) {
+      const payload = verifyJwt(refreshToken);
+
+      if (payload.tokenUse !== 'refresh') {
+        throw createHttpError(401, 'invalid_token');
+      }
+
+      targetSessionId = payload.sessionId;
+    }
+
+    if (!targetSessionId) {
+      return { ok: true, revoked: false };
+    }
+
+    const session = await this.repository.findAuthSessionBySessionId(
+      targetSessionId,
+    );
+
+    if (!session || session.userId !== userId) {
+      throw createHttpError(404, 'auth_session_not_found');
+    }
+
+    await this.repository.updateAuthSession(session.sessionId, {
+      ...session,
+      revokedAt: session.revokedAt || new Date(),
+      revokedReason: session.revokedReason || 'logout',
+    });
+
+    return { ok: true, revoked: true, sessionId: session.sessionId };
+  }
+
+  async listSessions(userId) {
+    const sessions = await this.repository.findAuthSessionsByUserId(userId);
+
+    return sessions.map(sanitizeSession);
+  }
+
+  async revokeSession({ requesterUserId, sessionId }) {
+    const session = await this.repository.findAuthSessionBySessionId(sessionId);
+
+    if (!session || session.userId !== requesterUserId) {
+      throw createHttpError(404, 'auth_session_not_found');
+    }
+
+    const revokedSession = await this.repository.updateAuthSession(sessionId, {
+      ...session,
+      revokedAt: session.revokedAt || new Date(),
+      revokedReason: session.revokedReason || 'revoked_by_user',
+    });
+
+    return sanitizeSession(revokedSession);
+  }
+
+  async revokeAllSessions(userId) {
+    await this.repository.revokeAuthSessionsByUserId(userId, {
+      revokedAt: new Date(),
+      revokedReason: 'revoked_all_by_user',
+    });
+
+    return { ok: true };
+  }
+
+  async createAuthResponse(user, sessionMetadata = {}) {
+    const sessionId = `session_${randomUUID()}`;
+    const refreshTokenFamilyId =
+      sessionMetadata.refreshTokenFamilyId || `family_${randomUUID()}`;
+    const tokens = issueTokenPair(user, {
+      refreshTokenFamilyId,
+      sessionId,
+    });
+    const authSession = await this.repository.createAuthSession({
+      deviceId: sessionMetadata.deviceId || null,
+      deviceName: sessionMetadata.deviceName || null,
+      expiresAt: getRefreshTokenExpiresAt(),
+      ipAddress: sessionMetadata.ipAddress || null,
+      refreshTokenFamilyId,
+      refreshTokenHash: hashRefreshToken(tokens.refreshToken),
+      sessionId,
+      userAgent: sessionMetadata.userAgent || null,
+      userId: user.userId,
+    });
+
     return {
-      session: issueTokenPair(user),
+      session: {
+        ...tokens,
+        sessionId,
+      },
+      sessionMetadata: sanitizeSession(authSession),
       user: sanitizeUser(user),
     };
   }
@@ -112,5 +265,6 @@ class AuthService {
 module.exports = {
   AuthService,
   normalizeEmail,
+  sanitizeSession,
   sanitizeUser,
 };

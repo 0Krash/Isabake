@@ -46,12 +46,13 @@ describe('syncDiagnosticsModel', () => {
       runRealAuthSessionDevCheck: jest.fn(),
       runResolveLatestConflictPreferLocalDevCheck: jest.fn(),
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(),
+      runServerSessionRevocationDevCheck: jest.fn(),
       runTwoWorkspaceIsolationDevCheck: jest.fn(),
     };
 
     const actions = createSyncDiagnosticsActions({ runners });
 
-    expect(actions).toHaveLength(17);
+    expect(actions).toHaveLength(18);
     expect(runners.runAuthWorkspaceDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
@@ -67,6 +68,7 @@ describe('syncDiagnosticsModel', () => {
     expect(runners.runResolveLatestConflictPreferRemoteDevCheck).not.toHaveBeenCalled();
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
+    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });
 
@@ -87,6 +89,7 @@ describe('syncDiagnosticsModel', () => {
       runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
+      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
@@ -105,6 +108,7 @@ describe('syncDiagnosticsModel', () => {
     await actions.find((action) => action.key === 'conflictResolutionEndToEnd').run();
     await actions.find((action) => action.key === 'conflictPreferLocal').run();
     await actions.find((action) => action.key === 'realAuthSession').run();
+    await actions.find((action) => action.key === 'serverSessionRevocation').run();
     await actions.find((action) => action.key === 'legacyPushPull').run();
     await actions.find((action) => action.key === 'legacyIsolation').run();
 
@@ -144,6 +148,7 @@ describe('syncDiagnosticsModel', () => {
       groupId: DEV_AUTH_GROUP_ID,
     });
     expect(runners.runRealAuthSessionDevCheck).toHaveBeenCalledWith();
+    expect(runners.runServerSessionRevocationDevCheck).toHaveBeenCalledWith();
     expect(runners.runPushPullDevCheck).toHaveBeenCalledWith({
       groupId: DEV_AUTH_GROUP_ID,
       legacy: true,
@@ -172,6 +177,7 @@ describe('syncDiagnosticsModel', () => {
       runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
+      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
@@ -187,6 +193,7 @@ describe('syncDiagnosticsModel', () => {
     expect(result.pullOverPendingConflict.ok).toBe(true);
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
+    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });
 
@@ -209,6 +216,7 @@ describe('syncDiagnosticsModel', () => {
       runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
+      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: false })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
@@ -218,6 +226,7 @@ describe('syncDiagnosticsModel', () => {
     expect(result.pullOverPendingConflict.ok).toBe(true);
     expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
+    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
   });
 });

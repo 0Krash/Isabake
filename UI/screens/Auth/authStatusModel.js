@@ -74,3 +74,11 @@ export const createAuthStatusDisplay = ({
     title: 'Modo local',
   };
 };
+
+export const sanitizeSessionForDisplay = (session = {}) => ({
+  deviceName: session.deviceName || 'Dispositivo',
+  isCurrent: Boolean(session.isCurrent),
+  lastUsedAt: session.lastUsedAt || null,
+  revokedAt: session.revokedAt || null,
+  sessionId: session.sessionId,
+});

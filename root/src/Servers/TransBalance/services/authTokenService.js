@@ -1,4 +1,4 @@
-const { createHmac, randomUUID } = require('crypto');
+const { createHash, createHmac, randomUUID } = require('crypto');
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -77,10 +77,20 @@ const verifyJwt = (token) => {
   return payload;
 };
 
-const issueTokenPair = (user) => ({
+const hashRefreshToken = (refreshToken) =>
+  createHash('sha256').update(String(refreshToken || '')).digest('hex');
+
+const getRefreshTokenExpiresAt = () =>
+  new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
+
+const issueTokenPair = (
+  user,
+  { refreshTokenFamilyId = randomUUID(), sessionId = randomUUID() } = {},
+) => ({
   accessToken: signJwt(
     {
       email: user.email,
+      sessionId,
       sub: user.userId,
       tokenUse: 'access',
     },
@@ -89,6 +99,8 @@ const issueTokenPair = (user) => ({
   expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   refreshToken: signJwt(
     {
+      refreshTokenFamilyId,
+      sessionId,
       sub: user.userId,
       tokenUse: 'refresh',
     },
@@ -99,6 +111,8 @@ const issueTokenPair = (user) => ({
 module.exports = {
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_SECONDS,
+  getRefreshTokenExpiresAt,
+  hashRefreshToken,
   issueTokenPair,
   signJwt,
   verifyJwt,

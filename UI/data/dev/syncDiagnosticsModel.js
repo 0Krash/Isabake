@@ -16,6 +16,7 @@ import {
   runRealAuthSessionDevCheck,
   runResolveLatestConflictPreferLocalDevCheck,
   runResolveLatestConflictPreferRemoteDevCheck,
+  runServerSessionRevocationDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
 import { createDevAuthSession } from '../auth/authSession';
@@ -48,6 +49,7 @@ export const createSyncDiagnosticsActions = ({
     runRealAuthSessionDevCheck,
     runResolveLatestConflictPreferLocalDevCheck,
     runResolveLatestConflictPreferRemoteDevCheck,
+    runServerSessionRevocationDevCheck,
     runTwoWorkspaceIsolationDevCheck,
   },
 } = {}) => [
@@ -81,6 +83,11 @@ export const createSyncDiagnosticsActions = ({
     key: 'realAuthSession',
     label: 'Real auth session check',
     run: () => runners.runRealAuthSessionDevCheck(),
+  },
+  {
+    key: 'serverSessionRevocation',
+    label: 'Server session revocation check',
+    run: () => runners.runServerSessionRevocationDevCheck(),
   },
   {
     key: 'conflictSimulation',
