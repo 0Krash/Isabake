@@ -47,16 +47,101 @@ const findConflictOutboxForDocument = async ({ collection, documentId }) => {
   );
 };
 
-const toConflictSummaryItem = (document) => ({
-  collection: document.collection,
-  groupId: document.groupId || null,
-  localId: document.id,
-  localVersion: document.localVersion,
-  remoteId: document.remoteId || null,
-  serverVersion: document.serverVersion,
-  syncStatus: document.syncStatus,
-  updatedAt: document.updatedAt,
-});
+const getConflictRemoteDocument = (conflict = {}) =>
+  conflict.remoteDocument ||
+  conflict.conflictDocument ||
+  conflict.conflictMetadata?.remoteDocument ||
+  conflict.conflictMetadata?.conflictDocument ||
+  null;
+
+const hasObjectPayload = (value) =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value));
+
+const hasRemotePayload = (remoteDocument) =>
+  hasObjectPayload(remoteDocument) &&
+  (hasObjectPayload(remoteDocument.document) ||
+    hasObjectPayload(remoteDocument.data) ||
+    Boolean(remoteDocument.deletedAt) ||
+    Boolean(remoteDocument.remoteId) ||
+    Boolean(remoteDocument.serverVersion));
+
+export const isConflictResolvablePreferRemote = (conflict = {}) =>
+  hasRemotePayload(getConflictRemoteDocument(conflict));
+
+export const isConflictResolvablePreferLocal = (conflict = {}) => {
+  if (conflict.localDocument) {
+    return conflict.localData !== null && conflict.localData !== undefined;
+  }
+
+  return Boolean(conflict.hasLocalDocument && conflict.hasLocalData);
+};
+
+export const getConflictResolutionCapabilities = (conflict = {}) => {
+  const resolvablePreferLocal = isConflictResolvablePreferLocal(conflict);
+  const resolvablePreferRemote = isConflictResolvablePreferRemote(conflict);
+
+  return {
+    missingLocalDocument: !resolvablePreferLocal,
+    missingRemoteDocument: !resolvablePreferRemote,
+    resolvablePreferLocal,
+    resolvablePreferRemote,
+  };
+};
+
+const getUnresolvableReason = (conflict, resolutionType) => {
+  if (resolutionType === 'preferRemote') {
+    return isConflictResolvablePreferRemote(conflict)
+      ? null
+      : 'missing_remote_document';
+  }
+
+  if (resolutionType === 'preferLocal') {
+    return isConflictResolvablePreferLocal(conflict)
+      ? null
+      : 'missing_local_document';
+  }
+
+  return 'unknown_resolution_type';
+};
+
+const sortLatestFirst = (conflicts = []) =>
+  [...conflicts].sort((left, right) => {
+    const leftTime = Date.parse(left.updatedAt || left.detectedAt || '') || 0;
+    const rightTime = Date.parse(right.updatedAt || right.detectedAt || '') || 0;
+
+    return rightTime - leftTime;
+  });
+
+const toConflictSummaryItem = (document, outboxEvents = []) => {
+  const outboxEvent =
+    outboxEvents.find(
+      (event) =>
+        event.collection === document.collection &&
+        event.documentId === document.id,
+    ) || null;
+  const conflictMetadata = parseMaybeJson(outboxEvent?.lastError) || {};
+  const conflictDocument = conflictMetadata.conflictDocument || null;
+  const item = {
+    collection: document.collection,
+    conflictDocument,
+    conflictMetadata,
+    groupId: document.groupId || null,
+    hasLocalData: document.data !== null && document.data !== undefined,
+    hasLocalDocument: true,
+    localId: document.id,
+    localVersion: document.localVersion,
+    remoteDocument: conflictDocument,
+    remoteId: document.remoteId || conflictDocument?.remoteId || null,
+    serverVersion: document.serverVersion,
+    syncStatus: document.syncStatus,
+    updatedAt: document.updatedAt,
+  };
+
+  return {
+    ...item,
+    ...getConflictResolutionCapabilities(item),
+  };
+};
 
 export const getConflictDocuments = async (options = {}) =>
   getConflictDocumentRows(options);
@@ -86,9 +171,26 @@ export const getConflictSummary = async (options = {}) => {
     conflictDocumentCount: documents.length,
     conflictOutboxCount: outboxEvents.length,
     conflictsByCollection: summarizeByCollection(documents),
-    documents: documents.map(toConflictSummaryItem),
+    documents: sortLatestFirst(
+      documents.map((document) => toConflictSummaryItem(document, outboxEvents)),
+    ),
     outboxByCollection: summarizeByCollection(outboxEvents),
+    preferLocalResolvableCount: documents.filter((document) =>
+      isConflictResolvablePreferLocal({
+        hasLocalData: document.data !== null && document.data !== undefined,
+        hasLocalDocument: true,
+      }),
+    ).length,
+    preferRemoteResolvableCount: documents.filter((document) => {
+      const item = toConflictSummaryItem(document, outboxEvents);
+      return isConflictResolvablePreferRemote(item);
+    }).length,
     resolvableConflictCount: documents.length,
+    totalConflicts: documents.length,
+    unresolvedMissingRemoteCount: documents.filter((document) => {
+      const item = toConflictSummaryItem(document, outboxEvents);
+      return !isConflictResolvablePreferRemote(item);
+    }).length,
   };
 };
 
@@ -105,7 +207,7 @@ export const getConflictDetails = async ({ collection, documentId } = {}) => {
   const conflictMetadata = parseMaybeJson(outboxEvent?.lastError) || {};
   const conflictDocument = conflictMetadata.conflictDocument || null;
 
-  return {
+  const details = {
     attemptedBaseServerVersion:
       conflictMetadata.attemptedBaseServerVersion || null,
     collection,
@@ -116,12 +218,86 @@ export const getConflictDetails = async ({ collection, documentId } = {}) => {
     groupId: localDocument?.groupId || conflictDocument?.document?.groupId || null,
     localData: localDocument?.data || null,
     localDocument,
+    localId: localDocument?.id || documentId,
     localVersion: localDocument?.localVersion || null,
     outboxEvent,
     outboxEvents,
     rejectedAt: conflictMetadata.rejectedAt || null,
     remoteDocument: conflictDocument,
     serverVersion: localDocument?.serverVersion || null,
+    updatedAt: localDocument?.updatedAt || null,
+  };
+
+  return {
+    ...details,
+    ...getConflictResolutionCapabilities(details),
+  };
+};
+
+export const getResolvableConflicts = async ({
+  resolutionType = 'preferRemote',
+} = {}) => {
+  const summary = await getConflictSummary();
+  const detailsList = await Promise.all(
+    (summary.documents || []).map((conflict) =>
+      getConflictDetails({
+        collection: conflict.collection,
+        documentId: conflict.localId,
+      }),
+    ),
+  );
+
+  return sortLatestFirst(
+    detailsList.filter((conflict) => !getUnresolvableReason(conflict, resolutionType)),
+  );
+};
+
+export const getResolvableConflictReport = async ({
+  resolutionType = 'preferRemote',
+} = {}) => {
+  const summary = await getConflictSummary();
+  const detailsList = await Promise.all(
+    (summary.documents || []).map((conflict) =>
+      getConflictDetails({
+        collection: conflict.collection,
+        documentId: conflict.localId,
+      }),
+    ),
+  );
+  const skippedConflicts = [];
+  const resolvableConflicts = [];
+
+  detailsList.forEach((conflict) => {
+    const reason = getUnresolvableReason(conflict, resolutionType);
+
+    if (reason) {
+      skippedConflicts.push({
+        collection: conflict.collection,
+        localId: conflict.localDocument?.id || conflict.localId || null,
+        reason,
+      });
+      return;
+    }
+
+    resolvableConflicts.push(conflict);
+  });
+
+  return {
+    conflicts: sortLatestFirst(resolvableConflicts),
+    skippedConflicts,
+    summary,
+  };
+};
+
+export const getLatestResolvableConflict = async ({
+  resolutionType = 'preferRemote',
+} = {}) => {
+  const report = await getResolvableConflictReport({ resolutionType });
+
+  return {
+    conflict: report.conflicts[0] || null,
+    report,
+    summary: report.summary,
   };
 };
 
@@ -259,11 +435,17 @@ export const markConflictResolvedManually = async ({
 };
 
 export default {
+  getConflictResolutionCapabilities,
   getConflictDetails,
   getConflictDocuments,
   getConflictOutboxEvents: getConflictOutboxEventList,
   getConflictSummary,
   getConflictsByCollection,
+  getLatestResolvableConflict,
+  getResolvableConflictReport,
+  getResolvableConflicts,
+  isConflictResolvablePreferLocal,
+  isConflictResolvablePreferRemote,
   markConflictResolvedManually,
   resolveConflictPreferLocal,
   resolveConflictPreferRemote,

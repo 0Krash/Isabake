@@ -4,9 +4,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import ConflictDataPreview from './ConflictDataPreview';
-import { getRemotePreviewData } from './conflictUiModel';
+import {
+  getConflictResolutionState,
+  getRemotePreviewData,
+} from './conflictUiModel';
 
-export { getRemotePreviewData };
+export { getConflictResolutionState, getRemotePreviewData };
 
 export default function ConflictDetailPanel({
   confirmAction,
@@ -31,6 +34,7 @@ export default function ConflictDetailPanel({
 
   const localData = details.localData;
   const remoteData = getRemotePreviewData(details);
+  const resolutionState = getConflictResolutionState(details);
   const confirmationText =
     confirmAction === 'local'
       ? 'Preferir local mantendra tus cambios y los reintentara en el siguiente sync.'
@@ -52,6 +56,24 @@ export default function ConflictDetailPanel({
       <Text style={[styles.meta, { color: colors.textMuted }]}>
         Outbox: {details.outboxEvent?.status || '-'}
       </Text>
+      <Text style={[styles.meta, { color: colors.textMuted }]}>
+        Preferir local:{' '}
+        {resolutionState.resolvablePreferLocal ? 'disponible' : 'sin datos'}
+      </Text>
+      <Text style={[styles.meta, { color: colors.textMuted }]}>
+        Preferir remoto:{' '}
+        {resolutionState.resolvablePreferRemote ? 'disponible' : 'sin remoto'}
+      </Text>
+      {resolutionState.missingRemoteDocument ? (
+        <Text style={[styles.warning, { color: colors.danger }]}>
+          {resolutionState.remoteUnavailableMessage}
+        </Text>
+      ) : null}
+      {resolutionState.missingLocalDocument ? (
+        <Text style={[styles.warning, { color: colors.danger }]}>
+          La version local no esta disponible para este conflicto.
+        </Text>
+      ) : null}
 
       <View style={styles.previewGrid}>
         <ConflictDataPreview data={localData} title="Local" />
@@ -87,7 +109,7 @@ export default function ConflictDetailPanel({
       ) : (
         <View style={styles.actions}>
           <Pressable
-            disabled={loading}
+            disabled={loading || !resolutionState.resolvablePreferLocal}
             onPress={onRequestPreferLocal}
             style={[styles.secondaryButton, { borderColor: colors.border }]}
           >
@@ -96,9 +118,16 @@ export default function ConflictDetailPanel({
             </Text>
           </Pressable>
           <Pressable
-            disabled={loading}
+            disabled={loading || !resolutionState.resolvablePreferRemote}
             onPress={onRequestPreferRemote}
-            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+            style={[
+              styles.primaryButton,
+              {
+                backgroundColor: resolutionState.resolvablePreferRemote
+                  ? colors.primary
+                  : colors.border,
+              },
+            ]}
           >
             <Text style={[styles.primaryText, { color: colors.textInverse }]}>
               Preferir remoto
@@ -168,5 +197,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.bold,
+  },
+  warning: {
+    fontSize: typography.sizes.bodySmall,
   },
 });

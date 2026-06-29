@@ -10,6 +10,11 @@ jest.mock('../db/localIds', () => ({
 }));
 
 jest.mock('../db/documentStore', () => ({
+  getConflictDocuments: jest.fn(async () =>
+    Array.from(mockDocuments.values()).filter(
+      (document) => document.syncStatus === 'conflict',
+    ),
+  ),
   getDocument: jest.fn(async (collection, id) => mockDocuments.get(`${collection}:${id}`)),
   markDocumentConflict: jest.fn(async (collection, id, { serverVersion } = {}) => {
     const key = `${collection}:${id}`;
@@ -21,6 +26,19 @@ jest.mock('../db/documentStore', () => ({
     }
 
     return document || null;
+  }),
+  preferRemoteVersion: jest.fn(async (collection, id, remoteDocument) => {
+    const document = {
+      collection,
+      data: remoteDocument.document || remoteDocument.data || {},
+      groupId: remoteDocument.document?.groupId || remoteDocument.data?.groupId,
+      id,
+      remoteId: remoteDocument.remoteId,
+      serverVersion: remoteDocument.serverVersion,
+      syncStatus: 'synced',
+    };
+    mockDocuments.set(`${collection}:${id}`, document);
+    return document;
   }),
   saveDocument: jest.fn(async (collection, id, data, options = {}) => {
     const existingDocument = mockDocuments.get(`${collection}:${id}`);
@@ -49,12 +67,43 @@ jest.mock('../db/documentStore', () => ({
 }));
 
 jest.mock('../sync/syncOutbox', () => ({
+  addOutboxEvent: jest.fn(async (collection, documentId, operation, payload) => {
+    const event = {
+      collection,
+      documentId,
+      id: `outbox_${documentId}_${mockOutboxEvents.length + 1}`,
+      operation,
+      payload,
+      status: 'pending',
+    };
+    mockOutboxEvents.push(event);
+    return event.id;
+  }),
+  getConflictOutboxEvents: jest.fn(async () =>
+    mockOutboxEvents.filter((event) => event.status === 'conflict'),
+  ),
   getOutboxEventById: jest.fn(async (id) =>
     mockOutboxEvents.find((event) => event.id === id) || null,
+  ),
+  getPendingOutboxEventsForDocument: jest.fn(async (collection, documentId) =>
+    mockOutboxEvents.filter(
+      (event) =>
+        event.collection === collection &&
+        event.documentId === documentId &&
+        event.status === 'pending',
+    ),
   ),
   getPendingOutboxEvents: jest.fn(async () =>
     mockOutboxEvents.filter((event) => event.status === 'pending'),
   ),
+  markOutboxEventResolved: jest.fn(async (id, resolution) => {
+    const event = mockOutboxEvents.find((item) => item.id === id);
+
+    if (event) {
+      event.lastError = JSON.stringify(resolution);
+      event.status = 'done';
+    }
+  }),
 }));
 
 jest.mock('../validation/syncReadinessCheck', () => ({
@@ -108,6 +157,7 @@ import {
   runMembershipSyncAccessDevCheck,
   runPullOverPendingConflictDevCheck,
   runPushPullDevCheck,
+  runResolveLatestConflictPreferRemoteDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
 import { pullRemoteChanges, pushPendingChanges } from '../sync';
@@ -995,5 +1045,83 @@ describe('runSyncIntegrationChecks', () => {
         syncStateBeforePull: expect.any(String),
       }),
     );
+  });
+
+  test('prefer-remote latest conflict check skips missing remote document', async () => {
+    mockDocuments.set('recipes:old_resolvable', {
+      collection: 'recipes',
+      data: { name: 'Old local' },
+      groupId: 'group_1',
+      id: 'old_resolvable',
+      syncStatus: 'conflict',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    mockDocuments.set('recipes:new_missing_remote', {
+      collection: 'recipes',
+      data: { name: 'New local' },
+      groupId: 'group_1',
+      id: 'new_missing_remote',
+      syncStatus: 'conflict',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+    mockOutboxEvents.push({
+      collection: 'recipes',
+      documentId: 'old_resolvable',
+      id: 'outbox_old_resolvable',
+      lastError: JSON.stringify({
+        conflictDocument: {
+          document: { groupId: 'group_1', name: 'Old remote' },
+          remoteId: 'remote_old',
+          serverVersion: 2,
+        },
+      }),
+      status: 'conflict',
+    });
+
+    const result = await runResolveLatestConflictPreferRemoteDevCheck();
+
+    expect(result.ok).toBe(true);
+    expect(result.details.conflict.localDocument.id).toBe('old_resolvable');
+    expect(result.details.after.syncStatus).toBe('synced');
+    expect(result.details.skippedConflictIds).toEqual(['new_missing_remote']);
+    expect(result.details.skippedReasons).toEqual([
+      {
+        localId: 'new_missing_remote',
+        reason: 'missing_remote_document',
+      },
+    ]);
+  });
+
+  test('prefer-remote latest conflict check returns controlled failure with no resolvable conflict', async () => {
+    mockDocuments.set('recipes:missing_remote', {
+      collection: 'recipes',
+      data: { name: 'Local' },
+      groupId: 'group_1',
+      id: 'missing_remote',
+      syncStatus: 'conflict',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    const result = await runResolveLatestConflictPreferRemoteDevCheck();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: 'no_prefer_remote_resolvable_conflict',
+        failedStep: 'no_prefer_remote_resolvable_conflict',
+        name: 'resolveLatestConflictPreferRemoteDev',
+        ok: false,
+      }),
+    );
+    expect(result.details).toEqual({
+      preferRemoteResolvableCount: 0,
+      skippedConflictIds: ['missing_remote'],
+      skippedReasons: [
+        {
+          localId: 'missing_remote',
+          reason: 'missing_remote_document',
+        },
+      ],
+      totalConflictCount: 1,
+    });
   });
 });

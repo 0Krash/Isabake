@@ -11,11 +11,17 @@ export {
 
 export { createSyncClient } from './syncClient';
 export {
+  getConflictResolutionCapabilities,
   getConflictDetails,
   getConflictDocuments,
   getConflictOutboxEvents,
   getConflictSummary,
   getConflictsByCollection,
+  getLatestResolvableConflict,
+  getResolvableConflictReport,
+  getResolvableConflicts,
+  isConflictResolvablePreferLocal,
+  isConflictResolvablePreferRemote,
   markConflictResolvedManually,
   resolveConflictPreferLocal,
   resolveConflictPreferRemote,

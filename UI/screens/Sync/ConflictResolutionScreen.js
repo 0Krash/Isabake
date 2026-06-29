@@ -134,6 +134,27 @@ export default function ConflictResolutionScreen() {
 
       <View style={[styles.summaryBox, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+          Resumen
+        </Text>
+        <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+          Total: {screenState.totalConflicts}
+        </Text>
+        <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+          Preferir local disponible: {screenState.preferLocalResolvableCount}
+        </Text>
+        <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+          Preferir remoto disponible: {screenState.preferRemoteResolvableCount}
+        </Text>
+        <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+          Sin version remota: {screenState.unresolvedMissingRemoteCount}
+        </Text>
+        <Text
+          style={[
+            styles.sectionTitle,
+            styles.collectionTitle,
+            { color: colors.textPrimary },
+          ]}
+        >
           Por coleccion
         </Text>
         {Object.keys(groupedCounts).length === 0 ? (
@@ -243,6 +264,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+  },
+  collectionTitle: {
+    marginTop: 14,
   },
   subtitle: {
     fontSize: typography.sizes.bodySmall,

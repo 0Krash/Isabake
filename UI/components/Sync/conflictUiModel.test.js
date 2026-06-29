@@ -1,4 +1,5 @@
 import {
+  getConflictResolutionState,
   getConflictKey,
   getConflictReason,
   getConflictScreenState,
@@ -27,6 +28,35 @@ describe('conflictUiModel', () => {
     ).toEqual({ name: 'Remote data' });
   });
 
+  test('derives conflict resolution button availability', () => {
+    expect(
+      getConflictResolutionState({
+        localData: { name: 'Local' },
+        remoteDocument: null,
+      }),
+    ).toEqual({
+      missingLocalDocument: false,
+      missingRemoteDocument: true,
+      remoteUnavailableMessage:
+        'Remote version is not available for this conflict. Choose Prefer local or resolve manually.',
+      resolvablePreferLocal: true,
+      resolvablePreferRemote: false,
+    });
+
+    expect(
+      getConflictResolutionState({
+        localData: { name: 'Local' },
+        remoteDocument: { document: { name: 'Remote' } },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        missingRemoteDocument: false,
+        resolvablePreferLocal: true,
+        resolvablePreferRemote: true,
+      }),
+    );
+  });
+
   test('builds readable conflict metadata', () => {
     expect(
       getConflictReason({
@@ -52,8 +82,11 @@ describe('conflictUiModel', () => {
   test('derives empty, list, and detail screen state', () => {
     expect(getConflictScreenState()).toEqual({
       hasConflicts: false,
+      preferLocalResolvableCount: 0,
+      preferRemoteResolvableCount: 0,
       selectedKey: null,
       totalConflicts: 0,
+      unresolvedMissingRemoteCount: 0,
     });
 
     const selectedConflict = {
@@ -66,12 +99,20 @@ describe('conflictUiModel', () => {
       getConflictScreenState({
         conflicts: [selectedConflict],
         selectedConflict,
-        summary: { conflictDocumentCount: 4 },
+        summary: {
+          conflictDocumentCount: 4,
+          preferLocalResolvableCount: 3,
+          preferRemoteResolvableCount: 2,
+          unresolvedMissingRemoteCount: 1,
+        },
       }),
     ).toEqual({
       hasConflicts: true,
+      preferLocalResolvableCount: 3,
+      preferRemoteResolvableCount: 2,
       selectedKey: 'recipes:recipe_1',
       totalConflicts: 4,
+      unresolvedMissingRemoteCount: 1,
     });
   });
 });

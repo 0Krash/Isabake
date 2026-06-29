@@ -79,7 +79,12 @@ jest.mock('./syncOutbox', () => ({
 
 import {
   getConflictDetails,
+  getConflictResolutionCapabilities,
+  getLatestResolvableConflict,
+  getResolvableConflicts,
   getConflictSummary,
+  isConflictResolvablePreferLocal,
+  isConflictResolvablePreferRemote,
   markConflictResolvedManually,
   resolveConflictPreferLocal,
   resolveConflictPreferRemote,
@@ -130,7 +135,10 @@ describe('conflictService', () => {
         conflictDocumentCount: 1,
         conflictOutboxCount: 1,
         conflictsByCollection: { recipes: 1 },
+        preferLocalResolvableCount: 1,
+        preferRemoteResolvableCount: 1,
         resolvableConflictCount: 1,
+        unresolvedMissingRemoteCount: 0,
       }),
     );
   });
@@ -145,6 +153,85 @@ describe('conflictService', () => {
     expect(details.remoteDocument.document.name).toBe('Remote');
     expect(details.attemptedBaseServerVersion).toBe(1);
     expect(details.currentServerVersion).toBe(2);
+    expect(details.resolvablePreferLocal).toBe(true);
+    expect(details.resolvablePreferRemote).toBe(true);
+  });
+
+  test('resolvability helpers detect missing remote and local data', () => {
+    expect(
+      isConflictResolvablePreferRemote({
+        conflictMetadata: {
+          conflictDocument: {
+            document: { name: 'Remote' },
+          },
+        },
+      }),
+    ).toBe(true);
+    expect(isConflictResolvablePreferRemote({ localData: { name: 'Local' } }))
+      .toBe(false);
+    expect(
+      isConflictResolvablePreferLocal({
+        localData: { name: 'Local' },
+        localDocument: { id: 'recipe_1' },
+      }),
+    ).toBe(true);
+    expect(getConflictResolutionCapabilities({})).toEqual({
+      missingLocalDocument: true,
+      missingRemoteDocument: true,
+      resolvablePreferLocal: false,
+      resolvablePreferRemote: false,
+    });
+  });
+
+  test('preferRemote selector skips conflicts without remote document', async () => {
+    mockDocuments.set('recipes:recipe_missing_remote', {
+      collection: 'recipes',
+      data: { name: 'Only local' },
+      groupId: 'group_1',
+      id: 'recipe_missing_remote',
+      syncStatus: 'conflict',
+      updatedAt: '2026-01-03T00:00:00.000Z',
+    });
+
+    const conflicts = await getResolvableConflicts({
+      resolutionType: 'preferRemote',
+    });
+
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].localDocument.id).toBe('recipe_1');
+  });
+
+  test('preferRemote selector chooses latest resolvable conflict', async () => {
+    mockDocuments.get('recipes:recipe_1').updatedAt =
+      '2026-01-01T00:00:00.000Z';
+    mockDocuments.set('recipes:recipe_2', {
+      collection: 'recipes',
+      data: { name: 'Local 2' },
+      groupId: 'group_1',
+      id: 'recipe_2',
+      syncStatus: 'conflict',
+      updatedAt: '2026-01-04T00:00:00.000Z',
+    });
+    mockConflictOutboxEvents.push({
+      collection: 'recipes',
+      documentId: 'recipe_2',
+      id: 'outbox_conflict_2',
+      lastError: JSON.stringify({
+        conflictDocument: {
+          document: { groupId: 'group_1', name: 'Remote 2' },
+          remoteId: 'remote_2',
+          serverVersion: 3,
+        },
+      }),
+      operation: 'update',
+      status: 'conflict',
+    });
+
+    const { conflict } = await getLatestResolvableConflict({
+      resolutionType: 'preferRemote',
+    });
+
+    expect(conflict.localDocument.id).toBe('recipe_2');
   });
 
   test('preferRemote applies remote data without creating outbox', async () => {

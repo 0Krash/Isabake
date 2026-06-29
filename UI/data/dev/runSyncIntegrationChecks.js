@@ -1660,36 +1660,50 @@ export const runResolveLatestConflictPreferRemoteDevCheck = async () => {
   const name = 'resolveLatestConflictPreferRemoteDev';
 
   try {
-    const { getConflictDetails, resolveConflictPreferRemote } = require(
-      '../sync/conflictService',
+    const {
+      getLatestResolvableConflict,
+      resolveConflictPreferRemote,
+    } = require('../sync/conflictService');
+    const { conflict, report, summary } = await getLatestResolvableConflict({
+      resolutionType: 'preferRemote',
+    });
+    const skippedConflictIds = (report.skippedConflicts || []).map(
+      (skipped) => skipped.localId,
     );
-    const { conflict, summary } = await getLatestConflict();
+    const skippedReasons = (report.skippedConflicts || []).map((skipped) => ({
+      localId: skipped.localId,
+      reason: skipped.reason,
+    }));
+    const debug = {
+      preferRemoteResolvableCount: report.conflicts?.length || 0,
+      skippedConflictIds,
+      skippedReasons,
+      totalConflictCount: summary?.conflictDocumentCount || 0,
+    };
 
     if (!conflict) {
       return makeResult({
-        details: summary,
-        error: 'no_conflict_available',
-        failedStep: 'find_latest_conflict',
+        details: debug,
+        error: 'no_prefer_remote_resolvable_conflict',
+        failedStep: 'no_prefer_remote_resolvable_conflict',
         name,
         ok: false,
       });
     }
 
-    const before = await getConflictDetails({
-      collection: conflict.collection,
-      documentId: conflict.localId,
-    });
     const resolution = await resolveConflictPreferRemote({
       collection: conflict.collection,
-      documentId: conflict.localId,
+      documentId: conflict.localDocument?.id || conflict.localId,
     });
-    const after = await getDocumentById(conflict.collection, conflict.localId);
+    const documentId = conflict.localDocument?.id || conflict.localId;
+    const after = await getDocumentById(conflict.collection, documentId);
 
     return makeResult({
       details: {
         after,
-        before,
+        before: conflict,
         conflict,
+        ...debug,
         resolution,
       },
       name,
