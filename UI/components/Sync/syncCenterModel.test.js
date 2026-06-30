@@ -2,6 +2,8 @@ import {
   createSyncCenterSummary,
   getAuthStatusLabel,
   getSyncCenterModeLabel,
+  getSyncWarningMessage,
+  getUserSafeSyncStatus,
   getUserSafeSyncError,
 } from './syncCenterModel';
 
@@ -78,7 +80,21 @@ describe('syncCenterModel', () => {
   test('maps user-safe sync errors and auth labels without tokens', () => {
     expect(getAuthStatusLabel('authenticated')).toBe('Sesion activa');
     expect(getAuthStatusLabel('session_expired')).toBe('Sesion expirada');
-    expect(getAuthStatusLabel('auth_required')).toBe('auth_required');
+    expect(getAuthStatusLabel('auth_required')).toBe('Cuenta requerida');
+    expect(getSyncWarningMessage({ code: 'conflict_detected' })).toBe(
+      'Hay cambios por revisar antes de continuar.',
+    );
+    expect(
+      getUserSafeSyncStatus({
+        conflictCount: 1,
+        failedCount: 2,
+        pendingCount: 3,
+      }),
+    ).toEqual({
+      conflictsLabel: 'Cambios por revisar: 1',
+      failedLabel: 'Cambios con error: 2',
+      pendingLabel: 'Cambios pendientes: 3',
+    });
     expect(getUserSafeSyncError(new Error('auth_required'))).toBe(
       'auth_required',
     );

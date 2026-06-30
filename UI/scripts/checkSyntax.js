@@ -16,14 +16,17 @@ const ignoredFiles = new Set([
 ]);
 
 const syntaxRoots = [
+  'components',
   'config',
   'data',
   'scripts',
+  'screens',
   'services',
   'test',
   'utils',
 ];
 const syntaxRootFiles = [
+  'App.js',
   'app.config.js',
 ];
 

@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
+import AppHeader from '../../components/layout/AppHeader';
+import AppScreen from '../../components/layout/AppScreen';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import { getCurrentSession } from '../../data/auth/authService';
@@ -18,7 +19,12 @@ import {
   refreshWorkspaceState,
 } from '../../data/workspace/workspaceService';
 import { parseInvitationLink } from '../../data/workspace/invitationLink';
-import { runSafeInvitationAction } from './invitationAcceptModel';
+import {
+  formatInvitationAcceptError,
+  formatInvitationPreviewStatus,
+  getInvitationAcceptActionState,
+  runSafeInvitationAction,
+} from './invitationAcceptModel';
 
 export default function InvitationAcceptScreen({
   client,
@@ -35,6 +41,11 @@ export default function InvitationAcceptScreen({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [preview, setPreview] = useState(null);
+  const actionState = getInvitationAcceptActionState({
+    authRequired,
+    loading,
+    preview,
+  });
 
   const getToken = () => initialToken || parseInvitationLink(input).token;
 
@@ -44,7 +55,7 @@ export default function InvitationAcceptScreen({
     const token = getToken();
 
     if (!token) {
-      setError('invalid_invitation_link');
+      setError(formatInvitationAcceptError('invalid_invitation_link'));
       return null;
     }
 
@@ -58,8 +69,7 @@ export default function InvitationAcceptScreen({
       setPreview(nextPreview);
       return nextPreview;
     } catch (nextError) {
-      const messageText = String(nextError?.message || nextError);
-      setError(messageText);
+      setError(formatInvitationAcceptError(nextError));
       return null;
     } finally {
       setLoading(false);
@@ -115,15 +125,11 @@ export default function InvitationAcceptScreen({
   }, [initialLink, initialToken]);
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { backgroundColor: colors.screenBackground },
-      ]}
-    >
-      <Text style={[styles.title, { color: colors.textPrimary }]}>
-        Invitacion a workspace
-      </Text>
+    <AppScreen>
+      <AppHeader
+        subtitle="Puedes revisar la invitacion antes de iniciar sesion. Aceptarla no ejecuta sync automatico."
+        title="Invitacion a workspace"
+      />
       <TextInput
         autoCapitalize="none"
         onChangeText={setInput}
@@ -157,7 +163,7 @@ export default function InvitationAcceptScreen({
             Rol: {preview.role}
           </Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            Estado: {preview.status}
+            Estado: {formatInvitationPreviewStatus(preview.status)}
           </Text>
           {authRequired ? (
             <Text style={[styles.warning, { color: colors.danger }]}>
@@ -165,9 +171,14 @@ export default function InvitationAcceptScreen({
               invitacion.
             </Text>
           ) : null}
+          {actionState.disabledReason ? (
+            <Text style={[styles.warning, { color: colors.textMuted }]}>
+              {actionState.disabledReason}
+            </Text>
+          ) : null}
           <View style={styles.row}>
             <Pressable
-              disabled={loading}
+              disabled={!actionState.canAccept}
               onPress={acceptInvitation}
               style={[styles.primaryButton, { backgroundColor: colors.primary }]}
             >
@@ -176,7 +187,7 @@ export default function InvitationAcceptScreen({
               </Text>
             </Pressable>
             <Pressable
-              disabled={loading}
+              disabled={!actionState.canDecline}
               onPress={declineInvitation}
               style={[styles.secondaryButton, { borderColor: colors.border }]}
             >
@@ -197,6 +208,11 @@ export default function InvitationAcceptScreen({
           </Pressable>
         </View>
       ) : null}
+      {loading ? (
+        <Text style={[styles.message, { color: colors.textMuted }]}>
+          Cargando invitacion...
+        </Text>
+      ) : null}
 
       {message ? (
         <Text style={[styles.message, { color: colors.success }]}>
@@ -206,7 +222,7 @@ export default function InvitationAcceptScreen({
       {error ? (
         <Text style={[styles.message, { color: colors.danger }]}>{error}</Text>
       ) : null}
-    </ScrollView>
+    </AppScreen>
   );
 }
 
@@ -217,10 +233,6 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: typography.sizes.bodySmall,
     fontWeight: '700',
-  },
-  container: {
-    gap: 16,
-    padding: 20,
   },
   input: {
     borderRadius: 8,

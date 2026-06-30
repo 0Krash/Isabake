@@ -1,6 +1,8 @@
 import {
   createAuthModeCopy,
   createAuthStatusDisplay,
+  formatAuthError,
+  getAuthActionMessage,
   sanitizeSessionForDisplay,
 } from './authStatusModel';
 
@@ -37,7 +39,7 @@ describe('AuthStatusScreen helpers', () => {
     expect(JSON.stringify(display)).not.toContain('jwt_refresh_secret');
   });
 
-  test('auth status display includes local-only, expired, and refreshing states', () => {
+  test('auth status display includes local-only, expired, refreshing, and revoked states', () => {
     expect(createAuthStatusDisplay().state).toBe('local-only');
     expect(createAuthStatusDisplay({ refreshing: true }).state).toBe('refreshing');
     expect(
@@ -48,6 +50,28 @@ describe('AuthStatusScreen helpers', () => {
         },
       }).state,
     ).toBe('expired');
+    expect(
+      createAuthStatusDisplay({
+        error: 'session_revoked',
+      }),
+    ).toEqual({
+      detail: 'Esta sesion fue revocada. Inicia sesion de nuevo en este dispositivo.',
+      state: 'revoked',
+      title: 'Sesion revocada',
+    });
+  });
+
+  test('formats safe auth errors and action messages', () => {
+    expect(formatAuthError('invalid_credentials')).toBe(
+      'Correo o contrasena incorrectos.',
+    );
+    expect(formatAuthError('refresh_failed')).toBe(
+      'No se pudo actualizar la sesion. Vuelve a iniciar sesion si necesitas sync compartido.',
+    );
+    expect(getAuthActionMessage('logout')).toBe(
+      'Sesion cerrada. No se elimino ningun dato local.',
+    );
+    expect(getAuthActionMessage('login')).toContain('sigue siendo manual');
   });
 
   test('session display does not expose token hashes', () => {

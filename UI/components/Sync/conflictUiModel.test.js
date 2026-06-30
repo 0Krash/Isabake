@@ -1,8 +1,10 @@
 import {
   getConflictResolutionState,
   getConflictKey,
+  formatConflictCollection,
   getConflictReason,
   getConflictScreenState,
+  getConflictDisplayName,
   getRemotePreviewData,
   groupConflictsByCollection,
   stringifyPreviewData,
@@ -11,7 +13,13 @@ import {
 describe('conflictUiModel', () => {
   test('stringifies preview data and handles empty values', () => {
     expect(stringifyPreviewData(null)).toBe('Sin datos');
-    expect(stringifyPreviewData({ name: 'Pan' })).toContain('"name": "Pan"');
+    expect(stringifyPreviewData({ name: 'Pan' })).toBe('Nombre: Pan');
+    expect(stringifyPreviewData({ id: 'raw_id_only' })).toBe(
+      'Elemento con cambios',
+    );
+    expect(stringifyPreviewData({ name: 'phase_15_dev_doc' })).toBe(
+      'Elemento con cambios',
+    );
   });
 
   test('gets remote preview data from supported detail shapes', () => {
@@ -38,7 +46,7 @@ describe('conflictUiModel', () => {
       missingLocalDocument: false,
       missingRemoteDocument: true,
       remoteUnavailableMessage:
-        'Remote version is not available for this conflict. Choose Prefer local or resolve manually.',
+        'La version compartida no esta disponible. Usa tu version o revisa manualmente.',
       resolvablePreferLocal: true,
       resolvablePreferRemote: false,
     });
@@ -58,6 +66,23 @@ describe('conflictUiModel', () => {
   });
 
   test('builds readable conflict metadata', () => {
+    expect(formatConflictCollection('recipes')).toBe('Receta');
+    expect(formatConflictCollection('inventory')).toBe('Inventario');
+    expect(getConflictDisplayName({ localId: 'recipe_1' })).toBe(
+      'Elemento con cambios',
+    );
+    expect(
+      getConflictDisplayName({
+        collection: 'recipes',
+        localData: { name: 'phase_15_conflict_doc' },
+      }),
+    ).toBe('Receta con cambios');
+    expect(
+      getConflictDisplayName({
+        collection: 'inventory',
+        localData: { name: 'Harina' },
+      }),
+    ).toBe('Harina');
     expect(
       getConflictReason({
         conflictMetadata: { reason: 'server_version_mismatch' },

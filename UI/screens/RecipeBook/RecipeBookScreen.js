@@ -232,6 +232,7 @@ function useBottomSheet(isVisible, onClose) {
 }
 
 export default function RecipeBookScreen({
+  onOpenAppMenu,
   onOpenInventory,
   onOpenRecipeSale,
 }) {
@@ -1881,6 +1882,10 @@ export default function RecipeBookScreen({
       <TransactionMenu
         isVisible={menuIsVisible}
         onClose={() => setMenuIsVisible(false)}
+        onOpenAppOptions={() => {
+          setMenuIsVisible(false);
+          onOpenAppMenu?.();
+        }}
         onOpenStoreManager={handleOpenStoreManager}
       />
 

@@ -292,6 +292,50 @@ Domain association templates live in `docs/app-links`. Opening or accepting an
 invitation link must not push, pull, full-sync, force login, or delete local
 data.
 
+## Account, Workspace, And Invitation UX
+
+Phase 28 keeps UX polish in testable model helpers. Node/Jest checks cover:
+
+- safe account status messages for local-only, authenticated, expired, revoked,
+  refresh-failed, login, register, and logout states
+- workspace role/status labels and safe empty/error states
+- invitation status labels for pending, accepted, declined, expired, and revoked
+- email delivery labels that do not expose invite links or token hashes
+- disabled invitation actions for non-admin roles and closed invitations
+- invitation accept/decline errors for wrong email, expired/revoked links, and
+  login-required states
+- no raw token/hash exposure in UI model output
+
+Manual runtime checks:
+
+1. Open `Cuenta` while logged out and confirm local-only copy.
+2. Login/register and confirm no token is shown.
+3. Logout and confirm local data remains visible.
+4. Open `Workspace` in local-only mode, shared mode, and no-invitations state.
+5. Confirm selecting a workspace does not sync.
+6. Open an invitation link, preview it, and confirm accepting/declining does not
+   sync automatically.
+
+## Primary Navigation UX
+
+Phase 28.1 recenters the app around three primary tabs:
+
+- `Transacciones`
+- `Recetas`
+- `Inventario`
+
+Technical/support screens are secondary and reachable from `Opciones`:
+
+- `Cuenta`
+- `Compartir negocio`
+- `Respaldo y sincronizacion`
+- `Cambios por revisar`
+- `Herramientas dev`, only when dev tools are explicitly enabled
+
+Normal users should not see `groupId`, `cursor`, push/pull wording, raw JSON, or
+dev diagnostics in primary navigation. Opening the secondary menu, sync screen,
+workspace screen, or conflict screen must not run sync automatically.
+
 Roles:
 
 - `owner`

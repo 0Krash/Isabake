@@ -3,9 +3,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import { getConflictReason } from './conflictUiModel';
+import {
+  formatConflictCollection,
+  getConflictDisplayName,
+  getConflictReason,
+} from './conflictUiModel';
 
-export { getConflictReason };
+export { formatConflictCollection, getConflictDisplayName, getConflictReason };
 
 export default function ConflictListItem({ conflict, onPress, selected }) {
   const { colors } = useTransactionBalanceTheme();
@@ -23,18 +27,14 @@ export default function ConflictListItem({ conflict, onPress, selected }) {
     >
       <View style={styles.header}>
         <Text style={[styles.collection, { color: colors.textPrimary }]}>
-          {conflict.collection}
+          {getConflictDisplayName(conflict)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {getConflictReason(conflict)}
+          {formatConflictCollection(conflict.collection)}
         </Text>
       </View>
       <Text style={[styles.id, { color: colors.textSecondary }]}>
-        {conflict.localId}
-      </Text>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Local v{conflict.localVersion || '-'} · Server v
-        {conflict.serverVersion || '-'}
+        {getConflictReason(conflict)}
       </Text>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
         {conflict.updatedAt || 'Sin fecha'}

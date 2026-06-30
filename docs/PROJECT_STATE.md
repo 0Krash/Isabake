@@ -25,6 +25,13 @@
 - Invitation deep-link navigation and safe link management
 - Production invitation email delivery foundation
 - Production universal/app links setup
+- Invitation/workspace/account UX polish
+- Primary navigation recentered on Transacciones, Recetas, Inventario
+- Runtime UX cleanup for secondary tools:
+  - secondary app options moved into a modal sheet
+  - shared secondary-screen layout/padding primitives added
+  - Sync Center advanced push/pull actions collapsed behind manual options
+  - technical workspace/conflict identifiers hidden from normal UI copy
 - Security cleanup:
   - devInviteLink default-deny
   - legacy socket.io disabled by default
@@ -33,7 +40,7 @@
 
 ## Current Next Phase
 
-- Phase 28: invitation/workspace/account UX polish
+- Phase 29: sync history/audit UI
 
 ## Important Backend Paths
 

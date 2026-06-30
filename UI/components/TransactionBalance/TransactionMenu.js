@@ -78,6 +78,7 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
 export default function TransactionMenu({
   isVisible,
   onClose,
+  onOpenAppOptions,
   onOpenStoreManager,
 }) {
   const { colorScheme, colors } = useTransactionBalanceTheme();
@@ -105,6 +106,12 @@ export default function TransactionMenu({
       label: 'Tiendas',
       onPress: onOpenStoreManager,
       value: 'Administrar',
+    },
+    {
+      description: 'Cuenta, respaldo, negocio compartido y cambios por revisar.',
+      label: 'Opciones de la app',
+      onPress: onOpenAppOptions,
+      value: 'Abrir',
     },
   ];
 

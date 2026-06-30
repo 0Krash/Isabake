@@ -16,7 +16,7 @@ import useTransactionBalanceData from '../../hooks/TransactionBalance/useTransac
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
-const TransactionBalanceScreen = () => {
+const TransactionBalanceScreen = ({ onOpenAppMenu } = {}) => {
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [addTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
@@ -88,6 +88,10 @@ const TransactionBalanceScreen = () => {
       <TransactionMenu
         isVisible={transactionMenuIsVisible}
         onClose={() => setTransactionMenuIsVisible(false)}
+        onOpenAppOptions={() => {
+          setTransactionMenuIsVisible(false);
+          onOpenAppMenu?.();
+        }}
         onOpenStoreManager={handleOpenStoreManager}
       />
       {addTransactionModalIsVisible && (

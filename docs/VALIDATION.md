@@ -43,6 +43,8 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Local SQLite initializes.
 - Local-only workspace/data remains usable without backend.
 - App.js does not run sync/dev checks.
+- Bottom navigation shows only Transacciones, Recetas, and Inventario.
+- Account, shared business, sync, conflicts, and dev tools are secondary.
 
 ### Auth/Logout
 
@@ -50,6 +52,9 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Tokens persist in SecureStore.
 - Logout clears auth session only.
 - Logout does not delete SQLite/local data.
+- Account screen shows safe messages for local-only, logged-in, expired,
+  revoked, refresh-failed, and logout states.
+- Account screen never shows JWTs or refresh tokens.
 
 ### Workspace
 
@@ -57,6 +62,10 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Shared workspace can be selected without auto-sync.
 - Disconnect/leave does not delete local data.
 - Workspace list has no duplicate keys.
+- Workspace screen shows clear loading, empty, auth-required, local-only, and
+  shared workspace states.
+- Member/invitation actions show safe disabled-state messages for unauthorized
+  roles and closed invitations.
 
 ### Invitations
 
@@ -65,6 +74,11 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Invite role cannot be owner.
 - Accept activates membership only.
 - Accept does not push/pull/full sync.
+- Invitation screens show safe labels for pending, accepted, declined, expired,
+  and revoked states.
+- Wrong-email, expired, revoked, and login-required states show user-facing
+  messages without backend internals.
+- Email delivery status is shown as safe metadata only.
 
 ### Invitation Links
 
@@ -101,13 +115,20 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Push/pull/full sync run only when manually pressed.
 - Sync uses active shared workspace groupId.
 - Auth/session/workspace errors are safe.
-
+- User-facing sync UI says Enviar cambios, Recibir cambios, and Sincronizar
+  ahora.
+- Sincronizar ahora is the primary manual action; Enviar/Recibir appear only in
+  advanced options.
+- Normal sync UI does not show groupId, cursor, push/pull wording, or raw JSON.
 ### Conflicts
 
 - Conflicts are listed safely.
 - Prefer remote is disabled when remote document is missing.
 - Prefer local leaves local changes pending when applicable.
 - No auto-resolve occurs.
+- Normal conflict UI uses Cambios por revisar, Tu version, and Version
+  compartida.
+- Raw JSON and technical IDs are not shown by default.
 
 ### Security/Logs
 

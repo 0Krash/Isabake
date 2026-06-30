@@ -1,17 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
+import AppHeader from '../../components/layout/AppHeader';
+import AppScreen from '../../components/layout/AppScreen';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
+  formatWorkspaceError,
+  formatWorkspaceName,
+  formatWorkspaceRole,
+  getInvitationActionState,
+  getWorkspaceEmptyState,
   getWorkspaceListKey,
   getWorkspaceModeLabel,
   isValidInvitationEmail,
@@ -21,12 +27,14 @@ import {
 
 const roleOptions = ['owner', 'admin', 'member', 'viewer'];
 const statusOptions = ['active', 'invited', 'removed'];
+const adminRoles = new Set(['owner', 'admin']);
 
 export { getWorkspaceListKey, getWorkspaceModeLabel, sanitizeMemberForDisplay };
 
 export default function WorkspaceScreen({ onOpenAccount }) {
   const { colors } = useTransactionBalanceTheme();
   const workspaceState = useWorkspaces();
+  const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const [memberUserId, setMemberUserId] = useState('');
   const [message, setMessage] = useState(null);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
@@ -35,6 +43,8 @@ export default function WorkspaceScreen({ onOpenAccount }) {
   const [role, setRole] = useState('member');
   const [status, setStatus] = useState('active');
   const currentWorkspace = workspaceState.currentWorkspace;
+  const currentRole = currentWorkspace?.workspaceRole || 'local';
+  const canAdminWorkspace = adminRoles.has(currentRole);
 
   useEffect(() => {
     if (currentWorkspace?.isRemote) {
@@ -45,8 +55,13 @@ export default function WorkspaceScreen({ onOpenAccount }) {
 
   const runAction = async (action, successMessage) => {
     setMessage(null);
-    await action();
-    setMessage(successMessage);
+
+    try {
+      await action();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(formatWorkspaceError(error));
+    }
   };
 
   const createWorkspace = () =>
@@ -95,33 +110,13 @@ export default function WorkspaceScreen({ onOpenAccount }) {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { backgroundColor: colors.screenBackground },
-      ]}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Workspaces
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            El modo local no requiere cuenta. El workspace compartido requiere
-            sesion.
-          </Text>
-        </View>
-        {onOpenAccount ? (
-          <Pressable
-            onPress={onOpenAccount}
-            style={[styles.smallButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Cuenta
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
+    <AppScreen>
+      <AppHeader
+        actionLabel={onOpenAccount ? 'Cuenta' : null}
+        onAction={onOpenAccount}
+        subtitle="Colaboradores, invitaciones y modo local."
+        title="Compartir negocio"
+      />
 
       <View style={[styles.panel, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
@@ -131,18 +126,17 @@ export default function WorkspaceScreen({ onOpenAccount }) {
           {getWorkspaceModeLabel(currentWorkspace)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {currentWorkspace?.name || 'Workspace local'} ·{' '}
-          {currentWorkspace?.groupId || 'sin grupo'}
+          {formatWorkspaceName(currentWorkspace)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Rol: {currentWorkspace?.workspaceRole || 'local'}
+          Rol: {formatWorkspaceRole(currentRole)}
         </Text>
       </View>
 
       {workspaceState.authRequired ? (
         <View style={[styles.panel, { borderColor: colors.border }]}>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            auth_required
+            Cuenta requerida
           </Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
             Inicia sesion para crear o administrar workspaces compartidos. El
@@ -153,7 +147,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
 
       <View style={[styles.panel, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Crear workspace compartido
+          Crear negocio compartido
         </Text>
         <TextInput
           onChangeText={setNewWorkspaceName}
@@ -178,7 +172,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
 
       <View style={[styles.panel, { backgroundColor: colors.surface }]}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Workspaces disponibles
+          Negocios disponibles
         </Text>
         {workspaceState.workspaces.length ? (
           workspaceState.workspaces.map((workspace) => (
@@ -188,13 +182,15 @@ export default function WorkspaceScreen({ onOpenAccount }) {
             >
               <View style={styles.rowText}>
                 <Text style={[styles.body, { color: colors.textPrimary }]}>
-                  {workspace.name}
+                  {formatWorkspaceName(workspace)}
                 </Text>
                 <Text style={[styles.meta, { color: colors.textMuted }]}>
-                  {getWorkspaceModeLabel(workspace)} · {workspace.groupId}
+                  {getWorkspaceModeLabel(workspace)}
                 </Text>
                 <Text style={[styles.meta, { color: colors.textMuted }]}>
-                  {workspace.workspaceRole || workspace.syncStatus || 'local'}
+                  {formatWorkspaceRole(
+                    workspace.workspaceRole || workspace.syncStatus || 'local',
+                  )}
                 </Text>
               </View>
               <Pressable
@@ -217,7 +213,13 @@ export default function WorkspaceScreen({ onOpenAccount }) {
           ))
         ) : (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Sin workspaces remotos disponibles.
+            {getWorkspaceEmptyState({
+              authRequired: workspaceState.authRequired,
+              currentWorkspace,
+              error: workspaceState.error,
+              loading: workspaceState.loading,
+              type: 'workspaces',
+            })}
           </Text>
         )}
         <Pressable
@@ -263,8 +265,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                     {invitation.email}
                   </Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>
-                    {invitation.groupId} · {invitation.role} ·{' '}
-                    {invitation.status}
+                    {invitation.role} · {invitation.status}
                   </Text>
                 </View>
                 <View style={styles.inlineActions}>
@@ -318,12 +319,47 @@ export default function WorkspaceScreen({ onOpenAccount }) {
           })}
         </View>
       ) : null}
+      {!workspaceState.myInvitations.length ? (
+        <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            Mis invitaciones
+          </Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {getWorkspaceEmptyState({
+              loading: workspaceState.loading,
+              type: 'myInvitations',
+            })}
+          </Text>
+        </View>
+      ) : null}
 
       {currentWorkspace?.isRemote ? (
         <View style={[styles.panel, { backgroundColor: colors.surface }]}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Miembros
+            Colaboradores
           </Text>
+          {!canAdminWorkspace ? (
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              Puedes ver el negocio compartido y salir o desconectarte. Solo
+              propietarios y administradores gestionan colaboradores.
+            </Text>
+          ) : null}
+          {canAdminWorkspace ? (
+            <Pressable
+              disabled={workspaceState.loading}
+              onPress={() => setAdminToolsOpen((open) => !open)}
+              style={[styles.secondaryButton, { borderColor: colors.border }]}
+            >
+              <Text
+                style={[styles.secondaryText, { color: colors.textPrimary }]}
+              >
+                {adminToolsOpen
+                  ? 'Ocultar herramientas'
+                  : 'Administrar colaboradores'}
+              </Text>
+            </Pressable>
+          ) : null}
+          {canAdminWorkspace && adminToolsOpen ? (
           <View style={styles.memberForm}>
             <TextInput
               autoCapitalize="none"
@@ -382,6 +418,13 @@ export default function WorkspaceScreen({ onOpenAccount }) {
 
             {workspaceState.invitations.map((rawInvitation) => {
               const invitation = sanitizeInvitationForDisplay(rawInvitation);
+              const actionState = getInvitationActionState({
+                invitation: {
+                  status: invitation.statusKey,
+                },
+                loading: workspaceState.loading,
+                role: currentRole,
+              });
 
               return (
                 <View
@@ -402,22 +445,24 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                         : 'no disponible'}
                     </Text>
                     <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      Email:{' '}
-                      {invitation.emailDelivery
-                        ? `${invitation.emailDelivery.status} (${invitation.emailDelivery.provider})`
-                        : 'sin estado'}
+                      {invitation.emailDeliveryLabel}
                     </Text>
+                    {actionState.disabledReason ? (
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
+                        {actionState.disabledReason}
+                      </Text>
+                    ) : null}
                   </View>
                   <View style={styles.inlineActions}>
                     <Pressable
-                      disabled={workspaceState.loading}
+                      disabled={!actionState.canRegenerate}
                       onPress={() =>
                         runAction(
                           () =>
                             workspaceState.regenerateInvitationLink(
                               invitation.invitationId,
                             ),
-                          'Link de invitacion regenerado.',
+                          'Link regenerado y email reenviado si el proveedor esta configurado.',
                         )
                       }
                       style={[styles.smallButton, { borderColor: colors.border }]}
@@ -428,11 +473,11 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                           { color: colors.textPrimary },
                         ]}
                       >
-                        Regenerar
+                        Reenviar link
                       </Text>
                     </Pressable>
                     <Pressable
-                      disabled={workspaceState.loading}
+                      disabled={!actionState.canRevoke}
                       onPress={() =>
                         runAction(
                           () =>
@@ -457,6 +502,14 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                 </View>
               );
             })}
+            {!workspaceState.invitations.length ? (
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                {getWorkspaceEmptyState({
+                  loading: workspaceState.loading,
+                  type: 'invitations',
+                })}
+              </Text>
+            ) : null}
 
             <TextInput
               autoCapitalize="none"
@@ -539,6 +592,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
               </Text>
             </Pressable>
           </View>
+          ) : null}
 
           {workspaceState.members.map((rawMember) => {
             const member = sanitizeMemberForDisplay(rawMember);
@@ -556,25 +610,38 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                     {member.role} · {member.status}
                   </Text>
                 </View>
-                <Pressable
-                  disabled={workspaceState.loading}
-                  onPress={() =>
-                    runAction(
-                      () => workspaceState.removeMember(member.userId),
-                      'Miembro removido.',
-                    )
-                  }
-                  style={[styles.smallButton, { borderColor: colors.border }]}
-                >
-                  <Text
-                    style={[styles.secondaryText, { color: colors.textPrimary }]}
+                {canAdminWorkspace ? (
+                  <Pressable
+                    disabled={workspaceState.loading}
+                    onPress={() =>
+                      runAction(
+                        () => workspaceState.removeMember(member.userId),
+                        'Colaborador removido.',
+                      )
+                    }
+                    style={[styles.smallButton, { borderColor: colors.border }]}
                   >
-                    Remover
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.secondaryText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Remover
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
+          {!workspaceState.members.length ? (
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              {getWorkspaceEmptyState({
+                loading: workspaceState.loading,
+                type: 'members',
+              })}
+            </Text>
+          ) : null}
 
           <Pressable
             disabled={workspaceState.loading}
@@ -591,7 +658,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
             style={[styles.secondaryButton, { borderColor: colors.border }]}
           >
             <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Salir del workspace
+              Salir del negocio compartido
             </Text>
           </Pressable>
         </View>
@@ -599,7 +666,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
 
       {workspaceState.error ? (
         <Text style={[styles.error, { color: colors.danger }]}>
-          {workspaceState.error}
+          {formatWorkspaceError(workspaceState.error)}
         </Text>
       ) : null}
       {message ? (
@@ -607,7 +674,7 @@ export default function WorkspaceScreen({ onOpenAccount }) {
           {message}
         </Text>
       ) : null}
-    </ScrollView>
+    </AppScreen>
   );
 }
 
@@ -619,11 +686,6 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
-  },
-  container: {
-    flexGrow: 1,
-    gap: 14,
-    padding: 20,
   },
   error: {
     fontSize: typography.sizes.bodySmall,

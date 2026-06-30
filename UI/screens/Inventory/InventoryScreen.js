@@ -489,7 +489,7 @@ function useBottomSheet(isVisible, onClose) {
   };
 }
 
-export default function InventoryScreen() {
+export default function InventoryScreen({ onOpenAppMenu } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const {
     createInventoryItem: createInventoryItemLocal,
@@ -1179,6 +1179,10 @@ export default function InventoryScreen() {
       <TransactionMenu
         isVisible={menuIsVisible}
         onClose={() => setMenuIsVisible(false)}
+        onOpenAppOptions={() => {
+          setMenuIsVisible(false);
+          onOpenAppMenu?.();
+        }}
         onOpenStoreManager={handleOpenStoreManager}
       />
 

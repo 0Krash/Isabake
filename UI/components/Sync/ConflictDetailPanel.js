@@ -37,32 +37,16 @@ export default function ConflictDetailPanel({
   const resolutionState = getConflictResolutionState(details);
   const confirmationText =
     confirmAction === 'local'
-      ? 'Preferir local mantendra tus cambios y los reintentara en el siguiente sync.'
-      : 'Preferir remoto reemplazara localmente los cambios sin sincronizar.';
+      ? 'Usar mi version mantendra tus cambios para enviarlos despues.'
+      : 'Usar version compartida aplicara localmente los cambios del negocio compartido.';
 
   return (
     <View style={[styles.container, { borderColor: colors.border }]}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>
-        Detalle del conflicto
+        Cambios por revisar
       </Text>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Base intentada: {details.attemptedBaseServerVersion || '-'} · Servidor:
-        {' '}
-        {details.currentServerVersion || '-'}
-      </Text>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Detectado: {details.rejectedAt || details.detectedAt || '-'}
-      </Text>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Outbox: {details.outboxEvent?.status || '-'}
-      </Text>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Preferir local:{' '}
-        {resolutionState.resolvablePreferLocal ? 'disponible' : 'sin datos'}
-      </Text>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Preferir remoto:{' '}
-        {resolutionState.resolvablePreferRemote ? 'disponible' : 'sin remoto'}
+        Detectado: {details.rejectedAt || details.detectedAt || 'Sin fecha'}
       </Text>
       {resolutionState.missingRemoteDocument ? (
         <Text style={[styles.warning, { color: colors.danger }]}>
@@ -76,8 +60,8 @@ export default function ConflictDetailPanel({
       ) : null}
 
       <View style={styles.previewGrid}>
-        <ConflictDataPreview data={localData} title="Local" />
-        <ConflictDataPreview data={remoteData} title="Remoto" />
+        <ConflictDataPreview data={localData} title="Tu version" />
+        <ConflictDataPreview data={remoteData} title="Version compartida" />
       </View>
 
       {confirmAction ? (
@@ -114,7 +98,7 @@ export default function ConflictDetailPanel({
             style={[styles.secondaryButton, { borderColor: colors.border }]}
           >
             <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Preferir local
+              Usar mi version
             </Text>
           </Pressable>
           <Pressable
@@ -130,7 +114,7 @@ export default function ConflictDetailPanel({
             ]}
           >
             <Text style={[styles.primaryText, { color: colors.textInverse }]}>
-              Preferir remoto
+              Usar version compartida
             </Text>
           </Pressable>
         </View>

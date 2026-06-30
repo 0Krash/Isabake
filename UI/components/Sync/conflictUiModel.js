@@ -3,7 +3,38 @@ export const stringifyPreviewData = (data) => {
     return 'Sin datos';
   }
 
-  return JSON.stringify(data, null, 2);
+  if (typeof data !== 'object') {
+    return String(data);
+  }
+
+  const importantFields = [
+    'name',
+    'nombre',
+    'title',
+    'sku',
+    'quantity',
+    'amount',
+    'price',
+    'updatedAt',
+  ];
+  const lines = importantFields
+    .filter((field) => data[field] !== undefined && data[field] !== null)
+    .map((field) => {
+      const value = String(data[field]);
+
+      if (isTechnicalIdentifier(value)) {
+        return null;
+      }
+
+      return `${formatFieldLabel(field)}: ${value}`;
+    })
+    .filter(Boolean);
+
+  if (lines.length > 0) {
+    return lines.join('\n');
+  }
+
+  return 'Elemento con cambios';
 };
 
 export const getRemotePreviewData = (details) =>
@@ -23,7 +54,7 @@ export const getConflictResolutionState = (details = {}) => {
     missingRemoteDocument:
       details.missingRemoteDocument ?? !resolvablePreferRemote,
     remoteUnavailableMessage:
-      'Remote version is not available for this conflict. Choose Prefer local or resolve manually.',
+      'La version compartida no esta disponible. Usa tu version o revisa manualmente.',
     resolvablePreferLocal,
     resolvablePreferRemote,
   };
@@ -34,6 +65,64 @@ export const getConflictReason = (conflict) =>
   conflict?.reason ||
   conflict?.syncStatus ||
   'conflict';
+
+export const formatConflictCollection = (collection = '') => {
+  const labels = {
+    categories: 'Categoria',
+    inventory: 'Inventario',
+    recipes: 'Receta',
+    recipeSections: 'Seccion de receta',
+    recipeTypes: 'Tipo de receta',
+    stockMovements: 'Movimiento de inventario',
+    stores: 'Tienda',
+    transactions: 'Transaccion',
+  };
+
+  return labels[collection] || 'Elemento';
+};
+
+export const isTechnicalIdentifier = (value = '') =>
+  /^(phase_|sync_|workspace_|group_|local_|remote_)/i.test(
+    String(value || '').trim(),
+  ) || /_phase_\d+/i.test(String(value || ''));
+
+export const getFriendlyConflictFallback = (conflict = {}) => {
+  const collectionLabel = formatConflictCollection(conflict.collection);
+  return collectionLabel === 'Elemento'
+    ? 'Elemento con cambios'
+    : `${collectionLabel} con cambios`;
+};
+
+export const getConflictDisplayName = (conflict = {}) => {
+  const candidates = [
+    conflict.name,
+    conflict.title,
+    conflict.document?.name,
+    conflict.document?.nombre,
+    conflict.localData?.name,
+    conflict.localData?.nombre,
+  ];
+  const displayName = candidates.find(
+    (candidate) => candidate && !isTechnicalIdentifier(candidate),
+  );
+
+  return displayName || getFriendlyConflictFallback(conflict);
+};
+
+export const formatFieldLabel = (field = '') => {
+  const labels = {
+    amount: 'Importe',
+    name: 'Nombre',
+    nombre: 'Nombre',
+    price: 'Precio',
+    quantity: 'Cantidad',
+    sku: 'SKU',
+    title: 'Titulo',
+    updatedAt: 'Actualizado',
+  };
+
+  return labels[field] || field;
+};
 
 export const getConflictKey = (conflict) =>
   conflict ? `${conflict.collection}:${conflict.localId}` : null;

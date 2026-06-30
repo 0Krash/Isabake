@@ -1,23 +1,33 @@
 import React, { useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
+import AppCard from '../../components/layout/AppCard';
+import AppHeader from '../../components/layout/AppHeader';
+import AppScreen from '../../components/layout/AppScreen';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useAuthSession from '../../hooks/auth/useAuthSession';
 import {
   createAuthModeCopy,
   createAuthStatusDisplay,
+  formatAuthError,
+  getAuthActionMessage,
   sanitizeSessionForDisplay,
 } from './authStatusModel';
 
-export { createAuthModeCopy, createAuthStatusDisplay, sanitizeSessionForDisplay };
+export {
+  createAuthModeCopy,
+  createAuthStatusDisplay,
+  formatAuthError,
+  getAuthActionMessage,
+  sanitizeSessionForDisplay,
+};
 
 export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
   const { colors } = useTransactionBalanceTheme();
@@ -29,67 +39,74 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
   const [message, setMessage] = useState(null);
   const copy = createAuthModeCopy(mode);
   const status = createAuthStatusDisplay({
+    error: auth.error,
     loading: auth.loading,
     refreshing: auth.refreshing,
     session: auth.session,
   });
 
-  const submit = async () => {
+  const runAuthAction = async (action, successMessage) => {
     setMessage(null);
 
+    try {
+      await action();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(formatAuthError(error));
+    }
+  };
+
+  const submit = async () => {
     if (mode === 'register') {
-      await auth.register({ displayName, email, password });
-      setMessage('Cuenta creada. El sync compartido ya puede usar JWT.');
+      await runAuthAction(
+        () => auth.register({ displayName, email, password }),
+        getAuthActionMessage('register'),
+      );
       return;
     }
 
-    await auth.login({ email, password });
-    setMessage('Sesion iniciada. El sync compartido ya puede usar JWT.');
+    await runAuthAction(
+      () => auth.login({ email, password }),
+      getAuthActionMessage('login'),
+    );
   };
 
   const logout = async () => {
-    await auth.logout();
-    setMessage('Sesion cerrada. Los datos locales permanecen en el dispositivo.');
+    await runAuthAction(() => auth.logout(), getAuthActionMessage('logout'));
   };
 
   const verifySession = async () => {
-    setMessage(null);
-    await auth.verifySession();
-    setMessage('Sesion verificada.');
+    await runAuthAction(
+      () => auth.verifySession(),
+      getAuthActionMessage('verify'),
+    );
   };
 
   const loadSessions = async () => {
-    setMessage(null);
-    await auth.loadSessions();
-    setMessage('Sesiones actualizadas.');
+    await runAuthAction(
+      () => auth.loadSessions(),
+      getAuthActionMessage('sessions'),
+    );
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { backgroundColor: colors.screenBackground },
-      ]}
-    >
-      <Text style={[styles.title, { color: colors.textPrimary }]}>
-        Cuenta
-      </Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-        El modo local funciona sin iniciar sesion. El sync compartido requiere
-        una cuenta.
-      </Text>
+    <AppScreen>
+      <AppHeader
+        subtitle="El modo local funciona sin iniciar sesion. El sync compartido requiere una cuenta y siempre se ejecuta manualmente."
+        title="Cuenta"
+      />
 
-      <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
+      <AppCard>
         <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
           {status.title}
         </Text>
         <Text style={[styles.statusText, { color: colors.textSecondary }]}>
           {status.detail}
         </Text>
-      </View>
+      </AppCard>
 
       {auth.session ? (
-        <View style={[styles.statusBox, { backgroundColor: colors.surface }]}>
+        <AppCard>
           <Text style={[styles.statusTitle, { color: colors.textPrimary }]}>
             Workspace activo
           </Text>
@@ -110,7 +127,7 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
               </Text>
             </Pressable>
           ) : null}
-        </View>
+        </AppCard>
       ) : null}
 
       {auth.session ? (
@@ -233,7 +250,7 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
 
       {auth.error ? (
         <Text style={[styles.error, { color: colors.danger }]}>
-          {auth.error}
+          {formatAuthError(auth.error)}
         </Text>
       ) : null}
       {message ? (
@@ -241,7 +258,7 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
           {message}
         </Text>
       ) : null}
-    </ScrollView>
+    </AppScreen>
   );
 }
 
@@ -249,10 +266,6 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
-  },
-  container: {
-    flexGrow: 1,
-    padding: 20,
   },
   error: {
     fontSize: typography.sizes.bodySmall,
@@ -320,14 +333,6 @@ const styles = StyleSheet.create({
   },
   statusTitle: {
     fontSize: typography.sizes.body,
-    fontWeight: typography.weights.bold,
-  },
-  subtitle: {
-    fontSize: typography.sizes.bodySmall,
-    marginTop: 6,
-  },
-  title: {
-    fontSize: typography.sizes.title,
     fontWeight: typography.weights.bold,
   },
 });

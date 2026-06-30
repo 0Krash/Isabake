@@ -20,6 +20,7 @@ import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
 import AppBottomNavigation from './components/AppBottomNavigation';
+import AppSecondaryMenu from './components/AppSecondaryMenu';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
 import { initDatabase } from './data/db/database';
@@ -31,6 +32,7 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
+  const [secondaryMenuVisible, setSecondaryMenuVisible] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
   const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
@@ -65,6 +67,7 @@ export default function App() {
       }
 
       setInviteToken(navigationState.inviteToken);
+      setSecondaryMenuVisible(false);
       setSaleRecipe(null);
       setActiveTab('invite');
     };
@@ -100,13 +103,16 @@ export default function App() {
       return (
         <RecipeBookScreen
           onOpenInventory={() => setActiveTab('inventory')}
+          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
           onOpenRecipeSale={setSaleRecipe}
         />
       );
     }
 
     if (activeTab === 'inventory') {
-      return <InventoryScreen />;
+      return (
+        <InventoryScreen onOpenAppMenu={() => setSecondaryMenuVisible(true)} />
+      );
     }
 
     if (activeTab === 'conflicts') {
@@ -139,7 +145,17 @@ export default function App() {
       return <SyncDiagnosticsScreen />;
     }
 
-    return <TransactionBalanceScreen />;
+    return (
+      <TransactionBalanceScreen
+        onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+      />
+    );
+  };
+
+  const openSecondaryScreen = (tabKey) => {
+    setSecondaryMenuVisible(false);
+    setSaleRecipe(null);
+    setActiveTab(tabKey);
   };
 
   if (!dbReady || dbError) {
@@ -175,19 +191,16 @@ export default function App() {
           { backgroundColor: theme.colors.appBackground },
         ]}
       >
+        <AppSecondaryMenu
+          devToolsEnabled={devSyncDiagnosticsEnabled}
+          onClose={() => setSecondaryMenuVisible(false)}
+          onSelect={openSecondaryScreen}
+          visible={secondaryMenuVisible && !saleRecipe}
+        />
         <View style={styles.screenContainer}>{renderScreen()}</View>
         {!saleRecipe && (
           <AppBottomNavigation
             activeTab={activeTab}
-            accountTabEnabled
-            conflictTabEnabled
-            syncTabEnabled
-            workspaceTabEnabled
-            extraTabs={
-              devSyncDiagnosticsEnabled
-                ? [{ key: 'dev-sync', label: 'Sync Dev' }]
-                : []
-            }
             onTabPress={setActiveTab}
           />
         )}

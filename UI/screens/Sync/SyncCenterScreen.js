@@ -1,29 +1,46 @@
 import React, { useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import AppButton from '../../components/layout/AppButton';
+import AppCard from '../../components/layout/AppCard';
+import AppHeader from '../../components/layout/AppHeader';
+import AppScreen from '../../components/layout/AppScreen';
 import {
   getAuthStatusLabel,
   getSyncCenterModeLabel,
+  getSyncWarningMessage,
+  getUserSafeSyncStatus,
 } from '../../components/Sync/syncCenterModel';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useSyncCenter from '../../hooks/sync/useSyncCenter';
+import { formatWorkspaceName } from '../Workspace/workspaceUiModel';
 
-export { getAuthStatusLabel, getSyncCenterModeLabel };
+export {
+  getAuthStatusLabel,
+  getSyncCenterModeLabel,
+  getSyncWarningMessage,
+  getUserSafeSyncStatus,
+};
 
 export default function SyncCenterScreen({ onOpenConflicts } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const syncCenter = useSyncCenter();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [message, setMessage] = useState(null);
   const disabled = syncCenter.loading || syncCenter.syncing;
   const workspace = syncCenter.currentWorkspace;
   const isShared = Boolean(workspace?.isRemote);
+  const status = getUserSafeSyncStatus({
+    conflictCount: syncCenter.conflictCount,
+    failedCount: syncCenter.failedCount,
+    pendingCount: syncCenter.pendingCount,
+  });
   const canRunSharedSync =
     isShared && syncCenter.authStatus === 'authenticated' && !disabled;
 
@@ -34,21 +51,12 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { backgroundColor: colors.screenBackground },
-      ]}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Sync Center
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            Sync manual para el workspace compartido activo.
-          </Text>
-        </View>
+    <AppScreen>
+      <AppHeader
+        subtitle="Envia o recibe cambios solo cuando tu lo decidas."
+        title="Respaldo y sincronizacion"
+      />
+      <View style={styles.headerActions}>
         <Pressable
           disabled={disabled}
           onPress={() =>
@@ -62,48 +70,44 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
         </Pressable>
       </View>
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+      <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Workspace
+          Negocio compartido
         </Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {getSyncCenterModeLabel(workspace)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {workspace?.name || 'Workspace local'} · {workspace?.groupId || '-'}
+          {formatWorkspaceName(workspace)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Auth: {getAuthStatusLabel(syncCenter.authStatus)}
-        </Text>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Cursor: {syncCenter.lastSyncState?.lastSyncCursor || '-'}
+          Cuenta: {getAuthStatusLabel(syncCenter.authStatus)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
           Ultimo sync: {syncCenter.lastSyncState?.lastSyncedAt || '-'}
         </Text>
-      </View>
+      </AppCard>
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+      <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
           Estado
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Pendientes: {syncCenter.pendingCount}
+          {status.pendingLabel}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Fallidos: {syncCenter.failedCount}
+          {status.failedLabel}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Conflictos: {syncCenter.conflictCount}
+          {status.conflictsLabel}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Readiness:{' '}
-          {syncCenter.readiness?.ok ? 'lista' : 'requiere atencion'}
+          Estado: {syncCenter.readiness?.ok ? 'listo' : 'requiere atencion'}
         </Text>
-      </View>
+      </AppCard>
 
       {syncCenter.summary?.warnings?.length ? (
-        <View style={[styles.panel, { borderColor: colors.border }]}>
+        <AppCard style={{ borderColor: colors.border, borderWidth: 1 }}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
             Avisos
           </Text>
@@ -112,77 +116,76 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
               key={warning.code}
               style={[styles.warning, { color: colors.textSecondary }]}
             >
-              {warning.code}: {warning.message}
+              {getSyncWarningMessage(warning)}
             </Text>
           ))}
-        </View>
+        </AppCard>
       ) : null}
 
       {!isShared ? (
         <Text style={[styles.info, { color: colors.textMuted }]}>
-          El modo local no usa push/pull compartido. Puedes seguir usando la app
+          El modo local no usa respaldo compartido. Puedes seguir usando la app
           offline.
         </Text>
       ) : null}
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+      <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Acciones manuales
+          Acciones
         </Text>
-        <Pressable
-          disabled={!canRunSharedSync}
-          onPress={() =>
-            runAction(syncCenter.runPush, 'Push completado. Estado actualizado.')
-          }
-          style={[
-            styles.primaryButton,
-            { backgroundColor: canRunSharedSync ? colors.primary : colors.border },
-          ]}
-        >
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-            Push local changes
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={!canRunSharedSync}
-          onPress={() =>
-            runAction(syncCenter.runPull, 'Pull completado. Estado actualizado.')
-          }
-          style={[
-            styles.primaryButton,
-            { backgroundColor: canRunSharedSync ? colors.primary : colors.border },
-          ]}
-        >
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-            Pull remote changes
-          </Text>
-        </Pressable>
-        <Pressable
+        <AppButton
           disabled={!canRunSharedSync}
           onPress={() =>
             runAction(syncCenter.runFullSync, 'Sync completo finalizado.')
           }
-          style={[
-            styles.primaryButton,
-            { backgroundColor: canRunSharedSync ? colors.primary : colors.border },
-          ]}
         >
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-            Run full sync
-          </Text>
-        </Pressable>
+          Sincronizar ahora
+        </AppButton>
+        <AppButton
+          disabled={disabled}
+          onPress={() => setAdvancedOpen((open) => !open)}
+          variant="secondary"
+        >
+          Opciones avanzadas
+        </AppButton>
+        {advancedOpen ? (
+          <>
+            <AppButton
+              disabled={!canRunSharedSync}
+              onPress={() =>
+                runAction(
+                  syncCenter.runPush,
+                  'Cambios enviados. Estado actualizado.',
+                )
+              }
+              variant="secondary"
+            >
+              Enviar cambios
+            </AppButton>
+            <AppButton
+              disabled={!canRunSharedSync}
+              onPress={() =>
+                runAction(
+                  syncCenter.runPull,
+                  'Cambios recibidos. Estado actualizado.',
+                )
+              }
+              variant="secondary"
+            >
+              Recibir cambios
+            </AppButton>
+          </>
+        ) : null}
         {onOpenConflicts ? (
-          <Pressable
+          <AppButton
             disabled={disabled}
             onPress={onOpenConflicts}
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
+            variant="secondary"
           >
-            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Open Conflicts
-            </Text>
-          </Pressable>
+            Cambios por revisar
+          </AppButton>
         ) : null}
-      </View>
+      </AppCard>
 
       {syncCenter.error ? (
         <Text style={[styles.error, { color: colors.danger }]}>
@@ -194,7 +197,7 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
           {message}
         </Text>
       ) : null}
-    </ScrollView>
+    </AppScreen>
   );
 }
 
@@ -203,23 +206,13 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
   },
-  buttonText: {
-    fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.semibold,
-  },
-  container: {
-    flexGrow: 1,
-    gap: 14,
-    padding: 20,
-  },
   error: {
     fontSize: typography.sizes.bodySmall,
   },
-  header: {
-    alignItems: 'flex-start',
+  headerActions: {
+    alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
   info: {
     fontSize: typography.sizes.bodySmall,
@@ -230,27 +223,6 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: typography.sizes.label,
     marginTop: 4,
-  },
-  panel: {
-    borderRadius: 8,
-    borderWidth: 0,
-    gap: 10,
-    padding: 14,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
   },
   secondaryText: {
     fontSize: typography.sizes.bodySmall,

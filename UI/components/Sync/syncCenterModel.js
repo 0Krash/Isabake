@@ -16,8 +16,40 @@ export const getAuthStatusLabel = (authStatus) => {
     return 'Sesion expirada';
   }
 
-  return 'auth_required';
+  return 'Cuenta requerida';
 };
+
+export const getSyncWarningMessage = (warning = {}) => {
+  const code = warning.code || warning;
+
+  if (code === 'local_only_mode') {
+    return 'Estas trabajando solo en este dispositivo.';
+  }
+
+  if (code === 'auth_required' || code === 'session_expired') {
+    return 'Inicia sesion para usar respaldo compartido.';
+  }
+
+  if (code === 'conflict_detected') {
+    return 'Hay cambios por revisar antes de continuar.';
+  }
+
+  if (code === 'failed_outbox_events_present') {
+    return 'Algunos cambios no se pudieron enviar.';
+  }
+
+  return 'Hay una situacion que requiere atencion.';
+};
+
+export const getUserSafeSyncStatus = ({
+  conflictCount = 0,
+  failedCount = 0,
+  pendingCount = 0,
+} = {}) => ({
+  conflictsLabel: `Cambios por revisar: ${conflictCount}`,
+  failedLabel: `Cambios con error: ${failedCount}`,
+  pendingLabel: `Cambios pendientes: ${pendingCount}`,
+});
 
 export const getUserSafeSyncError = (error) => {
   const message = String(error?.message || error || '');
@@ -124,5 +156,7 @@ export default {
   createSyncCenterSummary,
   getAuthStatusLabel,
   getSyncCenterModeLabel,
+  getSyncWarningMessage,
+  getUserSafeSyncStatus,
   getUserSafeSyncError,
 };

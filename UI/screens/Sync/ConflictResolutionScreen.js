@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -9,7 +8,11 @@ import {
 
 import ConflictDetailPanel from '../../components/Sync/ConflictDetailPanel';
 import ConflictListItem from '../../components/Sync/ConflictListItem';
+import AppCard from '../../components/layout/AppCard';
+import AppHeader from '../../components/layout/AppHeader';
+import AppScreen from '../../components/layout/AppScreen';
 import {
+  formatConflictCollection,
   getConflictKey,
   getConflictScreenState,
   groupConflictsByCollection,
@@ -20,7 +23,11 @@ import useConflicts, {
   resolveConfirmedConflict,
 } from '../../hooks/sync/useConflicts';
 
-export { getConflictScreenState, groupConflictsByCollection };
+export {
+  formatConflictCollection,
+  getConflictScreenState,
+  groupConflictsByCollection,
+};
 
 export default function ConflictResolutionScreen() {
   const { colors } = useTransactionBalanceTheme();
@@ -82,9 +89,9 @@ export default function ConflictResolutionScreen() {
       });
 
       if (confirmAction === 'local') {
-        setMessage('La version local quedo pendiente para reintentar sync.');
+        setMessage('Tu version quedo lista para enviarse despues.');
       } else {
-        setMessage('La version remota fue aplicada localmente.');
+        setMessage('La version compartida fue aplicada en este dispositivo.');
       }
 
       setConfirmAction(null);
@@ -97,21 +104,12 @@ export default function ConflictResolutionScreen() {
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { backgroundColor: colors.screenBackground },
-      ]}
-    >
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Conflictos
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            {screenState.totalConflicts} pendientes
-          </Text>
-        </View>
+    <AppScreen>
+      <AppHeader
+        subtitle={`${screenState.totalConflicts} pendientes`}
+        title="Cambios por revisar"
+      />
+      <View style={styles.headerActions}>
         <Pressable
           disabled={loading}
           onPress={refresh}
@@ -132,7 +130,7 @@ export default function ConflictResolutionScreen() {
         </Text>
       ) : null}
 
-      <View style={[styles.summaryBox, { backgroundColor: colors.surface }]}>
+      <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
           Resumen
         </Text>
@@ -140,13 +138,14 @@ export default function ConflictResolutionScreen() {
           Total: {screenState.totalConflicts}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Preferir local disponible: {screenState.preferLocalResolvableCount}
+          Usar mi version disponible: {screenState.preferLocalResolvableCount}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Preferir remoto disponible: {screenState.preferRemoteResolvableCount}
+          Usar version compartida disponible:{' '}
+          {screenState.preferRemoteResolvableCount}
         </Text>
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
-          Sin version remota: {screenState.unresolvedMissingRemoteCount}
+          Sin version compartida: {screenState.unresolvedMissingRemoteCount}
         </Text>
         <Text
           style={[
@@ -167,11 +166,11 @@ export default function ConflictResolutionScreen() {
               key={collection}
               style={[styles.summaryLine, { color: colors.textSecondary }]}
             >
-              {collection}: {count}
+              {formatConflictCollection(collection)}: {count}
             </Text>
           ))
         )}
-      </View>
+      </AppCard>
 
       {!screenState.hasConflicts ? (
         <View style={[styles.emptyState, { borderColor: colors.border }]}>
@@ -179,8 +178,8 @@ export default function ConflictResolutionScreen() {
             Todo limpio
           </Text>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Cuando haya conflictos de sync, apareceran aqui para comparar local
-            y remoto.
+            Cuando haya cambios del negocio que necesiten decision, apareceran
+            aqui.
           </Text>
         </View>
       ) : (
@@ -206,15 +205,11 @@ export default function ConflictResolutionScreen() {
           />
         </View>
       )}
-    </ScrollView>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 20,
-  },
   content: {
     gap: 14,
     marginTop: 16,
@@ -237,11 +232,10 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.bodySmall,
     marginTop: 12,
   },
-  header: {
+  headerActions: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'flex-end',
   },
   list: {
     gap: 10,

@@ -3,31 +3,11 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import typography from '../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../context/TransactionBalanceThemeContext';
+import { getPrimaryNavigationTabs } from './appNavigationModel';
 
-const tabs = [
-  { key: 'home', label: 'Inicio' },
-  { key: 'recipes', label: 'Recetas' },
-  { key: 'inventory', label: 'Inventario' },
-];
-
-export default function AppBottomNavigation({
-  accountTabEnabled = false,
-  activeTab,
-  conflictTabEnabled = false,
-  extraTabs = [],
-  onTabPress,
-  syncTabEnabled = false,
-  workspaceTabEnabled = false,
-}) {
+export default function AppBottomNavigation({ activeTab, onTabPress }) {
   const { colors } = useTransactionBalanceTheme();
-  const visibleTabs = [
-    ...tabs,
-    ...(conflictTabEnabled ? [{ key: 'conflicts', label: 'Conflictos' }] : []),
-    ...(syncTabEnabled ? [{ key: 'sync', label: 'Sync' }] : []),
-    ...(workspaceTabEnabled ? [{ key: 'workspace', label: 'Workspace' }] : []),
-    ...(accountTabEnabled ? [{ key: 'account', label: 'Cuenta' }] : []),
-    ...extraTabs,
-  ];
+  const tabs = getPrimaryNavigationTabs();
 
   return (
     <View
@@ -36,7 +16,7 @@ export default function AppBottomNavigation({
         { backgroundColor: colors.surface, borderTopColor: colors.border },
       ]}
     >
-      {visibleTabs.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = tab.key === activeTab;
 
         return (
@@ -75,6 +55,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
   tab: {
     alignItems: 'center',
