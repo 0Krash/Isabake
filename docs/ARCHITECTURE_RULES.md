@@ -3,7 +3,10 @@
 ## Startup
 
 - No forced login.
-- No auto sync.
+- No sync execution on startup.
+- Safe foreground auto-sync bootstrap may register app-state listeners after DB
+  init, but it must not push/pull/full-sync until a guarded foreground trigger
+  occurs.
 - No dev checks.
 - No WebSocket.
 - No background sync.
@@ -24,10 +27,12 @@
 
 ## Sync
 
-- Sync Center actions are manual only.
+- Sync Center manual actions run only when pressed.
+- Foreground auto-sync may run only while the app is open/active and all
+  eligibility guards pass.
 - Push/pull/full sync use active shared workspace groupId only.
 - No sync after login, workspace selection, invitation accept, app startup, conflict resolution, or invite-link open.
-- Sync remains push/pull; no background scheduler.
+- Sync remains push/pull/full-sync; no background scheduler or realtime.
 
 ## Auth
 
@@ -87,7 +92,8 @@
 ## App.js Restrictions
 
 - No forced login.
-- No auto sync.
+- No push/pull/full sync execution on startup.
+- Foreground auto-sync bootstrap may initialize the controller and listen to
+  app-state changes only.
 - No dev checks.
-- No sync internals called from startup.
 - Invite-link routing may navigate to the invitation screen, but must not sync or force login.

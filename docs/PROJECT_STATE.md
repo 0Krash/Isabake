@@ -37,6 +37,14 @@
   - manual sync/status attempts recorded as safe metadata
   - retention keeps latest 100 records
   - minimal secondary Sync History diagnostic screen
+- Safe foreground auto-sync foundation:
+  - runs only while the app process is active
+  - requires auto-sync enabled, authenticated session, and active shared
+    workspace `groupId`
+  - skips local-only, logged-out, conflicted, inactive, cooldown, and backoff
+    states
+  - records safe sync history metadata for automatic runs and skips
+  - can be enabled/disabled from Sync Center
 - Security cleanup:
   - devInviteLink default-deny
   - legacy socket.io disabled by default
@@ -45,7 +53,7 @@
 
 ## Current Next Phase
 
-- Phase 30: hardening/QA/release prep
+- Phase 31: hardening/QA/release prep
 
 ## Important Backend Paths
 
@@ -77,7 +85,8 @@
 - Backend full suite must be run outside sandbox if Supertest fails with `listen EPERM`.
 - Production app links require real domain, certs, Android SHA-256 signing
   fingerprint, Apple Team ID, and final iOS bundle identifier.
-- Background sync intentionally pending.
-- WebSockets intentionally pending.
-- Auto-sync intentionally pending; sync history prepares diagnostics for future
-  safe automation.
+- OS-level background sync intentionally pending.
+- WebSockets/realtime intentionally pending.
+- Foreground-only auto-sync exists; it must not run while the app is closed,
+  in local-only mode, without auth, with conflicts, or from invitation link
+  open/accept flows.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -19,6 +19,10 @@ import {
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useSyncCenter from '../../hooks/sync/useSyncCenter';
+import {
+  getAutoSyncState,
+  setAutoSyncEnabled,
+} from '../../data/sync/autoSyncService';
 import { formatWorkspaceName } from '../Workspace/workspaceUiModel';
 
 export {
@@ -32,6 +36,8 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
   const { colors } = useTransactionBalanceTheme();
   const syncCenter = useSyncCenter();
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [autoSyncEnabledState, setAutoSyncEnabledState] = useState(true);
+  const [autoSyncStatus, setAutoSyncStatus] = useState(null);
   const [message, setMessage] = useState(null);
   const disabled = syncCenter.loading || syncCenter.syncing;
   const workspace = syncCenter.currentWorkspace;
@@ -48,6 +54,28 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
     setMessage(null);
     await action();
     setMessage(successMessage);
+  };
+
+  useEffect(() => {
+    getAutoSyncState()
+      .then((state) => {
+        if (state.autoSyncEnabled !== undefined) {
+          setAutoSyncEnabledState(state.autoSyncEnabled);
+        }
+        setAutoSyncStatus(state.lastStatus || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleAutoSync = async () => {
+    const nextEnabled = !autoSyncEnabledState;
+    setAutoSyncEnabledState(nextEnabled);
+    await setAutoSyncEnabled(nextEnabled);
+    setMessage(
+      nextEnabled
+        ? 'Sincronizacion automatica activada.'
+        : 'Sincronizacion automatica desactivada.',
+    );
   };
 
   return (
@@ -131,6 +159,31 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
           offline.
         </Text>
       ) : null}
+
+      <AppCard>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+          Sincronizacion automatica
+        </Text>
+        <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+          {autoSyncEnabledState
+            ? 'Activada para workspaces compartidos cuando la app esta abierta.'
+            : 'Desactivada en este dispositivo.'}
+        </Text>
+        {autoSyncStatus ? (
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            Ultimo estado automatico: {autoSyncStatus}
+          </Text>
+        ) : null}
+        <AppButton
+          disabled={disabled}
+          onPress={toggleAutoSync}
+          variant="secondary"
+        >
+          {autoSyncEnabledState
+            ? 'Desactivar automatico'
+            : 'Activar automatico'}
+        </AppButton>
+      </AppCard>
 
       <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>

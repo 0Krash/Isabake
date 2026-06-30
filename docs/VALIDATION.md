@@ -124,6 +124,28 @@ report it clearly, run focused service/non-listener tests when possible, and sta
   metadata.
 - Opening Sync Center or Sync History does not create a history record or run
   sync.
+- Foreground auto-sync can be enabled/disabled from Sync Center.
+- Foreground auto-sync must not run on Sync Center render.
+- Foreground auto-sync must not run in local-only mode, logged-out mode, while
+  conflicts exist, during cooldown/backoff, or while another sync is active.
+- Foreground auto-sync may run only after the app is active and a safe trigger
+  occurs, such as app returning to foreground or a local outbox change.
+- Automatic sync attempts/skips write safe `sync_history` metadata with
+  `triggerSource: "system_future"`.
+
+### Foreground Auto-Sync
+
+- Open the app in local-only mode and confirm no push/pull/full sync runs.
+- Login, select a shared workspace, enable automatic sync, and create a local
+  change; confirm sync is debounced rather than immediate.
+- Background the app before the debounce expires; confirm no automatic sync
+  runs while inactive.
+- Return to foreground; confirm one guarded automatic attempt may run.
+- Create/keep a conflict and confirm automatic sync is skipped, not resolved.
+- Disable automatic sync in Sync Center and confirm later local changes do not
+  run sync automatically.
+- Confirm invitation link open/accept still does not trigger sync.
+- Confirm no WebSocket/realtime/background task is active.
 
 ### Sync History
 

@@ -1,4 +1,5 @@
 import {
+  AppState,
   Linking,
   SafeAreaView,
   StyleSheet,
@@ -25,6 +26,12 @@ import AppSecondaryMenu from './components/AppSecondaryMenu';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
 import { initDatabase } from './data/db/database';
+import {
+  handleAutoSyncAppStateChange,
+  initializeAutoSync,
+  startAutoSync,
+  stopAutoSync,
+} from './data/sync/autoSyncService';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -43,6 +50,10 @@ export default function App() {
     initDatabase()
       .then(() => {
         if (isMounted) {
+          initializeAutoSync();
+          startAutoSync({
+            appState: AppState.currentState === 'active' ? 'active' : 'inactive',
+          });
           setDbReady(true);
         }
       })
@@ -58,6 +69,21 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!dbReady) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      handleAutoSyncAppStateChange(nextState);
+    });
+
+    return () => {
+      subscription?.remove?.();
+      stopAutoSync();
+    };
+  }, [dbReady]);
 
   useEffect(() => {
     const handleUrl = (url) => {

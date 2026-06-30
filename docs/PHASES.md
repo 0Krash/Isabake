@@ -9,7 +9,7 @@
 
 ## Current Next Phase
 
-- Phase 30: hardening/QA/release prep.
+- Phase 31: hardening/QA/release prep.
 
 ## Latest Cleanup
 
@@ -17,8 +17,11 @@
   screen layout, Sync Center action hierarchy, and technical-id hiding.
 - Phase 29: local-only sync history/audit foundation and minimal secondary
   diagnostic UI. No auto-sync.
+- Phase 30: safe foreground auto-sync foundation with explicit Sync Center
+  setting, eligibility guards, debounce/cooldown/backoff, and sync history
+  records for automatic runs/skips. No OS background sync or realtime.
 
 ## Likely Future Phases
 
-- Phase 30: hardening/QA/release prep.
+- Phase 31: hardening/QA/release prep.
 - WebSockets only later and only as “changes available” notification; actual sync remains push/pull.

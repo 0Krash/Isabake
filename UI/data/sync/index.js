@@ -28,6 +28,16 @@ export {
 } from './conflictService';
 export { getSyncBaseUrl, validateSyncConfig } from './syncConfig';
 export {
+  getAutoSyncState,
+  handleAutoSyncAppStateChange,
+  initializeAutoSync,
+  notifyAutoSyncNeeded,
+  runAutoSyncNow,
+  setAutoSyncEnabled,
+  startAutoSync,
+  stopAutoSync,
+} from './autoSyncService';
+export {
   clearOldSyncHistory,
   finishSyncHistoryRun,
   getLatestSyncHistory,

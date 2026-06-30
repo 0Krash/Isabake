@@ -14,7 +14,7 @@ Before changing code, read:
 
 Do not advance to the next phase.
 Do not force login.
-Do not auto-sync.
+Do not change foreground auto-sync behavior unless this phase explicitly asks for it.
 Do not add WebSockets/background sync unless this phase explicitly asks for it.
 App.js must remain startup-clean.
 Run validation from docs/VALIDATION.md.

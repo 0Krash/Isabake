@@ -35,6 +35,8 @@ Jest tests cover:
 - `runLocalTransaction` return/error propagation with mocked DB
 - dev runner result shaping and destructive-check skipping
 - mobile sync client request/response compatibility with the backend contract
+- foreground auto-sync eligibility, debouncing, cooldown/backoff, safe skip
+  recording, and sanitized failure handling
 
 ## Expo Runtime Checks
 
@@ -351,10 +353,9 @@ Statuses:
 
 Still missing:
 
-- email invitations
 - realtime membership updates
-- polished account/workspace settings UX
-- automatic sync scheduling
+- OS-level background sync
+- production push notifications for remote-change awareness
 
 ## Sync Center
 
@@ -386,12 +387,21 @@ Behavior:
 The `Open Conflicts` button navigates to the conflict UI. Use that screen for
 manual conflict handling before retrying sync.
 
+Foreground auto-sync:
+
+- Phase 30 adds a Sync Center toggle for automatic sync while the app is open.
+- It requires an authenticated session and active shared workspace.
+- It skips local-only mode, logged-out mode, conflicts, inactive app state,
+  cooldown/backoff, and in-flight sync.
+- It is debounced after local outbox changes and foreground transitions.
+- It writes safe local sync history metadata for runs and skips.
+- It does not use OS background tasks, WebSockets, or realtime subscriptions.
+- It must not run from invitation link open/accept flows.
+
 Still missing:
 
-- background sync
-- scheduled sync
+- OS-level background sync
 - realtime/WebSocket notifications
-- email invitations
 
 ## Workspace Invitations
 

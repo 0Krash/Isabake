@@ -5,6 +5,9 @@ import {
   runSafeInvitationAction,
 } from './invitationAcceptModel';
 
+const fs = require('fs');
+const path = require('path');
+
 describe('invitationAcceptModel', () => {
   test('handled action failure sets error and does not throw', async () => {
     const setError = jest.fn();
@@ -96,5 +99,29 @@ describe('invitationAcceptModel', () => {
       canDecline: false,
       disabledReason: 'Esta invitacion ya no esta pendiente.',
     });
+  });
+
+  test('invitation screens do not execute sync or auto-sync directly', () => {
+    const invitationScreenSource = fs.readFileSync(
+      path.join(__dirname, 'InvitationAcceptScreen.js'),
+      'utf8',
+    );
+    const appSource = fs.readFileSync(
+      path.join(__dirname, '../../App.js'),
+      'utf8',
+    );
+    const forbiddenSyncCalls = [
+      'runSync(',
+      'pushPendingChanges',
+      'pullRemoteChanges',
+      'notifyAutoSyncNeeded',
+      'runAutoSyncNow',
+    ];
+
+    forbiddenSyncCalls.forEach((forbiddenCall) => {
+      expect(invitationScreenSource).not.toContain(forbiddenCall);
+    });
+    expect(appSource).not.toContain('runAutoSyncNow');
+    expect(appSource).not.toContain('notifyAutoSyncNeeded');
   });
 });

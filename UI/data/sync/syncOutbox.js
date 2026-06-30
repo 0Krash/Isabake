@@ -44,6 +44,12 @@ export const addOutboxEvent = async (
     [id, collection, documentId, operation, serializePayload(payload), nowIso()],
   );
 
+  import('./autoSyncService')
+    .then(({ notifyAutoSyncNeeded }) =>
+      notifyAutoSyncNeeded('local_change'),
+    )
+    .catch(() => {});
+
   return id;
 };
 
