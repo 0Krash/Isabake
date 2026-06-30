@@ -27,5 +27,15 @@ export {
   resolveConflictPreferRemote,
 } from './conflictService';
 export { getSyncBaseUrl, validateSyncConfig } from './syncConfig';
+export {
+  clearOldSyncHistory,
+  finishSyncHistoryRun,
+  getLatestSyncHistory,
+  getRecentSyncHistory,
+  getSyncHistoryCount,
+  recordSkippedSyncRun,
+  sanitizeSyncHistoryError,
+  startSyncHistoryRun,
+} from './syncHistoryService';
 export { getAllSyncStates, getLastSyncCursor, getSyncState } from './syncStateRepository';
 export { OUTBOX_STATUS, SYNC_OPERATIONS, SYNC_STATUS } from './syncTypes';

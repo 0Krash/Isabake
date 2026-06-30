@@ -120,6 +120,22 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Sincronizar ahora is the primary manual action; Enviar/Recibir appear only in
   advanced options.
 - Normal sync UI does not show groupId, cursor, push/pull wording, or raw JSON.
+- Manual status refresh, push, pull, and full sync write local-only sync history
+  metadata.
+- Opening Sync Center or Sync History does not create a history record or run
+  sync.
+
+### Sync History
+
+- Sync History is reachable from Sync Center only; it is not a bottom tab.
+- Sync History stores safe local metadata only: action, trigger, status, counts,
+  safe error code/message, timestamps, auth/network state, and workspace label.
+- Sync History never stores tokens, headers, request/response bodies, cookies,
+  stack traces, raw backend payloads, invitation tokens, or password/hash fields.
+- Retention keeps the latest 100 records during writes; no timer/background
+  cleanup exists.
+- Clearing old sync history affects only `sync_history`, never business data.
+
 ### Conflicts
 
 - Conflicts are listed safely.

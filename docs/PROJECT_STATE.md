@@ -32,6 +32,11 @@
   - shared secondary-screen layout/padding primitives added
   - Sync Center advanced push/pull actions collapsed behind manual options
   - technical workspace/conflict identifiers hidden from normal UI copy
+- Internal sync history/audit foundation:
+  - local-only `sync_history` table
+  - manual sync/status attempts recorded as safe metadata
+  - retention keeps latest 100 records
+  - minimal secondary Sync History diagnostic screen
 - Security cleanup:
   - devInviteLink default-deny
   - legacy socket.io disabled by default
@@ -40,7 +45,7 @@
 
 ## Current Next Phase
 
-- Phase 29: sync history/audit UI
+- Phase 30: hardening/QA/release prep
 
 ## Important Backend Paths
 
@@ -65,6 +70,7 @@
 - `UI/screens/Sync/*`
 - `UI/data/auth/*`
 - `UI/data/sync/*`
+- `UI/screens/Sync/SyncHistoryScreen.js`
 
 ## Known Pending Items
 
@@ -73,3 +79,5 @@
   fingerprint, Apple Team ID, and final iOS bundle identifier.
 - Background sync intentionally pending.
 - WebSockets intentionally pending.
+- Auto-sync intentionally pending; sync history prepares diagnostics for future
+  safe automation.

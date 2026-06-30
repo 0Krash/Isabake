@@ -28,7 +28,7 @@ export {
   getUserSafeSyncStatus,
 };
 
-export default function SyncCenterScreen({ onOpenConflicts } = {}) {
+export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const syncCenter = useSyncCenter();
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -60,7 +60,10 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
         <Pressable
           disabled={disabled}
           onPress={() =>
-            runAction(syncCenter.refreshStatus, 'Estado actualizado.')
+            runAction(
+              () => syncCenter.refreshStatus({ recordHistory: true }),
+              'Estado actualizado.',
+            )
           }
           style={[styles.smallButton, { borderColor: colors.border }]}
         >
@@ -183,6 +186,15 @@ export default function SyncCenterScreen({ onOpenConflicts } = {}) {
             variant="secondary"
           >
             Cambios por revisar
+          </AppButton>
+        ) : null}
+        {onOpenHistory ? (
+          <AppButton
+            disabled={disabled}
+            onPress={onOpenHistory}
+            variant="secondary"
+          >
+            Historial de sync
           </AppButton>
         ) : null}
       </AppCard>

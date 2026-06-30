@@ -17,6 +17,23 @@ jest.mock('../../data/sync/syncService', () => ({
   runSync: jest.fn(),
 }));
 
+jest.mock('../../data/sync/syncHistoryService', () => ({
+  finishSyncHistoryRun: jest.fn(),
+  getSyncHistoryAuthState: jest.fn((status = {}) =>
+    status.session ? 'authenticated' : 'auth_required',
+  ),
+  getSyncHistoryWorkspaceName: jest.fn(
+    (workspace = {}) => workspace.name || 'Workspace local',
+  ),
+  recordSkippedSyncRun: jest.fn(),
+  safelyRecordSyncHistory: jest.fn((operation) => operation()),
+  startSyncHistoryRun: jest.fn(async (input) => ({
+    ...input,
+    runId: 'sync_run_1',
+    startedAt: '2026-01-01T00:00:00.000Z',
+  })),
+}));
+
 jest.mock('../../data/sync/syncStateRepository', () => ({
   getSyncState: jest.fn(),
 }));
@@ -25,6 +42,12 @@ import {
   loadSyncCenterStatus,
   runManualSyncAction,
 } from './useSyncCenter';
+import {
+  finishSyncHistoryRun,
+  recordSkippedSyncRun,
+  safelyRecordSyncHistory,
+  startSyncHistoryRun,
+} from '../../data/sync/syncHistoryService';
 
 describe('useSyncCenter helpers', () => {
   const sharedWorkspace = {
@@ -48,6 +71,10 @@ describe('useSyncCenter helpers', () => {
     ok: false,
     pendingOutboxCount: 3,
   };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   test('status refresh reports pending failed and conflict counts', async () => {
     const result = await loadSyncCenterStatus({
@@ -83,6 +110,13 @@ describe('useSyncCenter helpers', () => {
         push: jest.fn(),
       }),
     ).rejects.toThrow('auth_required');
+    expect(recordSkippedSyncRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'push',
+        reason: 'auth_required',
+        triggerSource: 'manual',
+      }),
+    );
   });
 
   test('local-only sync fails clearly and does not call push', async () => {
@@ -120,6 +154,52 @@ describe('useSyncCenter helpers', () => {
       push,
     });
 
+    expect(push).toHaveBeenCalledWith({
+      client: undefined,
+      groupId: 'group_1',
+    });
+    expect(startSyncHistoryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: 'push',
+        triggerSource: 'manual',
+      }),
+    );
+    expect(finishSyncHistoryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: { ok: true },
+        run: expect.objectContaining({ runId: 'sync_run_1' }),
+      }),
+    );
+  });
+
+  test('history write failure does not block manual sync', async () => {
+    const push = jest.fn(async () => ({ ok: true }));
+    const loadStatus = jest
+      .fn()
+      .mockResolvedValueOnce({
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 1,
+        session,
+      })
+      .mockResolvedValueOnce({
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 0,
+        session,
+      });
+
+    safelyRecordSyncHistory.mockImplementationOnce(async () => null);
+
+    await expect(
+      runManualSyncAction({
+        action: 'push',
+        loadStatus,
+        push,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        result: { ok: true },
+      }),
+    );
     expect(push).toHaveBeenCalledWith({
       client: undefined,
       groupId: 'group_1',
@@ -191,5 +271,6 @@ describe('useSyncCenter helpers', () => {
     expect(push).not.toHaveBeenCalled();
     expect(pull).not.toHaveBeenCalled();
     expect(sync).not.toHaveBeenCalled();
+    expect(startSyncHistoryRun).not.toHaveBeenCalled();
   });
 });

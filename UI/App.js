@@ -14,6 +14,7 @@ import InventoryScreen from './screens/Inventory/InventoryScreen';
 import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
 import ConflictResolutionScreen from './screens/Sync/ConflictResolutionScreen';
 import SyncCenterScreen from './screens/Sync/SyncCenterScreen';
+import SyncHistoryScreen from './screens/Sync/SyncHistoryScreen';
 import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
 import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
@@ -120,7 +121,16 @@ export default function App() {
     }
 
     if (activeTab === 'sync') {
-      return <SyncCenterScreen onOpenConflicts={() => setActiveTab('conflicts')} />;
+      return (
+        <SyncCenterScreen
+          onOpenConflicts={() => setActiveTab('conflicts')}
+          onOpenHistory={() => setActiveTab('sync-history')}
+        />
+      );
+    }
+
+    if (activeTab === 'sync-history') {
+      return <SyncHistoryScreen onBack={() => setActiveTab('sync')} />;
     }
 
     if (activeTab === 'account') {

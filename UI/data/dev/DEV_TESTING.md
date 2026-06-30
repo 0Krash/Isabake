@@ -962,3 +962,35 @@ Temporary limitations before broader production sync:
   production linking setup is still pending.
 - No WebSockets/realtime sync.
 - Sync is still manual; it does not run on startup or every local write.
+
+## Sync History
+
+Phase 29 adds local-only sync history for diagnostics and future auto-sync
+hardening.
+
+What is stored:
+
+- action type (`status_refresh`, `push`, `pull`, `full_sync`, `dev_check`)
+- trigger source (`manual`, `dev`, `system_future`)
+- status, timestamps, duration, counts, safe error code/message
+- safe auth/network state and workspace label
+
+What is never stored:
+
+- JWT/access/refresh/invite tokens
+- Authorization headers, cookies, API keys, provider secrets
+- raw request/response bodies
+- stack traces
+- `inviteTokenHash`, `refreshTokenHash`, `passwordHash`
+- raw conflict/backend payloads
+
+Retention keeps the latest 100 history records when a new record is written.
+There is no interval, scheduler, background sync, or startup sync.
+
+Manual check:
+
+1. Open Sync Center from the secondary app options.
+2. Open `Historial de sync`.
+3. Confirm opening the screen does not run sync.
+4. Return to Sync Center and press `Actualizar` or `Sincronizar ahora`.
+5. Open history again and confirm a safe, friendly record appears.
