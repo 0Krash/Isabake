@@ -153,6 +153,17 @@ describe('authApiClient', () => {
       groupId: 'group_1',
       role: 'member',
     });
+    await client.getWorkspaceInvitationPreviewByToken({
+      token: 'invite_token_1',
+    });
+    await client.acceptWorkspaceInvitationByToken({
+      authHeaders,
+      token: 'invite_token_1',
+    });
+    await client.declineWorkspaceInvitationByToken({
+      authHeaders,
+      token: 'invite_token_1',
+    });
     await client.listWorkspaceInvitations({ authHeaders, groupId: 'group_1' });
     await client.listMyWorkspaceInvitations({ authHeaders });
     await client.acceptWorkspaceInvitation({
@@ -204,6 +215,18 @@ describe('authApiClient', () => {
     );
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://api.example.test/workspaces/group_1/invitations',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/by-token/invite_token_1',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/by-token/invite_token_1/accept',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/invitations/by-token/invite_token_1/decline',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(fetchImpl).toHaveBeenCalledWith(

@@ -156,6 +156,10 @@ class MongooseWorkspaceRepository {
     return toPlainObject(await WorkspaceInvitation.findOne({ invitationId }));
   }
 
+  async findInvitationByTokenHash(inviteTokenHash) {
+    return toPlainObject(await WorkspaceInvitation.findOne({ inviteTokenHash }));
+  }
+
   async findInvitationsByGroupId(groupId) {
     return (
       await WorkspaceInvitation.find({

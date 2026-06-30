@@ -141,6 +141,14 @@ class MemoryWorkspaceRepository {
     );
   }
 
+  async findInvitationByTokenHash(inviteTokenHash) {
+    return (
+      this.invitations.find(
+        (invitation) => invitation.inviteTokenHash === inviteTokenHash,
+      ) || null
+    );
+  }
+
   async findInvitationsByGroupId(groupId) {
     return this.invitations.filter(
       (invitation) => invitation.groupId === groupId,

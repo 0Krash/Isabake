@@ -757,6 +757,62 @@ Role rules:
 - `invited`, `removed`, and non-members cannot push or pull.
 - `owner` and `admin` can add members.
 
+## Workspace Invitation Links
+
+Phase 24 adds invitation tokens and link/email delivery foundations.
+
+Create an invitation:
+
+```sh
+curl -X POST "$URL_Sync/workspaces/demo_group/invitations" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner" \
+  -H "x-dev-user-email: owner@example.test" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"invitee@example.test","role":"member"}'
+```
+
+The backend stores only `inviteTokenHash`; raw invite tokens are never stored.
+Responses do not include raw invite links by default. For isolated dev/test
+diagnostics only, set `EXPOSE_DEV_INVITE_LINKS=true` to include `devInviteLink`
+in invitation creation responses. Production or missing env must not expose raw
+invite links.
+
+Preview an invitation link without auth:
+
+```sh
+curl "$URL_Sync/workspaces/invitations/by-token/<token>"
+```
+
+Accept or decline with auth:
+
+```sh
+curl -X POST "$URL_Sync/workspaces/invitations/by-token/<token>/accept" \
+  -H "Authorization: Bearer dev-token-invitee" \
+  -H "x-dev-user-id: invitee" \
+  -H "x-dev-user-email: invitee@example.test"
+
+curl -X POST "$URL_Sync/workspaces/invitations/by-token/<token>/decline" \
+  -H "Authorization: Bearer dev-token-invitee" \
+  -H "x-dev-user-id: invitee" \
+  -H "x-dev-user-email: invitee@example.test"
+```
+
+Mobile helpers parse:
+
+- `isabake://invite/<token>`
+- `https://.../invite/<token>`
+
+`InvitationAcceptScreen` can load a safe preview and accept/decline after login.
+Accepting an invitation activates membership and refreshes workspaces, but it
+does not push, pull, full-sync, or delete local data.
+
+Email delivery:
+
+- `invitationEmailService.js` is a no-op provider by default.
+- Set `LOG_DEV_INVITE_LINKS=true` only in dev/test to log dev links explicitly.
+- A production email provider is still pending.
+
 Temporary limitations before broader production sync:
 
 - Dev auth headers are not production authentication and are disabled in
@@ -764,6 +820,9 @@ Temporary limitations before broader production sync:
 - Auth UI is intentionally minimal.
 - Full account/session audit UI is still pending.
 - Access token denylisting is not implemented.
-- Workspace invitations do not send email.
+- Workspace invitation email uses a no-op provider until a production provider
+  is configured.
+- Deep link registration/navigation is prepared by helpers and screen, but full
+  production linking setup is still pending.
 - No WebSockets/realtime sync.
 - Sync is still manual; it does not run on startup or every local write.

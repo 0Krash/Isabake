@@ -195,6 +195,18 @@ export const createWorkspaceInvitation = async ({
   });
 };
 
+export const loadWorkspaceInvitationPreviewByToken = async ({
+  client,
+  token,
+} = {}) => {
+  const authClient = client || createAuthApiClient();
+  const response = await authClient.getWorkspaceInvitationPreviewByToken({
+    token,
+  });
+
+  return response.invitation || null;
+};
+
 export const loadWorkspaceInvitations = async ({
   client,
   groupId,
@@ -240,6 +252,22 @@ export const acceptWorkspaceInvitation = async ({
   });
 };
 
+export const acceptWorkspaceInvitationByToken = async ({
+  client,
+  session,
+  token,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.acceptWorkspaceInvitationByToken({
+    authHeaders,
+    token,
+  });
+};
+
 export const declineWorkspaceInvitation = async ({
   client,
   invitationId,
@@ -253,6 +281,22 @@ export const declineWorkspaceInvitation = async ({
   return authClient.declineWorkspaceInvitation({
     authHeaders,
     invitationId,
+  });
+};
+
+export const declineWorkspaceInvitationByToken = async ({
+  client,
+  session,
+  token,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.declineWorkspaceInvitationByToken({
+    authHeaders,
+    token,
   });
 };
 
@@ -302,11 +346,14 @@ export const disconnectLocalWorkspace = async ({
 export default {
   addWorkspaceMember,
   acceptWorkspaceInvitation,
+  acceptWorkspaceInvitationByToken,
   createRemoteWorkspace,
   createWorkspaceInvitation,
   declineWorkspaceInvitation,
+  declineWorkspaceInvitationByToken,
   disconnectLocalWorkspace,
   loadMyWorkspaceInvitations,
+  loadWorkspaceInvitationPreviewByToken,
   loadWorkspaceMembers,
   loadWorkspaceInvitations,
   refreshWorkspaceState,

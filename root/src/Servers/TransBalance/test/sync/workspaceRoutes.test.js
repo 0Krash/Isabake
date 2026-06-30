@@ -135,6 +135,8 @@ jest.mock('../../models/workspaceInvitationModel', () => {
         (invitation) =>
           (!query.invitationId ||
             invitation.invitationId === query.invitationId) &&
+          (!query.inviteTokenHash ||
+            invitation.inviteTokenHash === query.inviteTokenHash) &&
           (!query.groupId || invitation.groupId === query.groupId) &&
           (!query.email || invitation.email === query.email) &&
           (!query.status || invitation.status === query.status),
@@ -159,6 +161,15 @@ jest.mock('../../models/workspaceInvitationModel', () => {
     }),
   };
 });
+
+jest.mock('../../services/invitationEmailService', () => ({
+  InvitationEmailService: jest.fn().mockImplementation(() => ({
+    sendWorkspaceInvitationEmail: jest.fn(async () => ({
+      provider: 'mock',
+      sent: true,
+    })),
+  })),
+}));
 
 const User = require('../../models/userModel');
 const Workspace = require('../../models/workspaceModel');
@@ -193,12 +204,23 @@ const seedWorkspace = ({
 };
 
 describe('workspace routes', () => {
+  const originalExposeDevInviteLinks = process.env.EXPOSE_DEV_INVITE_LINKS;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.EXPOSE_DEV_INVITE_LINKS;
     User.__store.length = 0;
     Workspace.__store.length = 0;
     WorkspaceInvitation.__store.length = 0;
     WorkspaceMembership.__store.length = 0;
+  });
+
+  afterEach(() => {
+    if (originalExposeDevInviteLinks === undefined) {
+      delete process.env.EXPOSE_DEV_INVITE_LINKS;
+    } else {
+      process.env.EXPOSE_DEV_INVITE_LINKS = originalExposeDevInviteLinks;
+    }
   });
 
   test('owner can create workspace', async () => {
@@ -469,6 +491,119 @@ describe('workspace routes', () => {
       first.body.invitation.invitationId,
     );
     expect(WorkspaceInvitation.__store).toHaveLength(1);
+    expect(WorkspaceInvitation.__store[0].inviteTokenHash).toBeTruthy();
+    expect(WorkspaceInvitation.__store[0].inviteTokenHash).not.toContain(
+      'invite_token',
+    );
+  });
+
+  test('invitation creation does not expose devInviteLink by default', async () => {
+    seedWorkspace();
+
+    const response = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'invitee@example.test' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.invitation.devInviteLink).toBeUndefined();
+    expect(JSON.stringify(response.body)).not.toContain('inviteTokenHash');
+  });
+
+  test('token preview works without auth and exposes safe invitation data', async () => {
+    process.env.EXPOSE_DEV_INVITE_LINKS = 'true';
+    seedWorkspace();
+    const createResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'invitee@example.test', role: 'viewer' });
+    const token = createResponse.body.invitation.devInviteLink.split('/').pop();
+
+    const previewResponse = await request(app)
+      .get(`/workspaces/invitations/by-token/${token}`);
+
+    expect(previewResponse.status).toBe(200);
+    expect(previewResponse.body.invitation).toEqual(
+      expect.objectContaining({
+        email: 'invitee@example.test',
+        role: 'viewer',
+        status: 'invited',
+        workspace: expect.objectContaining({ name: 'group_a' }),
+      }),
+    );
+    expect(JSON.stringify(previewResponse.body)).not.toContain('inviteTokenHash');
+    expect(JSON.stringify(previewResponse.body)).not.toContain('passwordHash');
+    expect(JSON.stringify(previewResponse.body)).not.toContain(
+      'refreshTokenHash',
+    );
+  });
+
+  test('accept by token requires auth and matching email', async () => {
+    process.env.EXPOSE_DEV_INVITE_LINKS = 'true';
+    seedWorkspace();
+    const createResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'invitee@example.test', role: 'member' });
+    const token = createResponse.body.invitation.devInviteLink.split('/').pop();
+
+    const missingAuthResponse = await request(app)
+      .post(`/workspaces/invitations/by-token/${token}/accept`);
+    const wrongEmailResponse = await request(app)
+      .post(`/workspaces/invitations/by-token/${token}/accept`)
+      .set(auth('other'));
+    const acceptResponse = await request(app)
+      .post(`/workspaces/invitations/by-token/${token}/accept`)
+      .set(auth('invitee'));
+
+    expect(missingAuthResponse.status).toBe(401);
+    expect(wrongEmailResponse.status).toBe(403);
+    expect(wrongEmailResponse.body.message).toBe('invitation_email_mismatch');
+    expect(acceptResponse.status).toBe(200);
+    expect(acceptResponse.body.invitation.status).toBe('accepted');
+    expect(WorkspaceMembership.__store).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          groupId: 'group_a',
+          role: 'member',
+          status: 'active',
+          userId: 'invitee',
+        }),
+      ]),
+    );
+    expect(JSON.stringify(acceptResponse.body)).not.toContain('inviteTokenHash');
+  });
+
+  test('decline by token works and revoked token preview fails safely', async () => {
+    process.env.EXPOSE_DEV_INVITE_LINKS = 'true';
+    seedWorkspace();
+    const declineResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'invitee@example.test' });
+    const revokedResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'revoked@example.test' });
+    const declineToken =
+      declineResponse.body.invitation.devInviteLink.split('/').pop();
+    const revokedToken =
+      revokedResponse.body.invitation.devInviteLink.split('/').pop();
+    const revokedInvitationId = revokedResponse.body.invitation.invitationId;
+
+    await request(app)
+      .delete(`/workspaces/group_a/invitations/${revokedInvitationId}`)
+      .set(auth('owner'));
+    const tokenDeclineResponse = await request(app)
+      .post(`/workspaces/invitations/by-token/${declineToken}/decline`)
+      .set(auth('invitee'));
+    const revokedPreviewResponse = await request(app)
+      .get(`/workspaces/invitations/by-token/${revokedToken}`);
+
+    expect(tokenDeclineResponse.status).toBe(200);
+    expect(tokenDeclineResponse.body.invitation.status).toBe('declined');
+    expect(revokedPreviewResponse.status).toBe(409);
+    expect(revokedPreviewResponse.body.message).toBe('invitation_not_active');
   });
 
   test('user can list and accept own invitation, activating membership', async () => {
@@ -556,5 +691,6 @@ describe('workspace routes', () => {
     expect(JSON.stringify(response.body)).not.toContain('passwordHash');
     expect(JSON.stringify(response.body)).not.toContain('refreshTokenHash');
     expect(JSON.stringify(response.body)).not.toContain('accessToken');
+    expect(JSON.stringify(response.body)).not.toContain('inviteTokenHash');
   });
 });

@@ -1,15 +1,44 @@
-const { WorkspaceService } = require('../../services/workspaceService');
+const {
+  WorkspaceService,
+  hashInviteToken,
+} = require('../../services/workspaceService');
 const MemoryWorkspaceRepository = require('./memoryWorkspaceRepository');
 
-const createService = () => {
+const createService = (options = {}) => {
   const repository = new MemoryWorkspaceRepository();
+  const emailService = options.emailService || {
+    sendWorkspaceInvitationEmail: jest.fn(async () => ({ sent: false })),
+  };
   return {
+    emailService,
     repository,
-    service: new WorkspaceService(repository),
+    service: new WorkspaceService(repository, { emailService }),
   };
 };
 
+const getInviteTokenFromEmail = (emailService) => {
+  const call = emailService.sendWorkspaceInvitationEmail.mock.calls.at(-1);
+  return call?.[0]?.inviteLink?.split('/').pop();
+};
+
 describe('WorkspaceService', () => {
+  const originalExposeDevInviteLinks = process.env.EXPOSE_DEV_INVITE_LINKS;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    if (originalExposeDevInviteLinks === undefined) {
+      delete process.env.EXPOSE_DEV_INVITE_LINKS;
+    } else {
+      process.env.EXPOSE_DEV_INVITE_LINKS = originalExposeDevInviteLinks;
+    }
+
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
   test('owner can create workspace and becomes active owner member', async () => {
     const { repository, service } = createService();
     await service.upsertDevUser({
@@ -334,7 +363,7 @@ describe('WorkspaceService', () => {
   });
 
   test('owner can invite by normalized email and duplicate active invite is reused', async () => {
-    const { repository, service } = createService();
+    const { emailService, repository, service } = createService();
     await service.createWorkspace({
       groupId: 'group_a',
       name: 'A',
@@ -363,6 +392,169 @@ describe('WorkspaceService', () => {
     );
     expect(second.invitationId).toBe(first.invitationId);
     expect(repository.invitations).toHaveLength(1);
+    expect(repository.invitations[0].inviteTokenHash).toBeTruthy();
+    expect(repository.invitations[0].inviteTokenHash).not.toContain(
+      'isabake://',
+    );
+    expect(first).not.toHaveProperty('inviteTokenHash');
+    expect(first).not.toHaveProperty('devInviteLink');
+    expect(emailService.sendWorkspaceInvitationEmail).toHaveBeenCalledTimes(2);
+  });
+
+  test('development NODE_ENV alone does not expose devInviteLink', async () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.EXPOSE_DEV_INVITE_LINKS;
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+
+    const invitation = await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+
+    expect(invitation).not.toHaveProperty('devInviteLink');
+    expect(invitation).not.toHaveProperty('inviteTokenHash');
+  });
+
+  test('explicit EXPOSE_DEV_INVITE_LINKS flag returns devInviteLink without token hash', async () => {
+    process.env.EXPOSE_DEV_INVITE_LINKS = 'true';
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+
+    const invitation = await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+
+    expect(invitation.devInviteLink).toContain('isabake://invite/');
+    expect(invitation).not.toHaveProperty('inviteTokenHash');
+  });
+
+  test('preview by token returns safe data and token hash lookup works', async () => {
+    const { emailService, repository, service } = createService();
+    await service.upsertDevUser({
+      displayName: 'Owner',
+      email: 'owner@example.test',
+      userId: 'owner',
+    });
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    const invitation = await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+    const token = getInviteTokenFromEmail(emailService);
+
+    await expect(service.getInvitationPreviewByToken(token)).resolves.toEqual(
+      expect.objectContaining({
+        email: 'invitee@example.test',
+        role: 'member',
+        status: 'invited',
+        workspace: expect.objectContaining({ name: 'A' }),
+      }),
+    );
+    expect(await repository.findInvitationByTokenHash(hashInviteToken(token))).toEqual(
+      expect.objectContaining({ invitationId: invitation.invitationId }),
+    );
+    expect(JSON.stringify(await service.getInvitationPreviewByToken(token))).not.toContain(
+      'inviteTokenHash',
+    );
+  });
+
+  test('token accept requires matching email and activates membership', async () => {
+    const { emailService, repository, service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    const invitation = await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'viewer',
+    });
+    const token = getInviteTokenFromEmail(emailService);
+
+    await expect(
+      service.acceptInvitationByToken({
+        email: 'wrong@example.test',
+        token,
+        userId: 'invitee',
+      }),
+    ).rejects.toMatchObject({ message: 'invitation_email_mismatch' });
+    await expect(
+      service.acceptInvitationByToken({
+        email: 'invitee@example.test',
+        token,
+        userId: 'invitee',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        inviteAcceptedFromTokenAt: expect.any(String),
+        status: 'accepted',
+      }),
+    );
+    expect(repository.memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          groupId: 'group_a',
+          role: 'viewer',
+          status: 'active',
+          userId: 'invitee',
+        }),
+      ]),
+    );
+  });
+
+  test('decline by token works and expired token fails safely', async () => {
+    const { emailService, repository, service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    const declined = await service.createInvitation({
+      email: 'decline@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+    const declinedToken = getInviteTokenFromEmail(emailService);
+    const expired = await service.createInvitation({
+      email: 'expired@example.test',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+    const expiredToken = getInviteTokenFromEmail(emailService);
+
+    await expect(
+      service.declineInvitationByToken({
+        email: 'decline@example.test',
+        token: declinedToken,
+        userId: 'decline',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: 'declined' }));
+    await expect(
+      service.getInvitationPreviewByToken(expiredToken),
+    ).rejects.toMatchObject({ message: 'invitation_expired' });
+    expect(
+      repository.memberships.some((membership) => membership.userId === 'decline'),
+    ).toBe(false);
   });
 
   test('member cannot invite and owner role is downgraded to member', async () => {

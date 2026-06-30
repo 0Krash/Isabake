@@ -68,11 +68,28 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'POST',
     }),
+  acceptWorkspaceInvitationByToken: ({ authHeaders, token }) =>
+    requestJson(`/workspaces/invitations/by-token/${encodeURIComponent(token)}/accept`, {
+      ...options,
+      headers: authHeaders,
+      method: 'POST',
+    }),
   declineWorkspaceInvitation: ({ authHeaders, invitationId }) =>
     requestJson(`/workspaces/invitations/${invitationId}/decline`, {
       ...options,
       headers: authHeaders,
       method: 'POST',
+    }),
+  declineWorkspaceInvitationByToken: ({ authHeaders, token }) =>
+    requestJson(`/workspaces/invitations/by-token/${encodeURIComponent(token)}/decline`, {
+      ...options,
+      headers: authHeaders,
+      method: 'POST',
+    }),
+  getWorkspaceInvitationPreviewByToken: ({ token }) =>
+    requestJson(`/workspaces/invitations/by-token/${encodeURIComponent(token)}`, {
+      ...options,
+      method: 'GET',
     }),
   leaveWorkspace: ({ authHeaders, groupId }) =>
     requestJson(`/workspaces/${groupId}/leave`, {

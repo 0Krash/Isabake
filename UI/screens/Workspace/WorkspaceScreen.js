@@ -395,6 +395,12 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                     <Text style={[styles.meta, { color: colors.textMuted }]}>
                       {invitation.role} · {invitation.status}
                     </Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      Link:{' '}
+                      {invitation.inviteTokenExpiresAt
+                        ? `activo hasta ${invitation.inviteTokenExpiresAt}`
+                        : 'no disponible'}
+                    </Text>
                   </View>
                   <Pressable
                     disabled={workspaceState.loading}

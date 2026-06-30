@@ -26,6 +26,24 @@ const workspaceInvitationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    inviteAcceptedFromTokenAt: {
+      type: Date,
+      default: null,
+    },
+    inviteLinkCreatedAt: {
+      type: Date,
+      default: null,
+    },
+    inviteTokenExpiresAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    inviteTokenHash: {
+      type: String,
+      default: null,
+      index: true,
+    },
     invitationId: {
       type: String,
       required: true,
@@ -65,6 +83,7 @@ const workspaceInvitationSchema = new mongoose.Schema(
 );
 
 workspaceInvitationSchema.index({ groupId: 1, email: 1, status: 1 });
+workspaceInvitationSchema.index({ inviteTokenHash: 1, status: 1 });
 
 module.exports = mongoose.model(
   'WorkspaceInvitation',

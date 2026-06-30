@@ -16,10 +16,18 @@ export const sanitizeMemberForDisplay = (member = {}) => ({
 export const isValidInvitationEmail = (email = '') =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 
-export const sanitizeInvitationForDisplay = (invitation = {}) => ({
+export const sanitizeInvitationForDisplay = (
+  invitation = {},
+  { exposeDevInviteLink = false } = {},
+) => ({
+  ...(exposeDevInviteLink && invitation.devInviteLink
+    ? { devInviteLink: invitation.devInviteLink }
+    : {}),
   email: invitation.email || 'sin_correo',
   groupId: invitation.groupId || null,
   invitationId: invitation.invitationId || null,
+  inviteLinkCreatedAt: invitation.inviteLinkCreatedAt || null,
+  inviteTokenExpiresAt: invitation.inviteTokenExpiresAt || null,
   role: invitation.role || 'member',
   status: invitation.status || 'invited',
 });

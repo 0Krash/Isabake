@@ -5,6 +5,10 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+router
+  .route('/invitations/by-token/:token')
+  .get(workspaceController.getInvitationPreviewByToken);
+
 router.use(requireAuth);
 
 router
@@ -23,6 +27,14 @@ router
 router
   .route('/invitations/:invitationId/decline')
   .post(workspaceController.declineInvitation);
+
+router
+  .route('/invitations/by-token/:token/accept')
+  .post(workspaceController.acceptInvitationByToken);
+
+router
+  .route('/invitations/by-token/:token/decline')
+  .post(workspaceController.declineInvitationByToken);
 
 router.route('/:groupId').get(workspaceController.getWorkspace);
 

@@ -186,3 +186,40 @@ exports.revokeInvitation = asyncHandler(async (req, res) => {
     status: 'success',
   });
 });
+
+exports.getInvitationPreviewByToken = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.getInvitationPreviewByToken(
+    req.params.token,
+  );
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});
+
+exports.acceptInvitationByToken = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.acceptInvitationByToken({
+    email: req.user.email,
+    token: req.params.token,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});
+
+exports.declineInvitationByToken = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.declineInvitationByToken({
+    email: req.user.email,
+    token: req.params.token,
+    userId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});

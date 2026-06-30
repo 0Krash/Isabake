@@ -49,7 +49,9 @@ describe('WorkspaceScreen model helpers', () => {
     expect(
       sanitizeInvitationForDisplay({
         accessToken: 'secret',
+        devInviteLink: 'isabake://invite/dev_token',
         email: 'invitee@example.test',
+        inviteTokenHash: 'hash_secret',
         invitationId: 'invitation_1',
         refreshToken: 'secret',
         role: 'viewer',
@@ -59,8 +61,25 @@ describe('WorkspaceScreen model helpers', () => {
       email: 'invitee@example.test',
       groupId: null,
       invitationId: 'invitation_1',
+      inviteLinkCreatedAt: null,
+      inviteTokenExpiresAt: null,
       role: 'viewer',
       status: 'invited',
     });
+    expect(
+      sanitizeInvitationForDisplay(
+        {
+          devInviteLink: 'isabake://invite/dev_token',
+          email: 'invitee@example.test',
+          invitationId: 'invitation_1',
+        },
+        { exposeDevInviteLink: true },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        devInviteLink: 'isabake://invite/dev_token',
+        email: 'invitee@example.test',
+      }),
+    );
   });
 });
