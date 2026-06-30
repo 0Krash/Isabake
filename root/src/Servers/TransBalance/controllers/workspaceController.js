@@ -187,6 +187,19 @@ exports.revokeInvitation = asyncHandler(async (req, res) => {
   });
 });
 
+exports.regenerateInvitationLink = asyncHandler(async (req, res) => {
+  const invitation = await workspaceService.regenerateInvitationLink({
+    groupId: req.params.groupId,
+    invitationId: req.params.invitationId,
+    requesterUserId: req.user.userId,
+  });
+
+  res.status(200).json({
+    invitation,
+    status: 'success',
+  });
+});
+
 exports.getInvitationPreviewByToken = asyncHandler(async (req, res) => {
   const invitation = await workspaceService.getInvitationPreviewByToken(
     req.params.token,

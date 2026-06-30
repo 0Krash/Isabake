@@ -63,6 +63,7 @@ import {
   loadMyWorkspaceInvitations,
   loadWorkspaceInvitationPreviewByToken,
   loadWorkspaceInvitations,
+  regenerateWorkspaceInvitationLink,
   refreshWorkspaceState,
   revokeWorkspaceInvitation,
   selectWorkspace,
@@ -281,6 +282,9 @@ describe('workspaceService', () => {
       listWorkspaceInvitations: jest.fn(async () => ({
         invitations: [{ invitationId: 'invitation_2' }],
       })),
+      regenerateWorkspaceInvitationLink: jest.fn(async () => ({
+        status: 'success',
+      })),
       revokeWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
     };
 
@@ -305,6 +309,11 @@ describe('workspaceService', () => {
     await declineWorkspaceInvitationByToken({
       client,
       token: 'invite_token_1',
+    });
+    await regenerateWorkspaceInvitationLink({
+      client,
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
     });
     await revokeWorkspaceInvitation({
       client,
@@ -343,6 +352,11 @@ describe('workspaceService', () => {
     expect(client.declineWorkspaceInvitationByToken).toHaveBeenCalledWith({
       authHeaders: { Authorization: 'Bearer jwt_access' },
       token: 'invite_token_1',
+    });
+    expect(client.regenerateWorkspaceInvitationLink).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
     });
     expect(client.revokeWorkspaceInvitation).toHaveBeenCalledWith({
       authHeaders: { Authorization: 'Bearer jwt_access' },

@@ -50,6 +50,12 @@ describe('WorkspaceScreen model helpers', () => {
       sanitizeInvitationForDisplay({
         accessToken: 'secret',
         devInviteLink: 'isabake://invite/dev_token',
+        emailDelivery: {
+          error: 'internal_error_detail',
+          provider: 'http',
+          sent: false,
+          status: 'failed',
+        },
         email: 'invitee@example.test',
         inviteTokenHash: 'hash_secret',
         invitationId: 'invitation_1',
@@ -58,6 +64,11 @@ describe('WorkspaceScreen model helpers', () => {
         status: 'invited',
       }),
     ).toEqual({
+      emailDelivery: {
+        provider: 'http',
+        sent: false,
+        status: 'failed',
+      },
       email: 'invitee@example.test',
       groupId: null,
       invitationId: 'invitation_1',
@@ -81,5 +92,13 @@ describe('WorkspaceScreen model helpers', () => {
         email: 'invitee@example.test',
       }),
     );
+    expect(
+      JSON.stringify(
+        sanitizeInvitationForDisplay({
+          devInviteLink: 'isabake://invite/dev_token',
+          inviteTokenHash: 'hash_secret',
+        }),
+      ),
+    ).not.toContain('dev_token');
   });
 });

@@ -182,6 +182,15 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'DELETE',
     }),
+  regenerateWorkspaceInvitationLink: ({ authHeaders, groupId, invitationId }) =>
+    requestJson(
+      `/workspaces/${groupId}/invitations/${invitationId}/regenerate-link`,
+      {
+        ...options,
+        headers: authHeaders,
+        method: 'POST',
+      },
+    ),
   updateWorkspaceMember: ({ authHeaders, groupId, role, status, userId }) =>
     requestJson(`/workspaces/${groupId}/members/${userId}`, {
       ...options,

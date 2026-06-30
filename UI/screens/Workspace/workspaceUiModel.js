@@ -19,15 +19,26 @@ export const isValidInvitationEmail = (email = '') =>
 export const sanitizeInvitationForDisplay = (
   invitation = {},
   { exposeDevInviteLink = false } = {},
-) => ({
-  ...(exposeDevInviteLink && invitation.devInviteLink
-    ? { devInviteLink: invitation.devInviteLink }
-    : {}),
-  email: invitation.email || 'sin_correo',
-  groupId: invitation.groupId || null,
-  invitationId: invitation.invitationId || null,
-  inviteLinkCreatedAt: invitation.inviteLinkCreatedAt || null,
-  inviteTokenExpiresAt: invitation.inviteTokenExpiresAt || null,
-  role: invitation.role || 'member',
-  status: invitation.status || 'invited',
-});
+) => {
+  const emailDelivery = invitation.emailDelivery
+    ? {
+        provider: invitation.emailDelivery.provider || 'unknown',
+        sent: Boolean(invitation.emailDelivery.sent),
+        status: invitation.emailDelivery.status || 'unknown',
+      }
+    : null;
+
+  return {
+    ...(exposeDevInviteLink && invitation.devInviteLink
+      ? { devInviteLink: invitation.devInviteLink }
+      : {}),
+    ...(emailDelivery ? { emailDelivery } : {}),
+    email: invitation.email || 'sin_correo',
+    groupId: invitation.groupId || null,
+    invitationId: invitation.invitationId || null,
+    inviteLinkCreatedAt: invitation.inviteLinkCreatedAt || null,
+    inviteTokenExpiresAt: invitation.inviteTokenExpiresAt || null,
+    role: invitation.role || 'member',
+    status: invitation.status || 'invited',
+  };
+};

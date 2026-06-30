@@ -2,6 +2,7 @@
   "expo": {
     "name": "UI",
     "slug": "UI",
+    "scheme": "isabake",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

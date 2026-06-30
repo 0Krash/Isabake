@@ -606,6 +606,45 @@ describe('workspace routes', () => {
     expect(revokedPreviewResponse.body.message).toBe('invitation_not_active');
   });
 
+  test('owner can regenerate invitation link and old token becomes invalid', async () => {
+    process.env.EXPOSE_DEV_INVITE_LINKS = 'true';
+    seedWorkspace();
+    const createResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'invitee@example.test' });
+    const invitationId = createResponse.body.invitation.invitationId;
+    const firstToken = createResponse.body.invitation.devInviteLink
+      .split('/')
+      .pop();
+
+    const deniedResponse = await request(app)
+      .post(`/workspaces/group_a/invitations/${invitationId}/regenerate-link`)
+      .set(auth('other'));
+    const regenerateResponse = await request(app)
+      .post(`/workspaces/group_a/invitations/${invitationId}/regenerate-link`)
+      .set(auth('owner'));
+    const secondToken = regenerateResponse.body.invitation.devInviteLink
+      .split('/')
+      .pop();
+    const oldPreviewResponse = await request(app)
+      .get(`/workspaces/invitations/by-token/${firstToken}`);
+    const newPreviewResponse = await request(app)
+      .get(`/workspaces/invitations/by-token/${secondToken}`);
+
+    expect(deniedResponse.status).toBe(403);
+    expect(regenerateResponse.status).toBe(200);
+    expect(secondToken).not.toBe(firstToken);
+    expect(JSON.stringify(regenerateResponse.body)).not.toContain(
+      'inviteTokenHash',
+    );
+    expect(oldPreviewResponse.status).toBe(404);
+    expect(newPreviewResponse.status).toBe(200);
+    expect(newPreviewResponse.body.invitation.email).toBe(
+      'invitee@example.test',
+    );
+  });
+
   test('user can list and accept own invitation, activating membership', async () => {
     seedWorkspace();
     await request(app)

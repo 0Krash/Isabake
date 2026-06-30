@@ -10,6 +10,7 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { getCurrentSession } from '../../data/auth/authService';
 import {
   acceptWorkspaceInvitationByToken,
   declineWorkspaceInvitationByToken,
@@ -23,10 +24,12 @@ export default function InvitationAcceptScreen({
   client,
   initialLink,
   initialToken,
+  onBackToWorkspace,
   onOpenAccount,
   session,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
+  const [authRequired, setAuthRequired] = useState(false);
   const [error, setError] = useState(null);
   const [input, setInput] = useState(initialLink || initialToken || '');
   const [loading, setLoading] = useState(false);
@@ -96,6 +99,16 @@ export default function InvitationAcceptScreen({
     );
 
   useEffect(() => {
+    getCurrentSession()
+      .then((currentSession) => {
+        setAuthRequired(!currentSession);
+      })
+      .catch(() => {
+        setAuthRequired(true);
+      });
+  }, []);
+
+  useEffect(() => {
     if (initialToken || initialLink) {
       loadPreview().catch(() => {});
     }
@@ -146,6 +159,12 @@ export default function InvitationAcceptScreen({
           <Text style={[styles.body, { color: colors.textSecondary }]}>
             Estado: {preview.status}
           </Text>
+          {authRequired ? (
+            <Text style={[styles.warning, { color: colors.danger }]}>
+              Inicia sesion con el correo invitado para aceptar o rechazar esta
+              invitacion.
+            </Text>
+          ) : null}
           <View style={styles.row}>
             <Pressable
               disabled={loading}
@@ -169,6 +188,11 @@ export default function InvitationAcceptScreen({
           <Pressable disabled={loading} onPress={onOpenAccount}>
             <Text style={[styles.link, { color: colors.primary }]}>
               Iniciar sesion o cambiar cuenta
+            </Text>
+          </Pressable>
+          <Pressable disabled={loading} onPress={onBackToWorkspace}>
+            <Text style={[styles.link, { color: colors.primary }]}>
+              Volver a workspaces
             </Text>
           </Pressable>
         </View>
@@ -247,5 +271,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.sizes.title,
     fontWeight: '800',
+  },
+  warning: {
+    fontSize: typography.sizes.bodySmall,
   },
 });

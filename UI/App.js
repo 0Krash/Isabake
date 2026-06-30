@@ -1,4 +1,5 @@
 import {
+  Linking,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -14,8 +15,10 @@ import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
 import ConflictResolutionScreen from './screens/Sync/ConflictResolutionScreen';
 import SyncCenterScreen from './screens/Sync/SyncCenterScreen';
 import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
+import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
+import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
@@ -27,6 +30,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
+  const [inviteToken, setInviteToken] = useState(null);
   const [saleRecipe, setSaleRecipe] = useState(null);
   const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
@@ -49,6 +53,36 @@ export default function App() {
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleUrl = (url) => {
+      const navigationState = createInvitationNavigationState(url);
+
+      if (!navigationState.ok) {
+        return;
+      }
+
+      setInviteToken(navigationState.inviteToken);
+      setSaleRecipe(null);
+      setActiveTab('invite');
+    };
+
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) {
+          handleUrl(url);
+        }
+      })
+      .catch(() => {});
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleUrl(url);
+    });
+
+    return () => {
+      subscription?.remove?.();
     };
   }, []);
 
@@ -89,6 +123,16 @@ export default function App() {
 
     if (activeTab === 'workspace') {
       return <WorkspaceScreen onOpenAccount={() => setActiveTab('account')} />;
+    }
+
+    if (activeTab === 'invite') {
+      return (
+        <InvitationAcceptScreen
+          initialToken={inviteToken}
+          onBackToWorkspace={() => setActiveTab('workspace')}
+          onOpenAccount={() => setActiveTab('account')}
+        />
+      );
     }
 
     if (activeTab === 'dev-sync' && devSyncDiagnosticsEnabled) {

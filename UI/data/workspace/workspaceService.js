@@ -318,6 +318,24 @@ export const revokeWorkspaceInvitation = async ({
   });
 };
 
+export const regenerateWorkspaceInvitationLink = async ({
+  client,
+  groupId,
+  invitationId,
+  session,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  return authClient.regenerateWorkspaceInvitationLink({
+    authHeaders,
+    groupId,
+    invitationId,
+  });
+};
+
 export const disconnectLocalWorkspace = async ({
   client,
   leaveRemote = false,
@@ -356,6 +374,7 @@ export default {
   loadWorkspaceInvitationPreviewByToken,
   loadWorkspaceMembers,
   loadWorkspaceInvitations,
+  regenerateWorkspaceInvitationLink,
   refreshWorkspaceState,
   removeWorkspaceMember,
   revokeWorkspaceInvitation,

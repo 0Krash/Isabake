@@ -174,6 +174,11 @@ describe('authApiClient', () => {
       authHeaders,
       invitationId: 'invitation_1',
     });
+    await client.regenerateWorkspaceInvitationLink({
+      authHeaders,
+      groupId: 'group_1',
+      invitationId: 'invitation_1',
+    });
     await client.revokeWorkspaceInvitation({
       authHeaders,
       groupId: 'group_1',
@@ -243,6 +248,10 @@ describe('authApiClient', () => {
     );
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://api.example.test/workspaces/invitations/invitation_1/decline',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1/invitations/invitation_1/regenerate-link',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(fetchImpl).toHaveBeenCalledWith(

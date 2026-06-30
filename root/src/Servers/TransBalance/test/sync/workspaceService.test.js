@@ -7,7 +7,11 @@ const MemoryWorkspaceRepository = require('./memoryWorkspaceRepository');
 const createService = (options = {}) => {
   const repository = new MemoryWorkspaceRepository();
   const emailService = options.emailService || {
-    sendWorkspaceInvitationEmail: jest.fn(async () => ({ sent: false })),
+    sendWorkspaceInvitationEmail: jest.fn(async () => ({
+      provider: 'mock',
+      sent: false,
+      status: 'skipped',
+    })),
   };
   return {
     emailService,
@@ -398,6 +402,12 @@ describe('WorkspaceService', () => {
     );
     expect(first).not.toHaveProperty('inviteTokenHash');
     expect(first).not.toHaveProperty('devInviteLink');
+    expect(first.emailDelivery).toEqual({
+      provider: 'mock',
+      sent: false,
+      status: 'skipped',
+    });
+    expect(JSON.stringify(first)).not.toContain('isabake://invite/');
     expect(emailService.sendWorkspaceInvitationEmail).toHaveBeenCalledTimes(2);
   });
 
@@ -419,6 +429,9 @@ describe('WorkspaceService', () => {
 
     expect(invitation).not.toHaveProperty('devInviteLink');
     expect(invitation).not.toHaveProperty('inviteTokenHash');
+    expect(invitation.emailDelivery).toEqual(
+      expect.objectContaining({ provider: 'mock', status: 'skipped' }),
+    );
   });
 
   test('explicit EXPOSE_DEV_INVITE_LINKS flag returns devInviteLink without token hash', async () => {
@@ -438,6 +451,9 @@ describe('WorkspaceService', () => {
 
     expect(invitation.devInviteLink).toContain('isabake://invite/');
     expect(invitation).not.toHaveProperty('inviteTokenHash');
+    expect(invitation.emailDelivery).toEqual(
+      expect.objectContaining({ provider: 'mock', status: 'skipped' }),
+    );
   });
 
   test('preview by token returns safe data and token hash lookup works', async () => {
@@ -518,6 +534,62 @@ describe('WorkspaceService', () => {
           userId: 'invitee',
         }),
       ]),
+    );
+  });
+
+  test('regenerate invitation link replaces token and keeps raw link default-deny', async () => {
+    const { emailService, repository, service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+      userId: 'member',
+    });
+    const invitation = await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+    });
+    const firstToken = getInviteTokenFromEmail(emailService);
+
+    await expect(
+      service.regenerateInvitationLink({
+        groupId: 'group_a',
+        invitationId: invitation.invitationId,
+        requesterUserId: 'member',
+      }),
+    ).rejects.toMatchObject({ message: 'workspace_admin_required' });
+
+    const regenerated = await service.regenerateInvitationLink({
+      groupId: 'group_a',
+      invitationId: invitation.invitationId,
+      requesterUserId: 'owner',
+    });
+    const secondToken = getInviteTokenFromEmail(emailService);
+
+    expect(secondToken).toBeTruthy();
+    expect(secondToken).not.toBe(firstToken);
+    expect(regenerated).not.toHaveProperty('devInviteLink');
+    expect(regenerated).not.toHaveProperty('inviteTokenHash');
+    expect(regenerated.emailDelivery).toEqual(
+      expect.objectContaining({ provider: 'mock', status: 'skipped' }),
+    );
+    expect(repository.invitations[0].inviteTokenHash).toBe(
+      hashInviteToken(secondToken),
+    );
+    await expect(service.getInvitationPreviewByToken(firstToken)).rejects.toMatchObject({
+      message: 'invitation_not_found',
+    });
+    await expect(service.getInvitationPreviewByToken(secondToken)).resolves.toEqual(
+      expect.objectContaining({
+        email: 'invitee@example.test',
+        status: 'invited',
+      }),
     );
   });
 

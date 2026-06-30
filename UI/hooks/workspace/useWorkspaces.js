@@ -10,6 +10,7 @@ import {
   loadMyWorkspaceInvitations,
   loadWorkspaceInvitations,
   loadWorkspaceMembers,
+  regenerateWorkspaceInvitationLink,
   refreshWorkspaceState,
   removeWorkspaceMember,
   revokeWorkspaceInvitation,
@@ -226,6 +227,25 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     [client, currentWorkspace, refreshInvitations, session],
   );
 
+  const regenerateInvitationLink = useCallback(
+    async (invitationId) => {
+      const groupId = currentWorkspace?.groupId;
+
+      if (!groupId) {
+        throw new Error('workspace_required');
+      }
+
+      await regenerateWorkspaceInvitationLink({
+        client,
+        groupId,
+        invitationId,
+        session,
+      });
+      return refreshInvitations(currentWorkspace);
+    },
+    [client, currentWorkspace, refreshInvitations, session],
+  );
+
   const acceptInvitation = useCallback(
     async (invitationId) => {
       await acceptWorkspaceInvitation({ client, invitationId, session });
@@ -331,6 +351,7 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     refreshMyInvitations,
     refreshWorkspaces,
     remoteWorkspaces,
+    regenerateInvitationLink,
     removeMember,
     revokeInvitation,
     selectWorkspace,

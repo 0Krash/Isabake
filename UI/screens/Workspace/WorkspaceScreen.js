@@ -401,29 +401,59 @@ export default function WorkspaceScreen({ onOpenAccount }) {
                         ? `activo hasta ${invitation.inviteTokenExpiresAt}`
                         : 'no disponible'}
                     </Text>
-                  </View>
-                  <Pressable
-                    disabled={workspaceState.loading}
-                    onPress={() =>
-                      runAction(
-                        () =>
-                          workspaceState.revokeInvitation(
-                            invitation.invitationId,
-                          ),
-                        'Invitacion revocada.',
-                      )
-                    }
-                    style={[styles.smallButton, { borderColor: colors.border }]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Revocar
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      Email:{' '}
+                      {invitation.emailDelivery
+                        ? `${invitation.emailDelivery.status} (${invitation.emailDelivery.provider})`
+                        : 'sin estado'}
                     </Text>
-                  </Pressable>
+                  </View>
+                  <View style={styles.inlineActions}>
+                    <Pressable
+                      disabled={workspaceState.loading}
+                      onPress={() =>
+                        runAction(
+                          () =>
+                            workspaceState.regenerateInvitationLink(
+                              invitation.invitationId,
+                            ),
+                          'Link de invitacion regenerado.',
+                        )
+                      }
+                      style={[styles.smallButton, { borderColor: colors.border }]}
+                    >
+                      <Text
+                        style={[
+                          styles.secondaryText,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        Regenerar
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={workspaceState.loading}
+                      onPress={() =>
+                        runAction(
+                          () =>
+                            workspaceState.revokeInvitation(
+                              invitation.invitationId,
+                            ),
+                          'Invitacion revocada.',
+                        )
+                      }
+                      style={[styles.smallButton, { borderColor: colors.border }]}
+                    >
+                      <Text
+                        style={[
+                          styles.secondaryText,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        Revocar
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}

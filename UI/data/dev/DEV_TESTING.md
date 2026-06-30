@@ -219,6 +219,48 @@ Member management:
 - a user can leave a workspace unless they are the only active owner
 - removing/leaving does not delete local device data
 
+## Invitation Email Delivery
+
+Phase 26 adds a backend email provider layer for workspace invitations.
+
+Safe defaults:
+
+- `INVITATION_EMAIL_PROVIDER` defaults to `noop`
+- `noop` returns `status: "skipped"` outside production
+- production or `INVITATION_EMAIL_REQUIRE_CONFIG=true` returns
+  `status: "not_configured"` when no provider is configured
+- normal API/UI responses expose only safe `emailDelivery` metadata
+
+Provider options:
+
+```sh
+INVITATION_EMAIL_PROVIDER=noop
+INVITATION_EMAIL_PROVIDER=console
+INVITATION_EMAIL_PROVIDER=http
+```
+
+HTTP webhook delivery:
+
+```sh
+APP_INVITE_BASE_URL=https://your-domain.example/invite
+INVITATION_EMAIL_PROVIDER=http
+INVITATION_EMAIL_WEBHOOK_URL=https://email-provider.example/send
+INVITATION_EMAIL_WEBHOOK_API_KEY=optional-secret
+INVITATION_EMAIL_FROM=hello@your-domain.example
+INVITATION_EMAIL_REPLY_TO=support@your-domain.example
+```
+
+Dev console logging:
+
+```sh
+INVITATION_EMAIL_PROVIDER=console
+LOG_DEV_INVITE_LINKS=true
+```
+
+`console` never logs raw links in production. `EXPOSE_DEV_INVITE_LINKS=true`
+is still required before API responses include `devInviteLink`, and normal
+Workspace UI does not render raw invite links.
+
 Roles:
 
 - `owner`
@@ -803,9 +845,28 @@ Mobile helpers parse:
 - `isabake://invite/<token>`
 - `https://.../invite/<token>`
 
-`InvitationAcceptScreen` can load a safe preview and accept/decline after login.
-Accepting an invitation activates membership and refreshes workspaces, but it
-does not push, pull, full-sync, or delete local data.
+The app declares the `isabake` scheme and routes invitation links to
+`InvitationAcceptScreen`. Opening a link only shows the invitation flow; it does
+not push, pull, full-sync, force login, or delete local data.
+
+`InvitationAcceptScreen` can load a safe preview before login. If the user is
+unauthenticated, the token stays in the screen so they can log in/register and
+return to accept or decline. Accepting an invitation activates membership and
+refreshes workspaces, but it does not push, pull, full-sync, or delete local
+data.
+
+Regenerate an invitation link:
+
+```sh
+curl -X POST "$URL_Sync/workspaces/demo_group/invitations/<invitationId>/regenerate-link" \
+  -H "Authorization: Bearer dev-token-owner" \
+  -H "x-dev-user-id: owner" \
+  -H "x-dev-user-email: owner@example.test"
+```
+
+Only `owner`/`admin` can regenerate links. The previous token becomes invalid.
+The raw regenerated link is returned only when `EXPOSE_DEV_INVITE_LINKS=true`;
+normal Workspace UI still shows only safe link status and expiration.
 
 Email delivery:
 

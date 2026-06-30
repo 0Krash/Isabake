@@ -52,6 +52,10 @@ router
   .route('/:groupId/invitations/:invitationId')
   .delete(workspaceController.revokeInvitation);
 
+router
+  .route('/:groupId/invitations/:invitationId/regenerate-link')
+  .post(workspaceController.regenerateInvitationLink);
+
 router.route('/:groupId/leave').post(workspaceController.leaveWorkspace);
 
 router

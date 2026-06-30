@@ -43,12 +43,45 @@ const isDevInviteLinkAllowed = () =>
 
 const getInvitationBaseUrl = () =>
   String(
-    process.env.INVITATION_BASE_URL ||
+    process.env.APP_INVITE_BASE_URL ||
+      process.env.INVITATION_BASE_URL ||
       process.env.PUBLIC_APP_URL ||
       'isabake://invite',
   ).replace(/\/+$/, '');
 
 const createInviteLink = (token) => `${getInvitationBaseUrl()}/${token}`;
+
+const createInvitationLinkBundle = ({ expiresAt } = {}) => {
+  const token = createInviteToken();
+  const inviteLink = createInviteLink(token);
+  const inviteTokenExpiresAt =
+    expiresAt || addDays(new Date(), 7).toISOString();
+
+  return {
+    inviteLink,
+    linkFields: {
+      inviteLinkCreatedAt: nowIso(),
+      inviteTokenExpiresAt,
+      inviteTokenHash: hashInviteToken(token),
+    },
+    token,
+  };
+};
+
+const sanitizeEmailDelivery = (emailDelivery = {}) => {
+  const status = emailDelivery.status || (emailDelivery.sent ? 'sent' : null);
+
+  if (!status) {
+    return null;
+  }
+
+  return {
+    ...(emailDelivery.error ? { error: emailDelivery.error } : {}),
+    provider: emailDelivery.provider || 'unknown',
+    sent: Boolean(emailDelivery.sent),
+    status,
+  };
+};
 
 const sanitizeInvitation = (invitation = {}, extra = {}) => {
   const safe = {
@@ -70,6 +103,12 @@ const sanitizeInvitation = (invitation = {}, extra = {}) => {
 
   if (extra.devInviteLink && isDevInviteLinkAllowed()) {
     safe.devInviteLink = extra.devInviteLink;
+  }
+
+  const emailDelivery = sanitizeEmailDelivery(extra.emailDelivery);
+
+  if (emailDelivery) {
+    safe.emailDelivery = emailDelivery;
   }
 
   return safe;
@@ -369,15 +408,11 @@ class WorkspaceService {
       throw createHttpError(404, 'workspace_not_found');
     }
 
-    const token = createInviteToken();
-    const inviteLink = createInviteLink(token);
-    const inviteTokenExpiresAt =
-      expiresAt || addDays(new Date(), 7).toISOString();
-    const linkFields = {
-      inviteLinkCreatedAt: nowIso(),
-      inviteTokenExpiresAt,
-      inviteTokenHash: hashInviteToken(token),
-    };
+    const inviter = await this.repository.findUserByUserId(requesterUserId);
+
+    const { inviteLink, linkFields } = createInvitationLinkBundle({
+      expiresAt,
+    });
 
     const existingInvitation =
       await this.repository.findActiveInvitationByEmail({
@@ -393,13 +428,19 @@ class WorkspaceService {
           ...linkFields,
         },
       );
-      await this.emailService.sendWorkspaceInvitationEmail({
+      const emailDelivery = await this.emailService.sendWorkspaceInvitationEmail({
+        expiresAt: rotatedInvitation.inviteTokenExpiresAt,
         inviteLink,
+        inviterEmail: inviter?.email,
+        inviterName: inviter?.displayName,
         role: rotatedInvitation.role,
         to: rotatedInvitation.email,
         workspaceName: workspace.name,
       });
-      return sanitizeInvitation(rotatedInvitation, { devInviteLink: inviteLink });
+      return sanitizeInvitation(rotatedInvitation, {
+        devInviteLink: inviteLink,
+        emailDelivery,
+      });
     }
 
     const existingUser = await this.repository.findUserByEmail(normalizedEmail);
@@ -417,14 +458,20 @@ class WorkspaceService {
       workspaceId: workspace.workspaceId,
     });
 
-    await this.emailService.sendWorkspaceInvitationEmail({
+    const emailDelivery = await this.emailService.sendWorkspaceInvitationEmail({
+      expiresAt: invitation.inviteTokenExpiresAt,
       inviteLink,
+      inviterEmail: inviter?.email,
+      inviterName: inviter?.displayName,
       role: invitation.role,
       to: invitation.email,
       workspaceName: workspace.name,
     });
 
-    return sanitizeInvitation(invitation, { devInviteLink: inviteLink });
+    return sanitizeInvitation(invitation, {
+      devInviteLink: inviteLink,
+      emailDelivery,
+    });
   }
 
   async listWorkspaceInvitations({ groupId, requesterUserId }) {
@@ -561,6 +608,53 @@ class WorkspaceService {
     });
 
     return sanitizeInvitation(updatedInvitation);
+  }
+
+  async regenerateInvitationLink({ groupId, invitationId, requesterUserId }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (!ADMIN_ROLES.has(requesterRole)) {
+      throw createHttpError(403, 'workspace_admin_required');
+    }
+
+    const invitation = await this.repository.findInvitationById(invitationId);
+
+    if (!invitation || invitation.groupId !== groupId) {
+      throw createHttpError(404, 'invitation_not_found');
+    }
+
+    await this.assertInvitationCanBeAccepted(invitation);
+
+    const workspace = await this.repository.findWorkspaceByGroupId(groupId);
+    const inviter = await this.repository.findUserByUserId(requesterUserId);
+    const { inviteLink, linkFields } = createInvitationLinkBundle({
+      expiresAt: invitation.expiresAt,
+    });
+    const updatedInvitation = await this.repository.updateInvitation(
+      invitation.invitationId,
+      {
+        ...invitation,
+        ...linkFields,
+      },
+    );
+
+    const emailDelivery = await this.emailService.sendWorkspaceInvitationEmail({
+      expiresAt: updatedInvitation.inviteTokenExpiresAt,
+      inviteLink,
+      inviterEmail: inviter?.email,
+      inviterName: inviter?.displayName,
+      role: updatedInvitation.role,
+      to: updatedInvitation.email,
+      workspaceName: workspace?.name || 'Workspace compartido',
+    });
+
+    return sanitizeInvitation(updatedInvitation, {
+      devInviteLink: inviteLink,
+      emailDelivery,
+    });
   }
 
   async findInvitationByToken(token) {
@@ -723,4 +817,5 @@ module.exports = {
   WorkspaceService,
   hashInviteToken,
   sanitizeInvitation,
+  sanitizeEmailDelivery,
 };
