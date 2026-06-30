@@ -815,6 +815,8 @@ module.exports = {
   VALID_STATUSES,
   VALID_INVITATION_ROLES,
   WorkspaceService,
+  createInviteLink,
+  getInvitationBaseUrl,
   hashInviteToken,
   sanitizeInvitation,
   sanitizeEmailDelivery,

@@ -24,6 +24,7 @@
 - Invitation token/link foundation
 - Invitation deep-link navigation and safe link management
 - Production invitation email delivery foundation
+- Production universal/app links setup
 - Security cleanup:
   - devInviteLink default-deny
   - legacy socket.io disabled by default
@@ -32,7 +33,7 @@
 
 ## Current Next Phase
 
-- Phase 27: production universal/app links setup
+- Phase 28: invitation/workspace/account UX polish
 
 ## Important Backend Paths
 
@@ -61,6 +62,7 @@
 ## Known Pending Items
 
 - Backend full suite must be run outside sandbox if Supertest fails with `listen EPERM`.
-- Production universal/app links domain setup pending.
+- Production app links require real domain, certs, Android SHA-256 signing
+  fingerprint, Apple Team ID, and final iOS bundle identifier.
 - Background sync intentionally pending.
 - WebSockets intentionally pending.

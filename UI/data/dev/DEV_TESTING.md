@@ -261,6 +261,37 @@ LOG_DEV_INVITE_LINKS=true
 is still required before API responses include `devInviteLink`, and normal
 Workspace UI does not render raw invite links.
 
+## Universal/App Links
+
+Phase 27 adds testable native config for invitation app links.
+
+Local custom scheme links:
+
+```sh
+npx uri-scheme open "isabake://invite/dev_token" --ios
+npx uri-scheme open "isabake://invite/dev_token" --android
+npx uri-scheme open "isabake:///invite/dev_token" --ios
+npx uri-scheme open "isabake:///invite/dev_token" --android
+```
+
+Production HTTPS links require a configured domain and native rebuild:
+
+```sh
+EXPO_PUBLIC_INVITE_DOMAIN=links.example.com
+APP_INVITE_BASE_URL=https://links.example.com/invite
+```
+
+Then test:
+
+```sh
+npx uri-scheme open "https://links.example.com/invite/dev_token?utm=email" --ios
+npx uri-scheme open "https://links.example.com/invite/dev_token?utm=email" --android
+```
+
+Domain association templates live in `docs/app-links`. Opening or accepting an
+invitation link must not push, pull, full-sync, force login, or delete local
+data.
+
 Roles:
 
 - `owner`

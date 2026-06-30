@@ -1,5 +1,7 @@
 const {
   WorkspaceService,
+  createInviteLink,
+  getInvitationBaseUrl,
   hashInviteToken,
 } = require('../../services/workspaceService');
 const MemoryWorkspaceRepository = require('./memoryWorkspaceRepository');
@@ -27,6 +29,8 @@ const getInviteTokenFromEmail = (emailService) => {
 
 describe('WorkspaceService', () => {
   const originalExposeDevInviteLinks = process.env.EXPOSE_DEV_INVITE_LINKS;
+  const originalAppInviteBaseUrl = process.env.APP_INVITE_BASE_URL;
+  const originalInvitationBaseUrl = process.env.INVITATION_BASE_URL;
   const originalNodeEnv = process.env.NODE_ENV;
 
   afterEach(() => {
@@ -34,6 +38,18 @@ describe('WorkspaceService', () => {
       delete process.env.EXPOSE_DEV_INVITE_LINKS;
     } else {
       process.env.EXPOSE_DEV_INVITE_LINKS = originalExposeDevInviteLinks;
+    }
+
+    if (originalAppInviteBaseUrl === undefined) {
+      delete process.env.APP_INVITE_BASE_URL;
+    } else {
+      process.env.APP_INVITE_BASE_URL = originalAppInviteBaseUrl;
+    }
+
+    if (originalInvitationBaseUrl === undefined) {
+      delete process.env.INVITATION_BASE_URL;
+    } else {
+      process.env.INVITATION_BASE_URL = originalInvitationBaseUrl;
     }
 
     if (originalNodeEnv === undefined) {
@@ -70,6 +86,21 @@ describe('WorkspaceService', () => {
         status: 'active',
         userId: 'user_owner',
       }),
+    );
+  });
+
+  test('invite link builder supports default scheme and configured https base URL', () => {
+    delete process.env.APP_INVITE_BASE_URL;
+    delete process.env.INVITATION_BASE_URL;
+
+    expect(getInvitationBaseUrl()).toBe('isabake://invite');
+    expect(createInviteLink('raw_token')).toBe('isabake://invite/raw_token');
+
+    process.env.APP_INVITE_BASE_URL = 'https://links.example/invite/';
+
+    expect(getInvitationBaseUrl()).toBe('https://links.example/invite');
+    expect(createInviteLink('raw_token')).toBe(
+      'https://links.example/invite/raw_token',
     );
   });
 

@@ -16,11 +16,15 @@ const ignoredFiles = new Set([
 ]);
 
 const syntaxRoots = [
+  'config',
   'data',
   'scripts',
   'services',
   'test',
   'utils',
+];
+const syntaxRootFiles = [
+  'app.config.js',
 ];
 
 const collectJsFiles = (dir, files = []) => {
@@ -47,7 +51,12 @@ const collectJsFiles = (dir, files = []) => {
 const files = syntaxRoots
   .map((syntaxRoot) => path.join(rootDir, syntaxRoot))
   .filter((syntaxRoot) => fs.existsSync(syntaxRoot))
-  .flatMap((syntaxRoot) => collectJsFiles(syntaxRoot));
+  .flatMap((syntaxRoot) => collectJsFiles(syntaxRoot))
+  .concat(
+    syntaxRootFiles
+      .map((file) => path.join(rootDir, file))
+      .filter((file) => fs.existsSync(file)),
+  );
 const failures = [];
 
 for (const file of files) {

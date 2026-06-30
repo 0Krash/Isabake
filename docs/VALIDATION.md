@@ -69,9 +69,20 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 ### Invitation Links
 
 - `isabake://invite/<token>` opens invitation screen.
+- `isabake:///invite/<token>` opens invitation screen.
 - `https://.../invite/<token>` parses safely.
+- `https://.../invite/<token>?utm=email` parses safely.
 - Invalid links do not crash.
+- Unknown paths and missing tokens are ignored safely.
 - Opening link does not force login or sync.
+
+### Universal/App Links
+
+- `EXPO_PUBLIC_INVITE_DOMAIN` adds native app-link config at build time.
+- `APP_INVITE_BASE_URL` controls backend-generated email invite URLs.
+- Android domain file lives at `/.well-known/assetlinks.json`.
+- iOS domain file lives at `/.well-known/apple-app-site-association`.
+- See `docs/app-links/APP_LINKS_SETUP.md` for templates and production steps.
 
 ### Invitation Email Delivery
 

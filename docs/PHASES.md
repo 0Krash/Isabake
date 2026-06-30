@@ -9,11 +9,10 @@
 
 ## Current Next Phase
 
-- Phase 27: production universal/app links setup.
+- Phase 28: invitation/workspace/account UX polish.
 
 ## Likely Future Phases
 
-- Phase 27: production universal/app links setup.
 - Phase 28: invitation/workspace/account UX polish.
 - Phase 29: sync history/audit UI.
 - Phase 30: hardening/QA/release prep.

@@ -15,7 +15,9 @@ describe('invitationNavigation', () => {
 
   test('routes https invitation links', () => {
     expect(
-      createInvitationNavigationState('https://isabake.example/invite/token_2'),
+      createInvitationNavigationState(
+        'https://isabake.example/invite/token_2?utm=email',
+      ),
     ).toEqual({
       activeTab: 'invite',
       error: null,
@@ -28,6 +30,7 @@ describe('invitationNavigation', () => {
     expect(shouldRouteInvitationLink('https://isabake.example/workspace')).toBe(
       false,
     );
+    expect(shouldRouteInvitationLink('isabake:///invite/')).toBe(false);
     expect(createInvitationNavigationState('bad link')).toEqual({
       activeTab: null,
       error: 'invalid_invitation_link',
