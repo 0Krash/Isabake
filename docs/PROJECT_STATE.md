@@ -45,6 +45,29 @@
     states
   - records safe sync history metadata for automatic runs and skips
   - can be enabled/disabled from Sync Center
+- User-facing backup status indicators:
+  - Transacciones, Recetas, Inventario, and Sync Center show friendly backup
+    state instead of technical sync details
+  - local-only, pending, syncing, backed-up, offline, login-required, failed,
+    and conflict states map to short Spanish labels
+  - conflict indicator links to the existing review screen without resolving
+    anything automatically
+- Auto-sync pending-state diagnostics:
+  - scheduled, syncing, skipped, cooldown, backoff, and failed states are
+    exposed as safe local metadata
+  - pending backup copy explains whether changes are scheduled, blocked, paused,
+    disabled, or waiting for login/workspace/conflict review
+  - dev diagnostics expose safe summary counts and booleans only, never tokens
+    or raw payloads
+- Network/offline-aware sync resilience:
+  - local network state tracks unknown, online/offline, backend reachable,
+    backend unreachable, and missing/invalid sync URL states
+  - backend reachability checks use the configured sync API base URL without
+    auth headers, tokens, or raw URL display
+  - foreground auto-sync skips safely while offline, backend-unreachable, or
+    misconfigured and may retry only after connectivity is restored
+  - backup indicators and Sync Center show friendly Spanish connectivity copy
+    instead of technical network errors
 - Security cleanup:
   - devInviteLink default-deny
   - legacy socket.io disabled by default
@@ -53,7 +76,7 @@
 
 ## Current Next Phase
 
-- Phase 31: hardening/QA/release prep
+- Phase 33: hardening/QA/release prep
 
 ## Important Backend Paths
 
@@ -77,6 +100,7 @@
 - `UI/screens/Workspace/*`
 - `UI/screens/Sync/*`
 - `UI/data/auth/*`
+- `UI/data/network/*`
 - `UI/data/sync/*`
 - `UI/screens/Sync/SyncHistoryScreen.js`
 
@@ -90,3 +114,5 @@
 - Foreground-only auto-sync exists; it must not run while the app is closed,
   in local-only mode, without auth, with conflicts, or from invitation link
   open/accept flows.
+- Network monitoring is foreground/process-local only; no OS background task,
+  realtime socket, or aggressive polling exists.

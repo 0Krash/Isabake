@@ -1,6 +1,15 @@
-import { getFreshAuthSession } from '../auth/authService';
+import {
+  getCurrentSession,
+  getFreshAuthSession,
+} from '../auth/authService';
 import { getCurrentWorkspace } from '../workspace/workspaceRepository';
 import { runSyncReadinessCheck } from '../validation/syncReadinessCheck';
+import { NETWORK_STATES } from '../network/networkStatusModel';
+import {
+  getNetworkDiagnostics,
+  getNetworkStatus,
+  refreshNetworkStatus,
+} from '../network/networkStatusService';
 import { runSync } from './syncService';
 import {
   finishSyncHistoryRun,
@@ -12,6 +21,7 @@ import {
 import {
   AUTO_SYNC_DEFAULTS,
   AUTO_SYNC_REASONS,
+  AUTO_SYNC_STATES,
   AUTO_SYNC_SKIP_REASONS,
 } from './autoSyncConfig';
 import {
@@ -29,6 +39,8 @@ const runtimeState = {
   lastFailureAt: null,
   lastRunAt: null,
   pendingReason: null,
+  scheduledAt: null,
+  scheduledReason: null,
   syncInFlight: false,
   timer: null,
 };
@@ -38,9 +50,70 @@ const clearAutoSyncTimer = () => {
     clearTimeout(runtimeState.timer);
     runtimeState.timer = null;
   }
+
+  runtimeState.scheduledAt = null;
+  runtimeState.scheduledReason = null;
 };
 
 const getReasonText = (reason) => reason || AUTO_SYNC_REASONS.LOCAL_CHANGE;
+
+const mapSkipReasonToState = (reason) => {
+  if (reason === AUTO_SYNC_SKIP_REASONS.AUTO_SYNC_DISABLED) {
+    return AUTO_SYNC_STATES.SKIPPED_DISABLED;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.APP_INACTIVE) {
+    return AUTO_SYNC_STATES.SKIPPED_APP_INACTIVE;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.NETWORK_OFFLINE) {
+    return AUTO_SYNC_STATES.SKIPPED_OFFLINE;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.BACKEND_UNREACHABLE) {
+    return AUTO_SYNC_STATES.BACKEND_UNREACHABLE;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.SYNC_URL_MISSING) {
+    return AUTO_SYNC_STATES.SYNC_URL_MISSING;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.SYNC_URL_INVALID) {
+    return AUTO_SYNC_STATES.SYNC_URL_INVALID;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.NO_AUTH_SESSION) {
+    return AUTO_SYNC_STATES.SKIPPED_NO_AUTH;
+  }
+
+  if (
+    reason === AUTO_SYNC_SKIP_REASONS.WORKSPACE_REQUIRED ||
+    reason === AUTO_SYNC_SKIP_REASONS.GROUP_ID_REQUIRED
+  ) {
+    return AUTO_SYNC_STATES.SKIPPED_NO_WORKSPACE;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.LOCAL_ONLY_MODE) {
+    return AUTO_SYNC_STATES.SKIPPED_LOCAL_ONLY;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.CONFLICTS_PENDING) {
+    return AUTO_SYNC_STATES.SKIPPED_CONFLICTS;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.RECENT_SYNC) {
+    return AUTO_SYNC_STATES.COOLDOWN;
+  }
+
+  if (reason === AUTO_SYNC_SKIP_REASONS.BACKOFF_ACTIVE) {
+    return AUTO_SYNC_STATES.BACKOFF;
+  }
+
+  return AUTO_SYNC_STATES.IDLE;
+};
+
+const saveRuntimeAutoSyncState = (state = {}) =>
+  setAutoSyncState(state).catch(() => null);
 
 const getPendingCount = (readiness = {}) =>
   Number(
@@ -82,6 +155,34 @@ export const isAutoSyncAllowed = (context = {}) => {
     return {
       allowed: false,
       reason: AUTO_SYNC_SKIP_REASONS.SYNC_IN_FLIGHT,
+    };
+  }
+
+  if (context.networkState === NETWORK_STATES.OFFLINE) {
+    return {
+      allowed: false,
+      reason: AUTO_SYNC_SKIP_REASONS.NETWORK_OFFLINE,
+    };
+  }
+
+  if (context.networkState === NETWORK_STATES.BACKEND_UNREACHABLE) {
+    return {
+      allowed: false,
+      reason: AUTO_SYNC_SKIP_REASONS.BACKEND_UNREACHABLE,
+    };
+  }
+
+  if (context.networkState === NETWORK_STATES.SYNC_URL_MISSING) {
+    return {
+      allowed: false,
+      reason: AUTO_SYNC_SKIP_REASONS.SYNC_URL_MISSING,
+    };
+  }
+
+  if (context.networkState === NETWORK_STATES.SYNC_URL_INVALID) {
+    return {
+      allowed: false,
+      reason: AUTO_SYNC_SKIP_REASONS.SYNC_URL_INVALID,
     };
   }
 
@@ -146,6 +247,7 @@ export const loadAutoSyncContext = async ({
   getSession = getFreshAuthSession,
   getSettings = getAutoSyncSettings,
   getWorkspace = getCurrentWorkspace,
+  refreshNetwork = refreshNetworkStatus,
   runReadiness = runSyncReadinessCheck,
 } = {}) => {
   const [settings, workspace, readiness] = await Promise.all([
@@ -155,14 +257,29 @@ export const loadAutoSyncContext = async ({
   ]);
   let session = null;
   let authError = null;
+  let networkStatus = getNetworkStatus();
 
   const shouldReadSession =
     settings.autoSyncEnabled !== false &&
     appState === 'active' &&
     workspace?.isRemote &&
     workspace?.groupId;
+  const shouldCheckNetwork =
+    shouldReadSession && getConflictCount(readiness) === 0;
 
-  if (shouldReadSession) {
+  if (shouldCheckNetwork) {
+    networkStatus = await refreshNetwork().catch(() => networkStatus);
+  }
+
+  if (
+    shouldReadSession &&
+    ![
+      NETWORK_STATES.OFFLINE,
+      NETWORK_STATES.BACKEND_UNREACHABLE,
+      NETWORK_STATES.SYNC_URL_INVALID,
+      NETWORK_STATES.SYNC_URL_MISSING,
+    ].includes(networkStatus?.networkState)
+  ) {
     try {
       session = await getSession();
     } catch (error) {
@@ -187,7 +304,7 @@ export const loadAutoSyncContext = async ({
       currentTime,
       lastRunAt: runtimeState.lastRunAt,
     }),
-    networkState: 'unknown',
+    networkState: networkStatus?.networkState || NETWORK_STATES.UNKNOWN,
     pendingCount: getPendingCount(readiness),
     readiness,
     session,
@@ -215,6 +332,7 @@ const recordAutoSyncSkipped = async ({ context, reason, triggerReason }) => {
     }),
   );
   await setAutoSyncState({
+    autoSyncState: mapSkipReasonToState(reason),
     lastReason: triggerReason,
     lastSkipReason: reason,
     lastStatus: 'skipped',
@@ -248,9 +366,18 @@ export const runAutoSyncNow = async ({
   }
 
   runtimeState.syncInFlight = true;
+  runtimeState.scheduledAt = null;
+  runtimeState.scheduledReason = null;
   let historyRun = null;
 
   try {
+    await setAutoSyncState({
+      autoSyncState: AUTO_SYNC_STATES.SYNCING,
+      lastReason: triggerReason,
+      lastStatus: 'syncing',
+      startedAt: new Date().toISOString(),
+    }).catch(() => null);
+
     historyRun = await safelyRecordSyncHistory(() =>
       startSyncHistoryRun({
         actionType: 'full_sync',
@@ -278,6 +405,7 @@ export const runAutoSyncNow = async ({
       }),
     );
     await setAutoSyncState({
+      autoSyncState: result.ok ? AUTO_SYNC_STATES.IDLE : AUTO_SYNC_STATES.FAILED,
       lastFinishedAt: new Date().toISOString(),
       lastReason: triggerReason,
       lastStatus: result.ok ? 'success' : 'partial',
@@ -301,6 +429,7 @@ export const runAutoSyncNow = async ({
       }),
     );
     await setAutoSyncState({
+      autoSyncState: AUTO_SYNC_STATES.FAILED,
       lastFinishedAt: new Date().toISOString(),
       lastReason: triggerReason,
       lastStatus: 'failed',
@@ -343,6 +472,12 @@ export const notifyAutoSyncNeeded = (
 
   if (runtimeState.appState !== 'active') {
     clearAutoSyncTimer();
+    saveRuntimeAutoSyncState({
+      autoSyncState: AUTO_SYNC_STATES.SKIPPED_APP_INACTIVE,
+      lastReason: reason,
+      lastSkipReason: AUTO_SYNC_SKIP_REASONS.APP_INACTIVE,
+      lastStatus: 'skipped',
+    });
     return {
       scheduled: false,
       reason: AUTO_SYNC_SKIP_REASONS.APP_INACTIVE,
@@ -350,10 +485,21 @@ export const notifyAutoSyncNeeded = (
   }
 
   clearAutoSyncTimer();
+  runtimeState.scheduledAt = nowMs();
+  runtimeState.scheduledReason = reason;
   runtimeState.timer = setTimeout(() => {
     runtimeState.timer = null;
+    runtimeState.scheduledAt = null;
+    runtimeState.scheduledReason = null;
     runAutoSyncNow({ config, reason }).catch(() => {});
   }, config.debounceMs);
+  saveRuntimeAutoSyncState({
+    autoSyncState: AUTO_SYNC_STATES.SCHEDULED,
+    lastReason: reason,
+    lastStatus: 'scheduled',
+    scheduledAt: new Date().toISOString(),
+    scheduledDelayMs: config.debounceMs,
+  });
 
   return {
     scheduled: true,
@@ -374,9 +520,20 @@ export const startAutoSync = ({ appState = 'active' } = {}) => {
 };
 
 export const stopAutoSync = () => {
+  const hadScheduledSync = Boolean(runtimeState.timer);
   clearAutoSyncTimer();
   runtimeState.appState = 'inactive';
   runtimeState.pendingReason = null;
+  runtimeState.scheduledAt = null;
+  runtimeState.scheduledReason = null;
+
+  if (hadScheduledSync) {
+    saveRuntimeAutoSyncState({
+      autoSyncState: AUTO_SYNC_STATES.SKIPPED_APP_INACTIVE,
+      lastSkipReason: AUTO_SYNC_SKIP_REASONS.APP_INACTIVE,
+      lastStatus: 'skipped',
+    });
+  }
 };
 
 export const handleAutoSyncAppStateChange = (nextState) => {
@@ -403,13 +560,98 @@ export const handleAutoSyncAppStateChange = (nextState) => {
   };
 };
 
-export const getAutoSyncState = async () => ({
-  ...(await getStoredAutoSyncState().catch(() => ({}))),
-  ...(await getAutoSyncSettings().catch(() => ({ autoSyncEnabled: true }))),
-  appState: runtimeState.appState,
-  initialized: runtimeState.initialized,
-  syncInFlight: runtimeState.syncInFlight,
-});
+const getRuntimeAutoSyncState = ({
+  config = AUTO_SYNC_DEFAULTS,
+  storedState = {},
+} = {}) => {
+  const currentTime = nowMs();
+  const backoffRemainingMs = getBackoffRemaining({
+    config,
+    currentTime,
+    lastFailureAt: runtimeState.lastFailureAt,
+  });
+  const cooldownRemainingMs = getCooldownRemaining({
+    config,
+    currentTime,
+    lastRunAt: runtimeState.lastRunAt,
+  });
+
+  if (runtimeState.syncInFlight) {
+    return AUTO_SYNC_STATES.SYNCING;
+  }
+
+  if (runtimeState.timer) {
+    return AUTO_SYNC_STATES.SCHEDULED;
+  }
+
+  if (backoffRemainingMs > 0) {
+    return AUTO_SYNC_STATES.BACKOFF;
+  }
+
+  if (cooldownRemainingMs > 0) {
+    return AUTO_SYNC_STATES.COOLDOWN;
+  }
+
+  return storedState.autoSyncState || AUTO_SYNC_STATES.IDLE;
+};
+
+export const getAutoSyncState = async ({ config = AUTO_SYNC_DEFAULTS } = {}) => {
+  const [storedState, settings] = await Promise.all([
+    getStoredAutoSyncState().catch(() => ({})),
+    getAutoSyncSettings().catch(() => ({ autoSyncEnabled: true })),
+  ]);
+  const currentTime = nowMs();
+
+  return {
+    ...storedState,
+    ...settings,
+    appState: runtimeState.appState,
+    autoSyncState: getRuntimeAutoSyncState({ config, storedState }),
+    backoffRemainingMs: getBackoffRemaining({
+      config,
+      currentTime,
+      lastFailureAt: runtimeState.lastFailureAt,
+    }),
+    cooldownRemainingMs: getCooldownRemaining({
+      config,
+      currentTime,
+      lastRunAt: runtimeState.lastRunAt,
+    }),
+    initialized: runtimeState.initialized,
+    scheduled: Boolean(runtimeState.timer),
+    scheduledReason: runtimeState.scheduledReason,
+    syncInFlight: runtimeState.syncInFlight,
+  };
+};
+
+export const getAutoSyncDiagnostics = async ({
+  getSession = getCurrentSession,
+  getWorkspace = getCurrentWorkspace,
+  runReadiness = runSyncReadinessCheck,
+} = {}) => {
+  const [autoSyncState, workspace, readiness, session] = await Promise.all([
+    getAutoSyncState().catch(() => ({})),
+    getWorkspace().catch(() => null),
+    runReadiness().catch(() => null),
+    getSession().catch(() => null),
+  ]);
+  const pendingOutboxCount = getPendingCount(readiness);
+  const conflictCount = getConflictCount(readiness);
+
+  return {
+    autoSyncEnabled: autoSyncState.autoSyncEnabled !== false,
+    autoSyncState: autoSyncState.autoSyncState || AUTO_SYNC_STATES.IDLE,
+    conflictCount,
+    currentWorkspaceMode: workspace?.isRemote ? 'shared' : 'local',
+    hasAuthSession: Boolean(session),
+    hasGroupId: Boolean(workspace?.groupId),
+    lastAutoSyncReason: autoSyncState.lastReason || null,
+    lastSkippedReason: autoSyncState.lastSkipReason || null,
+    lastSyncHistoryStatus: autoSyncState.lastStatus || null,
+    network: getNetworkDiagnostics(),
+    pendingOutboxCount,
+  };
+};
 
 export const setAutoSyncEnabled = (enabled) => persistAutoSyncEnabled(enabled);
 
@@ -420,12 +662,15 @@ export const __resetAutoSyncRuntimeForTests = () => {
   runtimeState.lastFailureAt = null;
   runtimeState.lastRunAt = null;
   runtimeState.pendingReason = null;
+  runtimeState.scheduledAt = null;
+  runtimeState.scheduledReason = null;
   runtimeState.syncInFlight = false;
 };
 
 export default {
   __resetAutoSyncRuntimeForTests,
   getAutoSyncState,
+  getAutoSyncDiagnostics,
   handleAutoSyncAppStateChange,
   initializeAutoSync,
   isAutoSyncAllowed,

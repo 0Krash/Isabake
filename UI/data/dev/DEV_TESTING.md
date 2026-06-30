@@ -37,6 +37,12 @@ Jest tests cover:
 - mobile sync client request/response compatibility with the backend contract
 - foreground auto-sync eligibility, debouncing, cooldown/backoff, safe skip
   recording, and sanitized failure handling
+- user-facing backup status labels, relative time formatting, sensitive text
+  sanitization, and static checks that main screens do not execute sync directly
+- auto-sync pending diagnostics, scheduled/syncing/skipped/backoff/failed state
+  shaping, and outbox-write notification of foreground auto-sync
+- network/offline sync state shaping, backend reachability safe failure,
+  missing/invalid sync URL skips, and sanitized diagnostics
 
 ## Expo Runtime Checks
 
@@ -387,6 +393,40 @@ Behavior:
 The `Open Conflicts` button navigates to the conflict UI. Use that screen for
 manual conflict handling before retrying sync.
 
+## Backup Status Indicators
+
+Phase 31 adds compact backup indicators to `Transacciones`, `Recetas`,
+`Inventario`, and the Sync Center status card.
+
+Friendly labels:
+
+- `Guardado en este dispositivo`
+- `Todo respaldado`
+- `Cambios pendientes`
+- `Sincronizando...`
+- `Sin conexión`
+- `Cuenta requerida para respaldo`
+- `Cambios por revisar`
+- `No se pudo respaldar`
+
+The indicator reads local status only. It must not run push, pull, full sync,
+force login, resolve conflicts, or show `groupId`, cursor, server versions, raw
+JSON, tokens, or hashes.
+
+Phase 31.1 makes pending states explainable:
+
+- scheduled: `Se respaldarán en unos segundos.`
+- syncing: `Sincronizando...`
+- disabled: `La sincronización automática está desactivada.`
+- no auth: `Cuenta requerida para respaldo`
+- no workspace: `Selecciona un negocio compartido`
+- conflicts: `Cambios por revisar`
+- backoff/failed: `Se intentará de nuevo más tarde.`
+
+`getAutoSyncDiagnostics()` returns a safe dev summary with booleans/counts and
+state labels only. It must not include tokens, raw headers, raw payloads, or
+technical document IDs.
+
 Foreground auto-sync:
 
 - Phase 30 adds a Sync Center toggle for automatic sync while the app is open.
@@ -566,6 +606,35 @@ await runDevDataReset({ confirm: true });
 ```
 
 `runDevDataReset()` refuses to run without `confirm: true`.
+
+## Network/Offline Awareness
+
+Phase 32 adds process-local network state for sync diagnostics and guarded
+foreground auto-sync.
+
+Tracked states:
+
+- `unknown`
+- `online`
+- `offline`
+- `backend_reachable`
+- `backend_unreachable`
+- `sync_url_missing`
+- `sync_url_invalid`
+
+Reachability checks use the configured sync API base URL without auth headers,
+tokens, cookies, request bodies, or raw URL display. Any backend HTTP response
+means the backend is reachable; fetch failures are mapped to offline or
+server-unavailable states.
+
+Foreground auto-sync skips safely when the device/backend is unavailable or the
+sync URL is missing/invalid. It may schedule one guarded attempt after
+connectivity is restored while the app process is active. It still requires the
+normal auto-sync guards: enabled setting, authenticated session, active shared
+workspace, no conflicts, no cooldown/backoff, and no active sync.
+
+No OS background sync, WebSocket, realtime listener, or aggressive polling is
+introduced by these checks.
 
 ## Static Startup Guard
 

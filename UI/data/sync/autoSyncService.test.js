@@ -1,4 +1,5 @@
 jest.mock('../auth/authService', () => ({
+  getCurrentSession: jest.fn(),
   getFreshAuthSession: jest.fn(),
 }));
 
@@ -8,6 +9,25 @@ jest.mock('../workspace/workspaceRepository', () => ({
 
 jest.mock('../validation/syncReadinessCheck', () => ({
   runSyncReadinessCheck: jest.fn(),
+}));
+
+jest.mock('../network/networkStatusService', () => ({
+  getNetworkDiagnostics: jest.fn(() => ({
+    backendReachable: true,
+    networkState: 'backend_reachable',
+    syncBaseUrlConfigured: true,
+    syncBaseUrlHost: 'api.example.test',
+  })),
+  getNetworkStatus: jest.fn(() => ({
+    backendReachable: true,
+    networkState: 'backend_reachable',
+    syncBaseUrlConfigured: true,
+  })),
+  refreshNetworkStatus: jest.fn(async () => ({
+    backendReachable: true,
+    networkState: 'backend_reachable',
+    syncBaseUrlConfigured: true,
+  })),
 }));
 
 jest.mock('./syncService', () => ({
@@ -37,9 +57,13 @@ jest.mock('./autoSyncStateRepository', () => ({
   setAutoSyncState: jest.fn(async (state) => state),
 }));
 
-import { getFreshAuthSession } from '../auth/authService';
+import {
+  getCurrentSession,
+  getFreshAuthSession,
+} from '../auth/authService';
 import { getCurrentWorkspace } from '../workspace/workspaceRepository';
 import { runSyncReadinessCheck } from '../validation/syncReadinessCheck';
+import { refreshNetworkStatus } from '../network/networkStatusService';
 import { runSync } from './syncService';
 import {
   finishSyncHistoryRun,
@@ -48,10 +72,13 @@ import {
 } from './syncHistoryService';
 import {
   getAutoSyncSettings,
+  setAutoSyncState,
   setAutoSyncEnabled as persistAutoSyncEnabled,
 } from './autoSyncStateRepository';
 import {
   __resetAutoSyncRuntimeForTests,
+  getAutoSyncDiagnostics,
+  getAutoSyncState,
   handleAutoSyncAppStateChange,
   isAutoSyncAllowed,
   notifyAutoSyncNeeded,
@@ -77,6 +104,7 @@ describe('autoSyncService', () => {
     jest.useFakeTimers();
     __resetAutoSyncRuntimeForTests();
     getCurrentWorkspace.mockResolvedValue(sharedWorkspace);
+    getCurrentSession.mockResolvedValue(session);
     getFreshAuthSession.mockResolvedValue(session);
     getAutoSyncSettings.mockResolvedValue({ autoSyncEnabled: true });
     runSync.mockResolvedValue({
@@ -88,6 +116,11 @@ describe('autoSyncService', () => {
       conflictDocumentCount: 0,
       conflictOutboxCount: 0,
       pendingOutboxCount: 1,
+    });
+    refreshNetworkStatus.mockResolvedValue({
+      backendReachable: true,
+      networkState: 'backend_reachable',
+      syncBaseUrlConfigured: true,
     });
   });
 
@@ -196,6 +229,47 @@ describe('autoSyncService', () => {
     );
   });
 
+  test('skips when network is offline, backend is unreachable, or sync URL is missing', async () => {
+    startAutoSync({ appState: 'active' });
+
+    refreshNetworkStatus.mockResolvedValueOnce({
+      backendReachable: false,
+      networkState: 'offline',
+      syncBaseUrlConfigured: true,
+    });
+    await runAutoSyncNow({ reason: 'local_change' });
+    expect(recordSkippedSyncRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        reason: 'network_offline',
+      }),
+    );
+
+    refreshNetworkStatus.mockResolvedValueOnce({
+      backendReachable: false,
+      networkState: 'backend_unreachable',
+      syncBaseUrlConfigured: true,
+    });
+    await runAutoSyncNow({ reason: 'local_change' });
+    expect(recordSkippedSyncRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        reason: 'backend_unreachable',
+      }),
+    );
+
+    refreshNetworkStatus.mockResolvedValueOnce({
+      backendReachable: false,
+      networkState: 'sync_url_missing',
+      syncBaseUrlConfigured: false,
+    });
+    await runAutoSyncNow({ reason: 'local_change' });
+    expect(recordSkippedSyncRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        reason: 'sync_url_missing',
+      }),
+    );
+    expect(runSync).not.toHaveBeenCalled();
+  });
+
   test('debounces multiple local-change notifications into one run', async () => {
     startAutoSync({ appState: 'active' });
 
@@ -211,6 +285,31 @@ describe('autoSyncService', () => {
 
     await jest.advanceTimersByTimeAsync(1);
     expect(runSync).toHaveBeenCalledTimes(1);
+  });
+
+  test('notifyAutoSyncNeeded exposes scheduled state before the debounced run', async () => {
+    startAutoSync({ appState: 'active' });
+
+    expect(
+      notifyAutoSyncNeeded('local_change', {
+        config: { cooldownMs: 0, debounceMs: 50, failureBackoffMs: 0 },
+      }),
+    ).toEqual({ scheduled: true });
+
+    await expect(getAutoSyncState()).resolves.toEqual(
+      expect.objectContaining({
+        autoSyncState: 'scheduled',
+        scheduled: true,
+        scheduledReason: 'local_change',
+      }),
+    );
+    expect(setAutoSyncState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        autoSyncState: 'scheduled',
+        lastStatus: 'scheduled',
+      }),
+    );
+    expect(runSync).not.toHaveBeenCalled();
   });
 
   test('cooldown and failure backoff skip repeated runs', async () => {
@@ -247,6 +346,12 @@ describe('autoSyncService', () => {
     expect(recordSkippedSyncRun).toHaveBeenLastCalledWith(
       expect.objectContaining({
         reason: 'backoff_active',
+      }),
+    );
+    expect(setAutoSyncState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        autoSyncState: 'backoff',
+        lastSkipReason: 'backoff_active',
       }),
     );
   });
@@ -293,6 +398,31 @@ describe('autoSyncService', () => {
       expect.objectContaining({
         error: expect.any(Error),
         status: 'failed',
+      }),
+    );
+    expect(setAutoSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoSyncState: 'failed',
+        lastStatus: 'failed',
+      }),
+    );
+  });
+
+  test('diagnostics summarize auto-sync state without secrets', async () => {
+    startAutoSync({ appState: 'active' });
+    notifyAutoSyncNeeded('local_change', {
+      config: { cooldownMs: 0, debounceMs: 100, failureBackoffMs: 0 },
+    });
+
+    await expect(getAutoSyncDiagnostics()).resolves.toEqual(
+      expect.objectContaining({
+        autoSyncEnabled: true,
+        autoSyncState: 'scheduled',
+        conflictCount: 0,
+        currentWorkspaceMode: 'shared',
+        hasAuthSession: true,
+        hasGroupId: true,
+        pendingOutboxCount: 1,
       }),
     );
   });

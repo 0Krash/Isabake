@@ -12,11 +12,15 @@ import AddTransactionModal from '../../components/TransactionBalance/modals/addT
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
 import useTransactionBalanceData from '../../hooks/TransactionBalance/useTransactionBalanceData';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
-const TransactionBalanceScreen = ({ onOpenAppMenu } = {}) => {
+const TransactionBalanceScreen = ({
+  onOpenAppMenu,
+  onOpenConflicts,
+} = {}) => {
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [addTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
@@ -66,6 +70,7 @@ const TransactionBalanceScreen = ({ onOpenAppMenu } = {}) => {
           }}
         />
       </View>
+      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
       <Dashboard
         transactionType={transactionType}
         totalAmountByCategoryResponse={totalAmountByCategory}

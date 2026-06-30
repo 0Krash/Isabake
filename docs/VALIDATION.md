@@ -112,6 +112,8 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 ### Sync Center
 
 - Refresh status does not sync.
+- Refresh status may check backend reachability but must not send auth headers,
+  push changes, pull changes, or expose the raw sync URL.
 - Push/pull/full sync run only when manually pressed.
 - Sync uses active shared workspace groupId.
 - Auth/session/workspace errors are safe.
@@ -132,12 +134,18 @@ report it clearly, run focused service/non-listener tests when possible, and sta
   occurs, such as app returning to foreground or a local outbox change.
 - Automatic sync attempts/skips write safe `sync_history` metadata with
   `triggerSource: "system_future"`.
+- Sync Center shows friendly connectivity state for online/offline,
+  backend-unreachable, missing sync URL, and invalid sync URL.
 
 ### Foreground Auto-Sync
 
 - Open the app in local-only mode and confirm no push/pull/full sync runs.
 - Login, select a shared workspace, enable automatic sync, and create a local
   change; confirm sync is debounced rather than immediate.
+- Turn off network/backend access and confirm automatic sync is skipped with a
+  safe offline or server-unavailable status.
+- Restore network/backend access and confirm a foreground connectivity-restored
+  trigger may schedule one guarded automatic attempt.
 - Background the app before the debounce expires; confirm no automatic sync
   runs while inactive.
 - Return to foreground; confirm one guarded automatic attempt may run.
@@ -146,6 +154,34 @@ report it clearly, run focused service/non-listener tests when possible, and sta
   run sync automatically.
 - Confirm invitation link open/accept still does not trigger sync.
 - Confirm no WebSocket/realtime/background task is active.
+
+### Backup Status Indicators
+
+- Transacciones, Recetas, and Inventario show a compact backup indicator below
+  the header.
+- Local-only mode shows “Guardado en este dispositivo” and does not look like
+  an error.
+- Logged-out shared mode shows “Cuenta requerida para respaldo”.
+- Fully backed-up shared mode shows “Todo respaldado” and a friendly relative
+  time when available.
+- Pending local changes show “Cambios pendientes”.
+- If auto-sync is scheduled, pending local changes say “Se respaldarán en unos
+  segundos.”
+- If auto-sync is disabled, pending local changes say “La sincronización
+  automática está desactivada.”
+- If auto-sync is blocked by login/workspace/conflicts/backoff/failure, the
+  indicator shows a specific friendly reason instead of the generic automatic
+  backup message.
+- Active guarded sync shows “Sincronizando...”.
+- Offline/unavailable state shows “Sin conexión” or a safe failure message.
+- Missing/invalid sync URL shows “Respaldo no configurado” without showing the
+  raw URL.
+- Conflicts show “Cambios por revisar” and can navigate to the existing review
+  screen; they are never auto-resolved.
+- Main screens and indicators do not show push, pull, cursor, groupId,
+  serverVersion, raw JSON, raw tokens, or hashes.
+- Opening main screens reads status only; it must not run push/pull/full sync or
+  force login.
 
 ### Sync History
 
@@ -174,3 +210,5 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - No inviteTokenHash/refreshTokenHash/passwordHash in API/UI/logs.
 - devInviteLink appears only when `EXPOSE_DEV_INVITE_LINKS=true`.
 - Legacy sockets are disabled by default.
+- Network diagnostics expose safe booleans/counts/state/host only, never raw
+  URLs, tokens, headers, cookies, or backend payloads.

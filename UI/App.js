@@ -21,6 +21,14 @@ import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
+import { NETWORK_STATES } from './data/network/networkStatusModel';
+import {
+  initializeNetworkStatus,
+  refreshNetworkStatus,
+  startNetworkMonitoring,
+  stopNetworkMonitoring,
+  subscribeToNetworkStatus,
+} from './data/network/networkStatusService';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import AppSecondaryMenu from './components/AppSecondaryMenu';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
@@ -29,6 +37,7 @@ import { initDatabase } from './data/db/database';
 import {
   handleAutoSyncAppStateChange,
   initializeAutoSync,
+  notifyAutoSyncNeeded,
   startAutoSync,
   stopAutoSync,
 } from './data/sync/autoSyncService';
@@ -51,9 +60,11 @@ export default function App() {
       .then(() => {
         if (isMounted) {
           initializeAutoSync();
+          initializeNetworkStatus();
           startAutoSync({
             appState: AppState.currentState === 'active' ? 'active' : 'inactive',
           });
+          startNetworkMonitoring();
           setDbReady(true);
         }
       })
@@ -77,10 +88,27 @@ export default function App() {
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       handleAutoSyncAppStateChange(nextState);
+
+      if (nextState === 'active') {
+        refreshNetworkStatus()
+          .then((status) => {
+            if (status.networkState === NETWORK_STATES.BACKEND_REACHABLE) {
+              notifyAutoSyncNeeded('connectivity_restored');
+            }
+          })
+          .catch(() => {});
+      }
+    });
+    const unsubscribeNetworkStatus = subscribeToNetworkStatus((status) => {
+      if (status.networkState === NETWORK_STATES.BACKEND_REACHABLE) {
+        notifyAutoSyncNeeded('connectivity_restored');
+      }
     });
 
     return () => {
       subscription?.remove?.();
+      unsubscribeNetworkStatus?.();
+      stopNetworkMonitoring();
       stopAutoSync();
     };
   }, [dbReady]);
@@ -131,6 +159,7 @@ export default function App() {
         <RecipeBookScreen
           onOpenInventory={() => setActiveTab('inventory')}
           onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenConflicts={() => setActiveTab('conflicts')}
           onOpenRecipeSale={setSaleRecipe}
         />
       );
@@ -138,7 +167,10 @@ export default function App() {
 
     if (activeTab === 'inventory') {
       return (
-        <InventoryScreen onOpenAppMenu={() => setSecondaryMenuVisible(true)} />
+        <InventoryScreen
+          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenConflicts={() => setActiveTab('conflicts')}
+        />
       );
     }
 
@@ -184,6 +216,7 @@ export default function App() {
     return (
       <TransactionBalanceScreen
         onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+        onOpenConflicts={() => setActiveTab('conflicts')}
       />
     );
   };

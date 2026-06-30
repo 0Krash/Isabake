@@ -9,7 +9,7 @@
 
 ## Current Next Phase
 
-- Phase 31: hardening/QA/release prep.
+- Phase 33: hardening/QA/release prep.
 
 ## Latest Cleanup
 
@@ -20,8 +20,18 @@
 - Phase 30: safe foreground auto-sync foundation with explicit Sync Center
   setting, eligibility guards, debounce/cooldown/backoff, and sync history
   records for automatic runs/skips. No OS background sync or realtime.
+- Phase 31: simple user-facing backup status indicators on main business
+  screens and Sync Center. Technical sync state is mapped to friendly Spanish
+  labels; no new primary tab, no background sync, no realtime.
+- Phase 31.1: auto-sync pending-state diagnostics and clearer backup copy for
+  scheduled, syncing, skipped, disabled, cooldown/backoff, failed, auth,
+  workspace, and conflict states.
+- Phase 32: network/offline-aware sync resilience. Foreground auto-sync skips
+  safely for offline, backend-unreachable, missing sync URL, and invalid sync
+  URL states; Sync Center and backup indicators show friendly connectivity
+  status. No background sync, realtime, or forced login.
 
 ## Likely Future Phases
 
-- Phase 31: hardening/QA/release prep.
+- Phase 33: hardening/QA/release prep.
 - WebSockets only later and only as “changes available” notification; actual sync remains push/pull.

@@ -16,6 +16,19 @@ const parseOutboxEvent = (event) => {
   };
 };
 
+const notifyAutoSyncAfterOutboxWrite = (options = {}) => {
+  if (options.notifyAutoSyncNeeded) {
+    options.notifyAutoSyncNeeded('local_change');
+    return;
+  }
+
+  import('./autoSyncService')
+    .then(({ notifyAutoSyncNeeded }) =>
+      notifyAutoSyncNeeded('local_change'),
+    )
+    .catch(() => {});
+};
+
 export const addOutboxEvent = async (
   collection,
   documentId,
@@ -44,11 +57,7 @@ export const addOutboxEvent = async (
     [id, collection, documentId, operation, serializePayload(payload), nowIso()],
   );
 
-  import('./autoSyncService')
-    .then(({ notifyAutoSyncNeeded }) =>
-      notifyAutoSyncNeeded('local_change'),
-    )
-    .catch(() => {});
+  notifyAutoSyncAfterOutboxWrite(options);
 
   return id;
 };

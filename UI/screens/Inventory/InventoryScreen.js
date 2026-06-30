@@ -32,6 +32,7 @@ import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChi
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
@@ -489,7 +490,10 @@ function useBottomSheet(isVisible, onClose) {
   };
 }
 
-export default function InventoryScreen({ onOpenAppMenu } = {}) {
+export default function InventoryScreen({
+  onOpenAppMenu,
+  onOpenConflicts,
+} = {}) {
   const { colors } = useTransactionBalanceTheme();
   const {
     createInventoryItem: createInventoryItemLocal,
@@ -962,6 +966,8 @@ export default function InventoryScreen({ onOpenAppMenu } = {}) {
           }}
         />
       </View>
+
+      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
 
       <View style={styles.searchContainer}>
         <TextInput

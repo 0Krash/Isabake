@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { parse } = require('@babel/parser');
 
 const rootDir = path.resolve(__dirname, '..');
 const ignoredDirs = new Set([
@@ -63,14 +63,17 @@ const files = syntaxRoots
 const failures = [];
 
 for (const file of files) {
-  const result = spawnSync(process.execPath, ['--check', file], {
-    encoding: 'utf8',
-  });
-
-  if (result.status !== 0) {
+  try {
+    parse(fs.readFileSync(file, 'utf8'), {
+      errorRecovery: false,
+      plugins: ['jsx'],
+      sourceFilename: file,
+      sourceType: 'unambiguous',
+    });
+  } catch (error) {
     failures.push({
       file: path.relative(rootDir, file),
-      output: result.stderr || result.stdout,
+      output: error.stack || error.message,
     });
   }
 }

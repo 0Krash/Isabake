@@ -34,6 +34,7 @@ import TransactionMenu, {
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useRecipeBookData from '../../hooks/RecipeBook/useRecipeBookData';
@@ -233,6 +234,7 @@ function useBottomSheet(isVisible, onClose) {
 
 export default function RecipeBookScreen({
   onOpenAppMenu,
+  onOpenConflicts,
   onOpenInventory,
   onOpenRecipeSale,
 }) {
@@ -1627,6 +1629,8 @@ export default function RecipeBookScreen({
           }}
         />
       </View>
+
+      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
 
       <View style={styles.searchContainer}>
         <TextInput

@@ -122,6 +122,9 @@ describe('invitationAcceptModel', () => {
       expect(invitationScreenSource).not.toContain(forbiddenCall);
     });
     expect(appSource).not.toContain('runAutoSyncNow');
-    expect(appSource).not.toContain('notifyAutoSyncNeeded');
+    expect(appSource).not.toMatch(
+      /runSync\(|pushPendingChanges|pullRemoteChanges/,
+    );
+    expect(appSource).toContain("notifyAutoSyncNeeded('connectivity_restored')");
   });
 });

@@ -10,6 +10,8 @@ import AppButton from '../../components/layout/AppButton';
 import AppCard from '../../components/layout/AppCard';
 import AppHeader from '../../components/layout/AppHeader';
 import AppScreen from '../../components/layout/AppScreen';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
+import { getBackupStatusForIndicator } from '../../components/Sync/backupStatusModel';
 import {
   getAuthStatusLabel,
   getSyncCenterModeLabel,
@@ -19,6 +21,10 @@ import {
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useSyncCenter from '../../hooks/sync/useSyncCenter';
+import {
+  getNetworkStatus,
+  refreshNetworkStatus,
+} from '../../data/network/networkStatusService';
 import {
   getAutoSyncState,
   setAutoSyncEnabled,
@@ -32,13 +38,37 @@ export {
   getUserSafeSyncStatus,
 };
 
+const getNetworkStatusLabel = (status = {}) => {
+  if (status.networkState === 'backend_reachable') {
+    return 'Con conexión';
+  }
+
+  if (status.networkState === 'offline') {
+    return 'Sin conexión';
+  }
+
+  if (status.networkState === 'backend_unreachable') {
+    return 'Servidor no disponible';
+  }
+
+  if (
+    status.networkState === 'sync_url_missing' ||
+    status.networkState === 'sync_url_invalid'
+  ) {
+    return 'Respaldo no configurado';
+  }
+
+  return 'Estado desconocido';
+};
+
 export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const syncCenter = useSyncCenter();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [autoSyncEnabledState, setAutoSyncEnabledState] = useState(true);
-  const [autoSyncStatus, setAutoSyncStatus] = useState(null);
+  const [autoSyncState, setAutoSyncState] = useState(null);
   const [message, setMessage] = useState(null);
+  const [networkStatus, setNetworkStatus] = useState(getNetworkStatus());
   const disabled = syncCenter.loading || syncCenter.syncing;
   const workspace = syncCenter.currentWorkspace;
   const isShared = Boolean(workspace?.isRemote);
@@ -49,11 +79,28 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
   });
   const canRunSharedSync =
     isShared && syncCenter.authStatus === 'authenticated' && !disabled;
+  const backupStatus = getBackupStatusForIndicator({
+    authStatus: syncCenter.authStatus,
+    autoSyncState,
+    conflictCount: syncCenter.conflictCount,
+    currentWorkspace: workspace,
+    failedCount: syncCenter.failedCount,
+    lastSyncState: syncCenter.lastSyncState,
+    networkStatus,
+    pendingCount: syncCenter.pendingCount,
+    syncing: syncCenter.syncing,
+  });
 
   const runAction = async (action, successMessage) => {
     setMessage(null);
     await action();
     setMessage(successMessage);
+  };
+
+  const refreshLocalStatus = async () => {
+    const status = await refreshNetworkStatus();
+    setNetworkStatus(status);
+    await syncCenter.refreshStatus({ recordHistory: true });
   };
 
   useEffect(() => {
@@ -62,7 +109,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
         if (state.autoSyncEnabled !== undefined) {
           setAutoSyncEnabledState(state.autoSyncEnabled);
         }
-        setAutoSyncStatus(state.lastStatus || null);
+        setAutoSyncState(state);
       })
       .catch(() => {});
   }, []);
@@ -89,7 +136,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
           disabled={disabled}
           onPress={() =>
             runAction(
-              () => syncCenter.refreshStatus({ recordHistory: true }),
+              refreshLocalStatus,
               'Estado actualizado.',
             )
           }
@@ -115,7 +162,10 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
           Cuenta: {getAuthStatusLabel(syncCenter.authStatus)}
         </Text>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Ultimo sync: {syncCenter.lastSyncState?.lastSyncedAt || '-'}
+          Último respaldo: {syncCenter.lastSyncState?.lastSyncedAt || '-'}
+        </Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
+          Conexión: {getNetworkStatusLabel(networkStatus)}
         </Text>
       </AppCard>
 
@@ -123,6 +173,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
           Estado
         </Text>
+        <BackupStatusIndicator status={backupStatus} style={styles.statusBadge} />
         <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
           {status.pendingLabel}
         </Text>
@@ -169,9 +220,9 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
             ? 'Activada para workspaces compartidos cuando la app esta abierta.'
             : 'Desactivada en este dispositivo.'}
         </Text>
-        {autoSyncStatus ? (
+        {autoSyncState?.lastStatus ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Ultimo estado automatico: {autoSyncStatus}
+            Último respaldo automático: {backupStatus.title}
           </Text>
         ) : null}
         <AppButton
@@ -192,7 +243,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
         <AppButton
           disabled={!canRunSharedSync}
           onPress={() =>
-            runAction(syncCenter.runFullSync, 'Sync completo finalizado.')
+            runAction(syncCenter.runFullSync, 'Respaldo finalizado.')
           }
         >
           Sincronizar ahora
@@ -247,7 +298,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
             onPress={onOpenHistory}
             variant="secondary"
           >
-            Historial de sync
+            Historial
           </AppButton>
         ) : null}
       </AppCard>
@@ -304,6 +355,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 36,
     paddingHorizontal: 10,
+  },
+  statusBadge: {
+    marginHorizontal: 0,
+    marginTop: 0,
   },
   subtitle: {
     fontSize: typography.sizes.bodySmall,
