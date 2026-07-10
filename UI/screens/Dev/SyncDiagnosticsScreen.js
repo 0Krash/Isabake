@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -42,6 +43,29 @@ export default function SyncDiagnosticsScreen() {
     }
   };
 
+  const handleActionPress = (action) => {
+    if (!action.requiresConfirmation) {
+      runAction(action);
+      return;
+    }
+
+    Alert.alert(
+      'Delete local data?',
+      'This deletes local SQLite documents, outbox, sync history, and sync state on this dev device. It does not delete backend data.',
+      [
+        {
+          style: 'cancel',
+          text: 'Cancel',
+        },
+        {
+          onPress: () => runAction(action),
+          style: 'destructive',
+          text: 'Delete local data',
+        },
+      ],
+    );
+  };
+
   if (!enabled) {
     return (
       <View
@@ -79,13 +103,15 @@ export default function SyncDiagnosticsScreen() {
             <Pressable
               key={action.key}
               disabled={Boolean(activeAction)}
-              onPress={() => runAction(action)}
+              onPress={() => handleActionPress(action)}
               style={[
                 styles.button,
                 {
                   backgroundColor: loading
                     ? colors.surfaceMuted
-                    : colors.primary,
+                    : action.destructive
+                      ? colors.danger
+                      : colors.primary,
                 },
               ]}
             >

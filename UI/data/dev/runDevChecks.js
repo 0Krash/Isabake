@@ -179,6 +179,33 @@ const syncCheckDefinitions = [
       return runSyncReadinessCheck();
     },
   },
+  {
+    mutatesData: false,
+    name: 'syncIntegrity',
+    runtime: 'expo',
+    run: async (options = {}) => {
+      const { checkSyncIntegrity } = await import(
+        '../sync/syncIntegrityService'
+      );
+
+      return checkSyncIntegrity({
+        groupId: options.groupId,
+        verifyRemote: Boolean(options.verifyRemote),
+      });
+    },
+  },
+  {
+    mutatesData: true,
+    name: 'businessSyncSanity',
+    runtime: 'expo',
+    run: async (options = {}) => {
+      const { runBusinessSyncSanityCheck } = await import(
+        './devSyncSanityCheck'
+      );
+
+      return runBusinessSyncSanityCheck(options);
+    },
+  },
 ];
 
 const summarizeRun = (kind, startedAt, summary) => ({
@@ -227,16 +254,15 @@ export const runAllDevChecks = async (options = {}) => {
 };
 
 export const previewDevDataReset = async (options = {}) => {
-  const { resetLocalDevData } = await import('./localDevDataReset');
+  const { previewDevDataReset: previewReset } = await import(
+    './devDataResetService'
+  );
 
-  return resetLocalDevData({
-    ...options,
-    dryRun: true,
-  });
+  return previewReset(options);
 };
 
-export const runDevDataReset = async ({ confirm = false, ...options } = {}) => {
-  if (!confirm) {
+export const runDevDataReset = async (options = {}) => {
+  if (!options.confirm) {
     return {
       blocked: true,
       error: 'runDevDataReset requires confirm: true.',
@@ -244,18 +270,87 @@ export const runDevDataReset = async ({ confirm = false, ...options } = {}) => {
     };
   }
 
-  const { resetLocalDevData } = await import('./localDevDataReset');
+  const { runDevDataReset: runReset } = await import('./devDataResetService');
 
-  return resetLocalDevData({
-    ...options,
-    dryRun: false,
-  });
+  return runReset(options);
+};
+
+export const runSyncSanityCheck = async (options = {}) => {
+  const { runSyncSanityCheck: runCheck } = await import(
+    './devSyncSanityCheck'
+  );
+
+  return runCheck(options);
+};
+
+export const runBusinessSyncSanityCheck = async (options = {}) => {
+  const { runBusinessSyncSanityCheck: runCheck } = await import(
+    './devSyncSanityCheck'
+  );
+
+  return runCheck(options);
+};
+
+export const runAutoSyncBusinessWriteCheck = async (options = {}) => {
+  const { runAutoSyncBusinessWriteCheck: runCheck } = await import(
+    './devSyncSanityCheck'
+  );
+
+  return runCheck(options);
+};
+
+export const runBusinessWriteAutoSyncCheck = async (options = {}) => {
+  const { runBusinessWriteAutoSyncCheck: runCheck } = await import(
+    './devSyncSanityCheck'
+  );
+
+  return runCheck(options);
+};
+
+export const runAutoSyncDecisionTraceCheck = async (options = {}) => {
+  const { runAutoSyncDecisionTraceCheck: runCheck } = await import(
+    './devSyncSanityCheck'
+  );
+
+  return runCheck(options);
+};
+
+export const runPostLoginSyncBootstrapCheck = async (options = {}) => {
+  const { runPostLoginSyncBootstrapCheck: runCheck } = await import(
+    '../sync/postLoginSyncBootstrap'
+  );
+
+  return runCheck(options);
+};
+
+export const previewSyncRepair = async (options = {}) => {
+  const { previewSyncRepair: previewRepair } = await import(
+    '../sync/syncIntegrityService'
+  );
+
+  return previewRepair(options);
+};
+
+export const runSyncRepair = async (options = {}) => {
+  const { runSyncRepair: repair } = await import(
+    '../sync/syncIntegrityService'
+  );
+
+  return repair(options);
 };
 
 export default {
+  previewSyncRepair,
   previewDevDataReset,
+  runAutoSyncBusinessWriteCheck,
+  runAutoSyncDecisionTraceCheck,
+  runBusinessWriteAutoSyncCheck,
+  runBusinessSyncSanityCheck,
   runAllDevChecks,
   runDevDataReset,
   runLocalDevChecks,
+  runPostLoginSyncBootstrapCheck,
+  runSyncRepair,
+  runSyncSanityCheck,
   runSyncDevChecks,
 };

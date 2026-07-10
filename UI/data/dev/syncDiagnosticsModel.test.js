@@ -48,11 +48,12 @@ describe('syncDiagnosticsModel', () => {
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(),
       runServerSessionRevocationDevCheck: jest.fn(),
       runTwoWorkspaceIsolationDevCheck: jest.fn(),
+      runDevDataReset: jest.fn(),
     };
 
     const actions = createSyncDiagnosticsActions({ runners });
 
-    expect(actions).toHaveLength(18);
+    expect(actions).toHaveLength(19);
     expect(runners.runAuthWorkspaceDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedPushPullDevCheck).not.toHaveBeenCalled();
     expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
@@ -70,6 +71,7 @@ describe('syncDiagnosticsModel', () => {
     expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
     expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
+    expect(runners.runDevDataReset).not.toHaveBeenCalled();
   });
 
   test('actions call their runners with the dev sync group', async () => {
@@ -91,9 +93,11 @@ describe('syncDiagnosticsModel', () => {
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
       runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
+      runDevDataReset: jest.fn(async () => ({ success: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
 
+    await actions.find((action) => action.key === 'deleteAllLocalData').run();
     await actions.find((action) => action.key === 'authWorkspace').run();
     await actions.find((action) => action.key === 'membershipAccess').run();
     await actions.find((action) => action.key === 'connectivity').run();
@@ -156,6 +160,10 @@ describe('syncDiagnosticsModel', () => {
     expect(runners.runTwoWorkspaceIsolationDevCheck).toHaveBeenCalledWith({
       legacy: true,
     });
+    expect(runners.runDevDataReset).toHaveBeenCalledWith({
+      confirm: true,
+      scope: 'full_local_dev_reset',
+    });
   });
 
   test('all action uses authenticated diagnostics and skips legacy runners', async () => {
@@ -179,6 +187,7 @@ describe('syncDiagnosticsModel', () => {
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
       runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
+      runDevDataReset: jest.fn(async () => ({ success: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
     const result = await actions.find((action) => action.key === 'all').run();
@@ -218,6 +227,7 @@ describe('syncDiagnosticsModel', () => {
       runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
       runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
       runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: false })),
+      runDevDataReset: jest.fn(async () => ({ success: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
     const result = await actions.find((action) => action.key === 'all').run();
@@ -228,5 +238,48 @@ describe('syncDiagnosticsModel', () => {
     expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
     expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
     expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
+    expect(runners.runDevDataReset).not.toHaveBeenCalled();
+  });
+
+  test('delete all local data action is marked destructive and requires confirmation', async () => {
+    const runners = {
+      runAuthWorkspaceDevCheck: jest.fn(),
+      runAuthenticatedPushPullDevCheck: jest.fn(),
+      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(),
+      runBackendSyncConnectivityCheck: jest.fn(),
+      runConflictPreferLocalDevCheck: jest.fn(),
+      runConflictResolutionDevCheck: jest.fn(),
+      runConflictSimulationDevCheck: jest.fn(),
+      runConflictSummaryDevCheck: jest.fn(),
+      runListConflictsDevCheck: jest.fn(),
+      runMembershipSyncAccessDevCheck: jest.fn(),
+      runPullOverPendingConflictDevCheck: jest.fn(),
+      runPushPullDevCheck: jest.fn(),
+      runRealAuthSessionDevCheck: jest.fn(),
+      runResolveLatestConflictPreferLocalDevCheck: jest.fn(),
+      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(),
+      runServerSessionRevocationDevCheck: jest.fn(),
+      runTwoWorkspaceIsolationDevCheck: jest.fn(),
+      runDevDataReset: jest.fn(async () => ({ success: true })),
+    };
+    const actions = createSyncDiagnosticsActions({ runners });
+    const resetAction = actions.find(
+      (action) => action.key === 'deleteAllLocalData',
+    );
+
+    expect(resetAction).toEqual(
+      expect.objectContaining({
+        destructive: true,
+        label: 'Delete all local SQLite data',
+        requiresConfirmation: true,
+      }),
+    );
+
+    await resetAction.run();
+
+    expect(runners.runDevDataReset).toHaveBeenCalledWith({
+      confirm: true,
+      scope: 'full_local_dev_reset',
+    });
   });
 });

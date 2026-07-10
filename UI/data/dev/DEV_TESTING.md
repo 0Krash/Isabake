@@ -43,6 +43,8 @@ Jest tests cover:
   shaping, and outbox-write notification of foreground auto-sync
 - network/offline sync state shaping, backend reachability safe failure,
   missing/invalid sync URL skips, and sanitized diagnostics
+- sync request timeout handling, manual retry recovery, auto-sync failed/backoff
+  state, stale in-flight recovery, and stale `sync_history` recovery
 
 ## Expo Runtime Checks
 
@@ -607,6 +609,287 @@ await runDevDataReset({ confirm: true });
 
 `runDevDataReset()` refuses to run without `confirm: true`.
 
+## Dev Reset And Sync Sanity
+
+Phase 33.1 adds dev-only cleanup and a sync sanity check. These helpers never
+run automatically and must not be wired into `App.js`.
+
+Import:
+
+```js
+import {
+  previewSyncRepair,
+  previewDevDataReset,
+  runAutoSyncDecisionTraceCheck,
+  runBusinessSyncSanityCheck,
+  runBusinessWriteAutoSyncCheck,
+  runDevDataReset,
+  runSyncRepair,
+  runSyncSanityCheck,
+  runAutoSyncBusinessWriteCheck,
+  runPostLoginSyncBootstrapCheck,
+} from './data/dev/runDevChecks';
+```
+
+Reset scopes:
+
+- `test_data_only` default, dev/test prefixes only
+- `stale_sync_only`
+- `conflicts_only`
+- `outbox_failed_only`
+- `full_local_dev_reset`
+
+Known dev/test prefixes:
+
+- `smoke_test`
+- `rollback_smoke_test`
+- `recipe_sale_smoke`
+- `phase_`
+- `dev_check`
+- `auth_workspace_dev`
+- `conflict_dev`
+
+Preview cleanup:
+
+```js
+await previewDevDataReset();
+await previewDevDataReset({ scope: 'conflicts_only' });
+```
+
+Run cleanup:
+
+```js
+await runDevDataReset({
+  confirm: true,
+  scope: 'test_data_only',
+});
+```
+
+Full local dev reset is intentionally loud:
+
+```js
+await runDevDataReset({
+  confirm: true,
+  scope: 'full_local_dev_reset',
+});
+```
+
+Use full local reset only on a development device/database. It clears local
+`documents`, `sync_outbox`, `sync_history`, and `sync_state`; it does not touch
+the backend and must not be used for production data.
+
+The Sync Dev diagnostics screen also exposes a destructive dev-only button:
+`Delete all local SQLite data`. It asks for confirmation and runs the same
+`full_local_dev_reset` scope. It is available only when dev tools are enabled
+with `EXPO_PUBLIC_ENABLE_DEV_TOOLS=true`.
+
+Stale sync cleanup:
+
+```js
+await runDevDataReset({
+  confirm: true,
+  scope: 'stale_sync_only',
+});
+```
+
+This recovers stale auto-sync/history state only. It does not delete business
+documents or outbox records.
+
+Sync sanity check:
+
+```js
+await runSyncSanityCheck();
+```
+
+Requirements:
+
+- authenticated session
+- active shared workspace
+- reachable backend
+
+The sanity check creates a `dev_check_sync_sanity` local recipe, verifies group
+assignment, verifies an outbox event exists, runs sync manually, verifies the
+outbox event is done, verifies the local document is synced with
+`remoteId/serverVersion`, and writes safe sync history metadata.
+
+Business sync sanity check:
+
+```js
+await runBusinessSyncSanityCheck();
+```
+
+This creates one dev recipe, one dev inventory item, and one dev transaction,
+verifies group assignment and pending outbox, runs sync manually, and verifies
+the backend with `POST /sync/verify-documents`. If the endpoint is unavailable,
+the check fails with `backend_verify_unavailable`.
+
+Auto-sync business write check:
+
+```js
+await runBusinessWriteAutoSyncCheck();
+// Existing alias:
+await runAutoSyncBusinessWriteCheck();
+```
+
+Requirements:
+
+- authenticated session
+- active shared workspace
+- automatic sync enabled by the check
+- reachable backend for the guarded sync run
+
+The check creates a `dev_check_auto_sync_business` recipe, inventory item, and
+transaction, verifies pending outbox for each, verifies safe auto-sync
+diagnostics show a `local_change` notification and scheduled/running state,
+waits for the debounce/run, verifies the outbox is `done`, verifies the local
+documents are `synced` with `remoteId/serverVersion`, and optionally verifies
+MongoDB with `POST /sync/verify-documents`.
+
+Clear failure reasons:
+
+- `no_outbox`
+- `no_autoSync_notification`
+- `no_autoSync_schedule`
+- `skipped_by_guard`
+- `runSync_failed`
+- `outbox_not_done`
+- `local_doc_not_synced`
+- `backend_verify_missing`
+
+Safe auto-sync diagnostics include `lastNotifyReason`, `lastNotifyAt`,
+`lastScheduledAt`, `lastRunStartedAt`, `lastRunFinishedAt`,
+`lastSkippedReason`, `pendingOutboxCount`, `autoSyncEnabled`,
+`hasSharedWorkspace`, `hasAuthSession`, `hasConflicts`, and `networkState`.
+Diagnostics never include tokens, headers, hashes, raw payloads, group
+documents, or request/response bodies. Foreground auto-sync remains guarded and
+debounced only; there is no background sync or WebSockets.
+
+Auto-sync decision trace check:
+
+```js
+await runAutoSyncDecisionTraceCheck();
+```
+
+The check creates a small dev recipe, confirms pending outbox exists, records a
+`local_change` notification, waits for the debounce, then validates that the
+guard decision trace shows service initialization, schedule, debounce fire,
+guard evaluation, and either a guarded run or a stable skip reason. Use
+`getAutoSyncDecisionTrace()` to inspect the latest safe trace fields:
+`notifierQueued`, `notifierFlushedAt`, `serviceInitialized`,
+`lastNotifyReason`, `lastScheduledAt`, `lastDebounceFiredAt`,
+`lastGuardEvaluationAt`, `lastDecision`, `lastSkippedReason`,
+`lastRunStartedAt`, `lastRunFinishedAt`, `lastRunStatus`,
+`pendingOutboxCount`, `autoSyncEnabled`, `hasAuthSession`,
+`hasSharedWorkspace`, `groupIdPresent`, `hasConflicts`, `networkState`,
+`backendReachable`, `inFlight`, `cooldownRemainingMs`, and
+`backoffRemainingMs`.
+
+Clear failure reasons:
+
+- `notifier_not_initialized`
+- `notification_not_recorded`
+- `debounce_not_scheduled`
+- `debounce_not_fired`
+- `guard_not_evaluated`
+- `skipped_auto_sync_disabled`
+- `skipped_no_auth`
+- `skipped_no_shared_workspace`
+- `skipped_conflicts_pending`
+- `skipped_backend_unreachable`
+- `sync_not_called`
+- `sync_failed`
+
+Manual Sync Center actions still run only when pressed. They use the same
+`runSync({ groupId })` engine, but they do not depend on notifier queue/flush
+or debounce scheduling. If data stays local, compare pending outbox, current
+workspace/groupId, auth state, conflicts, network state, and the latest
+decision trace before inspecting MongoDB `syncdocuments`.
+
+Post-login sync bootstrap check:
+
+```js
+await runPostLoginSyncBootstrapCheck();
+```
+
+Requirements:
+
+- authenticated session
+- active shared workspace
+- foreground app process
+- automatic sync enabled
+
+The check creates a `dev_check_post_login_sync` recipe, runs the same
+post-login bootstrap used after login/register, verifies pending outbox was
+detected, and confirms the guarded `login_success` full-sync path was
+scheduled or started. The full-sync path is still the existing
+`runSync({ groupId })`, so push and pull both run through normal conflict
+handling. Manual Sync Center actions remain manual; this check does not add
+background sync or WebSockets.
+
+Clear failure reasons:
+
+- `no_auth`
+- `no_shared_workspace`
+- `no_groupId`
+- `no_pending_outbox`
+- `auto_sync_disabled`
+- `conflicts_pending`
+- `backend_unreachable`
+- `sync_timeout`
+
+If login/register succeeds without a selected shared workspace, bootstrap skips
+with `no_shared_workspace_after_login` and does not upload local data to a
+random workspace. Invitation link open/accept and workspace selection do not
+call this bootstrap.
+
+Sync integrity and repair:
+
+```js
+await previewSyncRepair({ scope: 'missing_backend_only' });
+await runSyncRepair({
+  confirm: true,
+  scope: 'missing_backend_only',
+});
+```
+
+Available repair scopes:
+
+- `outbox_only`
+- `missing_backend_only`
+- `ungrouped_local_only`
+- `full_sync_repair`
+
+Repair never runs automatically, requires `confirm: true`, records safe
+`sync_history`, does not delete local business data, and does not auto-resolve
+conflicts. Backend `missing` means the sync document is absent and may be
+requeued. Backend `deleted` means a proper tombstone exists and must not be
+resurrected automatically.
+
+Check MongoDB in development:
+
+```js
+db.syncdocuments.find({
+  groupId: '<groupId>',
+  collection: 'recipes',
+  'document.name': /dev_check_sync_sanity/,
+}).sort({ updatedAt: -1 }).limit(5)
+```
+
+Development-only backend cleanup examples:
+
+```js
+db.syncdocuments.deleteMany({ groupId: /^phase_|^dev_check|^conflict_dev/ })
+db.syncevents.deleteMany({ groupId: /^phase_|^dev_check|^conflict_dev/ })
+db.users.deleteMany({ userId: /^phase_|^dev_check|^auth_workspace_dev/ })
+db.authsessions.deleteMany({ userId: /^phase_|^dev_check|^auth_workspace_dev/ })
+db.workspaces.deleteMany({ groupId: /^phase_|^dev_check|^auth_workspace_dev/ })
+db.workspacememberships.deleteMany({ groupId: /^phase_|^dev_check|^auth_workspace_dev/ })
+db.workspaceinvitations.deleteMany({ groupId: /^phase_|^dev_check|^auth_workspace_dev/ })
+```
+
+Run those MongoDB commands only against a development database. The mobile app
+does not provide a backend destructive reset API.
+
 ## Network/Offline Awareness
 
 Phase 32 adds process-local network state for sync diagnostics and guarded
@@ -635,6 +918,56 @@ workspace, no conflicts, no cooldown/backoff, and no active sync.
 
 No OS background sync, WebSocket, realtime listener, or aggressive polling is
 introduced by these checks.
+
+## Sync Timeout And Recovery
+
+Phase 33 hardens manual sync and foreground auto-sync against hanging requests.
+
+Safe defaults:
+
+- sync requests time out after `25000` ms
+- timeout error code is `sync_timeout`
+- aborted request code is `request_aborted`
+- network failure code is `network_error`
+- missing/invalid sync URL fails before network access
+
+Manual Sync Center actions recover loading state in `finally`; after timeout or
+network failure the user can press `Sincronizar ahora`, `Enviar cambios`, or
+`Recibir cambios` again. Failed manual attempts write safe sync history
+metadata only.
+
+Foreground auto-sync clears in-flight state in `finally`. Timeout/failure stores
+safe `lastErrorCode`, `lastErrorMessage`, failed status, and backoff metadata.
+After backoff, a guarded retry may run only if the normal eligibility checks
+still pass.
+
+Stale recovery helpers:
+
+```js
+import {
+  recoverStaleAutoSyncState,
+  recoverStaleSyncHistoryRuns,
+} from './data/sync';
+```
+
+`recoverStaleSyncHistoryRuns()` marks old `started` sync history rows as failed
+with `sync_timeout`. It affects only `sync_history`.
+
+`recoverStaleAutoSyncState()` clears stale local in-flight state and records
+safe failed/backoff metadata. It does not push, pull, delete local data, or
+touch outbox documents.
+
+Manual runtime checks:
+
+- stop the backend and press `Sincronizar ahora`
+- use an invalid `EXPO_PUBLIC_SYNC_API_URL` and refresh Sync Center
+- point the URL at a hanging endpoint if available and confirm timeout copy
+- restore backend access and retry manually
+
+Diagnostics expose safe booleans/counts/timing only: current state, in-flight,
+scheduled, backoff/cooldown remaining, last safe error code/message, recovered
+history count, stale in-flight flag, and timeout milliseconds. They must never
+show tokens, headers, raw URLs, request bodies, response bodies, or stack traces.
 
 ## Static Startup Guard
 

@@ -19,6 +19,7 @@ import {
   runServerSessionRevocationDevCheck,
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
+import { runDevDataReset } from './runDevChecks';
 import { createDevAuthSession } from '../auth/authSession';
 
 export const DEV_SYNC_GROUP_ID = 'phase_13_sync_dev_group';
@@ -51,8 +52,20 @@ export const createSyncDiagnosticsActions = ({
     runResolveLatestConflictPreferRemoteDevCheck,
     runServerSessionRevocationDevCheck,
     runTwoWorkspaceIsolationDevCheck,
+    runDevDataReset,
   },
 } = {}) => [
+  {
+    destructive: true,
+    key: 'deleteAllLocalData',
+    label: 'Delete all local SQLite data',
+    requiresConfirmation: true,
+    run: () =>
+      runners.runDevDataReset({
+        confirm: true,
+        scope: 'full_local_dev_reset',
+      }),
+  },
   {
     key: 'authWorkspace',
     label: 'Auth workspace check',

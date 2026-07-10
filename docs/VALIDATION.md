@@ -115,6 +115,9 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Refresh status may check backend reachability but must not send auth headers,
   push changes, pull changes, or expose the raw sync URL.
 - Push/pull/full sync run only when manually pressed.
+- Push/pull/full sync requests time out safely after 25 seconds by default.
+- After timeout/failure, buttons stop loading and manual retry remains
+  available.
 - Sync uses active shared workspace groupId.
 - Auth/session/workspace errors are safe.
 - User-facing sync UI says Enviar cambios, Recibir cambios, and Sincronizar
@@ -126,26 +129,82 @@ report it clearly, run focused service/non-listener tests when possible, and sta
   metadata.
 - Opening Sync Center or Sync History does not create a history record or run
   sync.
+- Advanced "Revisar respaldo" runs a manual sync integrity check only when
+  pressed.
+- Advanced "Reparar respaldo" requires user confirmation, requeues repairable
+  sync work, and never deletes local business data.
+- Integrity/repair history stores safe counts/codes only; no raw documents,
+  request/response payloads, headers, tokens, cursor, group metadata, or URLs.
+- A backend `missing` sync document can be repaired by requeueing local data.
+- A backend `deleted` tombstone is reported separately and must not be
+  resurrected automatically.
 - Foreground auto-sync can be enabled/disabled from Sync Center.
 - Foreground auto-sync must not run on Sync Center render.
 - Foreground auto-sync must not run in local-only mode, logged-out mode, while
   conflicts exist, during cooldown/backoff, or while another sync is active.
 - Foreground auto-sync may run only after the app is active and a safe trigger
   occurs, such as app returning to foreground or a local outbox change.
+- Business writes should follow:
+  local write -> pending `sync_outbox` event -> `local_change` notification ->
+  debounce -> guarded auto-sync -> synced local document.
+- Login/register success should follow:
+  auth session persisted -> active shared workspace checked -> pending outbox
+  and ungrouped local documents inspected -> `login_success` notification ->
+  debounce -> guarded full sync. This path must not run from workspace
+  selection, invitation link open, or invitation accept.
+- If no shared workspace is selected after login, bootstrap records/skips with
+  `no_shared_workspace_after_login` and must not upload local data to a random
+  workspace.
 - Automatic sync attempts/skips write safe `sync_history` metadata with
   `triggerSource: "system_future"`.
 - Sync Center shows friendly connectivity state for online/offline,
   backend-unreachable, missing sync URL, and invalid sync URL.
+- Timeout/failure messages must say “No se pudo respaldar” or “La
+  sincronización tardó demasiado. Intenta de nuevo.” without fetch internals,
+  stack traces, request bodies, response bodies, headers, tokens, URLs, cursor,
+  groupId, or serverVersion.
 
 ### Foreground Auto-Sync
 
 - Open the app in local-only mode and confirm no push/pull/full sync runs.
 - Login, select a shared workspace, enable automatic sync, and create a local
   change; confirm sync is debounced rather than immediate.
+- Create local recipe, inventory, or transaction data while logged out; log in
+  with a shared workspace already selected and confirm one guarded
+  `login_success` full sync uploads local pending outbox and pulls remote
+  server changes.
+- Log in without a shared workspace selected and confirm the bootstrap skips
+  with `no_shared_workspace_after_login` without deleting or uploading local
+  data.
+- Keep a conflict present during login and confirm bootstrap skips with
+  `conflicts_pending` without resolving it.
+- Create a recipe, inventory item, transaction, or stock movement and confirm
+  one pending outbox event schedules one debounced automatic attempt.
+- Read `getAutoSyncDiagnostics()` and confirm it exposes only safe fields such
+  as `lastNotifyReason`, `lastNotifyAt`, `lastScheduledAt`,
+  `lastRunStartedAt`, `lastRunFinishedAt`, `lastSkippedReason`,
+  `pendingOutboxCount`, `autoSyncEnabled`, `hasSharedWorkspace`,
+  `hasAuthSession`, `hasConflicts`, and `networkState`.
+- Read `getAutoSyncDecisionTrace()` and confirm it shows the decision chain:
+  notifier queued/flushed, service initialized, last notify reason, debounce
+  scheduled/fired, guard evaluated, skipped/run decision, run status, pending
+  outbox count, auth/workspace/conflict/network state, cooldown, backoff, and
+  in-flight state. It must not expose tokens, headers, raw payloads, group
+  values, stack traces, URLs, invite tokens, password hashes, or refresh token
+  hashes.
+- Common automatic skip reasons include `auto_sync_disabled`, `no_auth`,
+  `no_shared_workspace`, `missing_groupId`, `conflicts_pending`,
+  `backend_unreachable`, `sync_base_url_missing`, `sync_base_url_invalid`,
+  `app_inactive`, `cooldown_active`, `backoff_active`, and `sync_in_flight`.
 - Turn off network/backend access and confirm automatic sync is skipped with a
   safe offline or server-unavailable status.
+- Simulate a hanging/slow backend and confirm automatic sync fails with
+  `sync_timeout`, clears in-flight/syncing state, records safe failed history,
+  and enters backoff instead of running forever.
 - Restore network/backend access and confirm a foreground connectivity-restored
   trigger may schedule one guarded automatic attempt.
+- After the backoff window, confirm a guarded retry can run when all normal
+  eligibility checks still pass.
 - Background the app before the debounce expires; confirm no automatic sync
   runs while inactive.
 - Return to foreground; confirm one guarded automatic attempt may run.
@@ -176,6 +235,10 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Offline/unavailable state shows “Sin conexión” or a safe failure message.
 - Missing/invalid sync URL shows “Respaldo no configurado” without showing the
   raw URL.
+- Sync timeout shows “No se pudo respaldar” with “La sincronización tardó
+  demasiado. Intenta de nuevo.”
+- Auto-sync backoff shows “No se pudo respaldar” with “Se intentará de nuevo
+  más tarde.”
 - Conflicts show “Cambios por revisar” and can navigate to the existing review
   screen; they are never auto-resolved.
 - Main screens and indicators do not show push, pull, cursor, groupId,
@@ -193,6 +256,84 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 - Retention keeps the latest 100 records during writes; no timer/background
   cleanup exists.
 - Clearing old sync history affects only `sync_history`, never business data.
+- Stale `started` sync history rows older than the recovery threshold can be
+  marked `failed` with `errorCode: "sync_timeout"` and safe message “La
+  sincronizacion tardo demasiado.”
+- Stale history recovery affects only `sync_history`; it never deletes local
+  SQLite business data, outbox records, or remote documents.
+
+### Dev Reset And Sync Sanity
+
+- Dev reset never runs automatically.
+- `previewDevDataReset()` is dry-run only.
+- `runDevDataReset()` requires `confirm: true`.
+- `full_local_dev_reset` requires explicit scope and `confirm: true`.
+- Default reset scope is `test_data_only`.
+- `test_data_only` deletes only known dev/test prefixes:
+  `smoke_test`, `rollback_smoke_test`, `recipe_sale_smoke`, `phase_`,
+  `dev_check`, `auth_workspace_dev`, and `conflict_dev`.
+- `stale_sync_only` recovers stale sync state/history without deleting business
+  documents or outbox records.
+- `conflicts_only` cleans only dev/test conflicts; real conflicts remain for
+  user review and are not auto-resolved.
+- `runSyncSanityCheck()` requires an authenticated session and active shared
+  workspace.
+- Sync sanity check creates a dev-prefixed local record, verifies outbox, runs
+  sync, and verifies local synced state plus sync history.
+- `runBusinessSyncSanityCheck()` requires an authenticated session and active
+  shared workspace.
+- Business sync sanity creates one dev recipe, one dev inventory item, and one
+  dev transaction, verifies groupId/outbox, runs sync, then calls
+  `/sync/verify-documents` to confirm MongoDB sync storage reports `ok` for all
+  three records.
+- `runBusinessWriteAutoSyncCheck()` / `runAutoSyncBusinessWriteCheck()`
+  requires an authenticated session and active shared workspace. It enables
+  auto-sync, creates one dev recipe, one dev inventory item, and one dev
+  transaction, verifies pending outbox, verifies notification/schedule
+  diagnostics, waits for the guarded debounce run, verifies outbox done,
+  verifies local synced state, and optionally verifies MongoDB through
+  `/sync/verify-documents`.
+- Auto-sync business write check failure reasons include `no_outbox`,
+  `no_autoSync_notification`, `no_autoSync_schedule`, `skipped_by_guard`,
+  `runSync_failed`, `outbox_not_done`, `local_doc_not_synced`, and
+  `backend_verify_missing`.
+- `runPostLoginSyncBootstrapCheck()` requires an authenticated session and
+  active shared workspace. It creates one dev recipe, runs the post-login
+  bootstrap, verifies pending outbox was detected, verifies a guarded
+  `login_success` sync was scheduled/started, and reports safe failure reasons:
+  `no_auth`, `no_shared_workspace`, `no_groupId`, `no_pending_outbox`,
+  `auto_sync_disabled`, `conflicts_pending`, `backend_unreachable`, or
+  `sync_timeout`.
+- `runAutoSyncDecisionTraceCheck()` requires an authenticated session and
+  active shared workspace. It creates a dev local change, verifies pending
+  outbox, checks that `local_change` was recorded, verifies debounce
+  scheduled/fired, confirms guard evaluation, and reports either the run status
+  or a stable skip reason such as `skipped_auto_sync_disabled`,
+  `skipped_no_auth`, `skipped_no_shared_workspace`,
+  `skipped_conflicts_pending`, or `skipped_backend_unreachable`.
+- Manual sync and automatic sync share the same `runSync({ groupId })` engine,
+  but manual Sync Center actions run only when pressed and do not depend on the
+  auto-sync notifier/debounce decision trace.
+- Backend cleanup is manual and development-only; the mobile app must not add a
+  backend destructive reset API.
+
+### Sync Integrity And Reconciliation
+
+- Login and select a shared workspace.
+- Create a recipe, inventory item, and transaction.
+- Run manual sync.
+- Verify MongoDB `syncdocuments` has records for `recipes`, `inventory`, and
+  `transactions`.
+- In dev only, manually delete one backend sync document.
+- Run Sync Center advanced "Revisar respaldo"; confirm a missing backend issue
+  is detected.
+- Run "Reparar respaldo" and confirm the repair result requeued work.
+- Run manual sync again or allow guarded foreground auto-sync.
+- Verify MongoDB has the missing document again.
+- Confirm no local SQLite business data was deleted.
+- Confirm proper backend tombstones return `deleted` and are not auto-repaired.
+- Confirm sync history contains safe `integrity_check`, `repair_preview`, or
+  `repair_run` metadata only.
 
 ### Conflicts
 
