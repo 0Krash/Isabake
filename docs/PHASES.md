@@ -9,7 +9,7 @@
 
 ## Current Next Phase
 
-- Phase 36: pending definition.
+- Phase 36: QA hardening and release readiness validation.
 
 ## Latest Cleanup
 
@@ -72,8 +72,14 @@
   missing workspace skips with `no_shared_workspace_after_login`; conflicts
   skip with `conflicts_pending`. Invitation link open/accept and workspace
   selection still do not trigger sync. No background sync or WebSockets.
+- Phase 36: current QA/release-readiness phase. Stabilize the existing app by
+  validating startup safety, iOS modal navigation, manual sync to MongoDB,
+  guarded foreground auto-sync, backup indicators, sync history, local-only
+  behavior, release hygiene, and diagnostics exports. This phase must not add
+  features, redesign UI, change sync architecture, add WebSockets/background
+  sync, force login, delete local data, expose tokens/hashes, or auto-resolve
+  conflicts.
 
 ## Likely Future Phases
 
-- Phase 36: hardening/QA/release prep.
 - WebSockets only later and only as “changes available” notification; actual sync remains push/pull.

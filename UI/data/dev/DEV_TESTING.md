@@ -25,6 +25,18 @@ npm run check:no-startup-test-wiring
 npm run check:sync-config
 ```
 
+Phase 36 release-readiness checks also rely on:
+
+- `npm run check:no-startup-test-wiring`
+- `npm run test:sync -- --runInBand`
+- `npm run test:dev`
+- `npm test -- --runInBand`
+
+The expected result is that startup remains clean, dev tools stay gated,
+legacy sockets stay disabled by default, diagnostics exports remain stable, and
+safe diagnostics never expose tokens, hashes, headers, raw URLs, raw payloads,
+or request/response bodies.
+
 Jest tests cover:
 
 - current workspace/current group behavior with mocked storage
@@ -325,6 +337,47 @@ Manual runtime checks:
 5. Confirm selecting a workspace does not sync.
 6. Open an invitation link, preview it, and confirm accepting/declining does not
    sync automatically.
+
+## Phase 36 Manual QA Gates
+
+Before release, validate these flows on real runtime builds:
+
+1. iOS modal navigation: open/close the secondary menu, then open Cuenta,
+   Compartir negocio, Respaldo y sincronizacion, Cambios por revisar, and dev
+   tools when enabled. Also open app options and store manager/options flows
+   from business screens. No modal should remain stuck or block the next screen.
+2. Android USB/Expo/backend: confirm login reaches the backend, manual sync
+   calls appear only after pressing Sync Center actions, and no repeated
+   `GET /` 404 spam appears.
+3. Manual sync: create one recipe, one inventory item, and one transaction in a
+   shared workspace, press `Sincronizar ahora`, then confirm `sync_history`
+   success and MongoDB `syncdocuments` records for `recipes`, `inventory`, and
+   `transactions`.
+4. Auto-sync: enable auto-sync, create a recipe/inventory/transaction, wait for
+   debounce, and inspect `getAutoSyncDecisionTrace()` plus
+   `getAutoSyncDiagnostics()` for a safe run or stable skip reason.
+5. Local-only: logout, create data locally, confirm no backend is required, log
+   in again, and confirm local data remains present.
+
+Useful Expo dev-console helpers:
+
+```js
+await runBusinessSyncSanityCheck();
+await runBusinessWriteAutoSyncCheck();
+await runPostLoginSyncBootstrapCheck();
+await runAutoSyncDecisionTraceCheck();
+```
+
+Use these inspection helpers after runtime actions:
+
+```js
+getAutoSyncDecisionTrace();
+await getAutoSyncDiagnostics();
+```
+
+`runRepositorySyncContractCheck()` is not part of the current codebase. If a
+future phase adds it, expose it through the same dev-check entry point before
+documenting it as runnable.
 
 ## Primary Navigation UX
 

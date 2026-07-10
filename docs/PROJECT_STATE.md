@@ -142,7 +142,11 @@
 
 ## Current Next Phase
 
-- Phase 35: pending definition
+- Phase 35: implemented/completed. Post-login sync bootstrap is in place and
+  remains guarded by auth, selected shared workspace, conflicts, network state,
+  debounce, and the existing foreground auto-sync controls.
+- Phase 36: current next phase. Scope is QA hardening and release readiness
+  validation, not sync architecture redesign.
 
 ## Important Backend Paths
 
@@ -172,11 +176,17 @@
 
 ## Known Pending Items
 
+- Phase 36 manual QA gates remain open until the current app build is checked
+  on iOS, Android USB/Expo, backend sync storage, auto-sync diagnostics, and
+  local-only/logout flows.
 - Backend full suite must be run outside sandbox if Supertest fails with `listen EPERM`.
 - Production app links require real domain, certs, Android SHA-256 signing
   fingerprint, Apple Team ID, and final iOS bundle identifier.
 - OS-level background sync intentionally pending.
 - WebSockets/realtime intentionally pending.
+- Release readiness still requires final confirmation that `.env` files,
+  `UI/android/local.properties`, `UI/dist`, tokens, hashes, raw sync payloads,
+  dev tools, legacy sockets, and startup code remain safe for production.
 - Foreground-only auto-sync exists; it must not run while the app is closed,
   in local-only mode, without auth, with conflicts, or from invitation link
   open/accept flows.

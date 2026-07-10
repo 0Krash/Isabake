@@ -37,6 +37,93 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 
 ## Manual Validation Checklists
 
+### Phase 36 QA And Release Readiness
+
+Overall expected state:
+
+- Phase 35 is implemented/completed.
+- Phase 36 is the current QA/release-readiness phase.
+- Remaining work is validation, release hygiene, and blocker triage, not sync
+  architecture redesign.
+- Manual Sync Center actions remain manual.
+- Foreground auto-sync remains guarded/debounced and never becomes OS
+  background sync, WebSocket sync, startup sync, invitation sync, or conflict
+  auto-resolution.
+
+Stable app behavior to preserve:
+
+- Startup opens into the local-first app without forced login.
+- `App.js` initializes local DB/runtime listeners only and does not run
+  readiness checks, dev checks, push, pull, full sync, post-login bootstrap, or
+  sync repair from startup.
+- Primary tabs remain `Transacciones`, `Recetas`, and `Inventario`.
+- Secondary menu remains the entry point for `Cuenta`, `Compartir negocio`,
+  `Respaldo y sincronizacion`, `Cambios por revisar`, and dev tools when
+  explicitly enabled.
+- Local SQLite remains the source of truth; logout, disconnect, and leave do not
+  delete local data.
+
+Sync QA checklist:
+
+- Login and select a shared workspace.
+- Create one recipe, one inventory item, and one transaction.
+- Press `Sincronizar ahora`.
+- Confirm `sync_history` records a successful manual full sync with safe
+  metadata only.
+- Confirm MongoDB `syncdocuments` contains records for `recipes`, `inventory`,
+  and `transactions` for the active shared workspace.
+- Enable auto-sync, create a new recipe/inventory/transaction, do not press
+  manual sync, wait for debounce, and inspect `getAutoSyncDecisionTrace()`.
+- Confirm either `lastDecision: "run"` with `lastRunStatus: "success"` or
+  `lastDecision: "skipped"` with a stable safe `lastSkippedReason`.
+- Confirm `getAutoSyncDiagnostics()` exposes only safe booleans/counts/state and
+  no tokens, headers, hashes, URLs, raw payloads, request/response bodies,
+  cursor values, or group values.
+
+iOS modal QA checklist:
+
+- Open and close the secondary menu.
+- From the secondary menu, open `Cuenta`, `Compartir negocio`,
+  `Respaldo y sincronizacion`, `Cambios por revisar`, and `Herramientas dev`
+  when dev tools are enabled.
+- From business screens, open the app options flow and store manager/options
+  flow.
+- Confirm each second modal/screen opens after the first modal closes, with no
+  stuck overlay, transition warning, crash, or lost navigation.
+
+Android USB/Expo/backend checklist:
+
+- Start the backend and confirm the device can reach it through the configured
+  local address or USB reverse setup.
+- Run Expo on the physical Android device.
+- Login from the device and confirm the backend logs `/auth/login`.
+- Use Sync Center manual sync and confirm backend `/sync/push` and
+  `/sync/pull` only after pressing sync actions.
+- Confirm no repeated `GET /` 404 spam appears from the mobile app.
+
+Release blockers:
+
+- Any startup sync, forced login, startup dev check, startup repair, or startup
+  sync bootstrap.
+- Any manual sync button that stays loading after timeout/failure.
+- iOS modal transitions that block account/workspace/sync/conflict/dev screens.
+- Manual sync success without MongoDB `recipes`, `inventory`, and
+  `transactions` records when pending local data exists.
+- Auto-sync failures that do not appear in safe diagnostics/history.
+- Token/hash/header/raw payload exposure in UI, diagnostics, history, or logs.
+- `UI/.env`, backend `.env`, `UI/android/local.properties`, or `UI/dist`
+  becoming tracked release files.
+- Legacy sockets, dev tools, or dev auth enabled by default in production.
+
+Known non-blockers:
+
+- OS-level background sync is intentionally pending.
+- WebSockets/realtime notifications are intentionally pending.
+- Production app links still require final domain, certificate, signing, Apple
+  Team ID, and bundle-id setup.
+- Backend full suite may require a non-sandbox environment if Supertest cannot
+  listen in the current sandbox.
+
 ### Startup/Local-Only
 
 - App opens without login.
