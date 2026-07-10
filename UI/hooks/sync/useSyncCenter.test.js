@@ -17,6 +17,14 @@ jest.mock('../../data/sync/syncService', () => ({
   runSync: jest.fn(),
 }));
 
+jest.mock('../../data/sync/syncIntegrityService', () => ({
+  checkSyncIntegrity: jest.fn(),
+  runSyncRepair: jest.fn(),
+  SYNC_REPAIR_SCOPES: {
+    FULL: 'full_sync_repair',
+  },
+}));
+
 jest.mock('../../data/sync/syncHistoryService', () => ({
   finishSyncHistoryRun: jest.fn(),
   getSyncHistoryAuthState: jest.fn((status = {}) =>
@@ -254,6 +262,69 @@ describe('useSyncCenter helpers', () => {
       client: undefined,
       groupId: 'group_1',
     });
+  });
+
+  test('manual full sync timeout records failed history and remains retryable', async () => {
+    const sync = jest.fn(async () => ({
+      error: 'sync_timeout',
+      ok: false,
+      pull: { applied: [], conflicts: [], skipped: [] },
+      push: { accepted: [], rejected: [], skipped: [] },
+    }));
+    const loadStatus = jest
+      .fn()
+      .mockResolvedValueOnce({
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 1,
+        session,
+      })
+      .mockResolvedValueOnce({
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 1,
+        session,
+      });
+
+    await expect(
+      runManualSyncAction({
+        action: 'full',
+        loadStatus,
+        sync,
+      }),
+    ).rejects.toThrow('sync_timeout');
+
+    expect(finishSyncHistoryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'sync_timeout',
+        status: 'failed',
+      }),
+    );
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  test('manual push and pull timeout failures clear through failed history path', async () => {
+    const loadStatus = jest
+      .fn()
+      .mockResolvedValue({
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 1,
+        session,
+      });
+    const push = jest.fn(async () => ({ error: 'sync_timeout', ok: false }));
+    const pull = jest.fn(async () => ({ error: 'sync_timeout', ok: false }));
+
+    await expect(
+      runManualSyncAction({ action: 'push', loadStatus, push }),
+    ).rejects.toThrow('sync_timeout');
+    await expect(
+      runManualSyncAction({ action: 'pull', loadStatus, pull }),
+    ).rejects.toThrow('sync_timeout');
+
+    expect(finishSyncHistoryRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: 'sync_timeout',
+        status: 'failed',
+      }),
+    );
   });
 
   test('does not run sync service while only loading status', async () => {

@@ -18,12 +18,17 @@ import {
   getFailedOutboxCountsByCollection,
   getPendingOutboxCountsByCollection,
 } from './syncOutbox';
+import {
+  __resetAutoSyncNotifierForTests,
+  setAutoSyncNotifier,
+} from './autoSyncNotifier';
 
 describe('syncOutbox count helpers', () => {
   beforeEach(() => {
     mockGetAllAsync.mockReset();
     mockNotifyAutoSyncNeeded.mockReset();
     mockRunAsync.mockReset();
+    __resetAutoSyncNotifierForTests();
   });
 
   test('adding an outbox event notifies auto-sync after the local write', async () => {
@@ -39,6 +44,32 @@ describe('syncOutbox count helpers', () => {
     );
 
     expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledWith('local_change');
+    expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledTimes(1);
+  });
+
+  test('adding an outbox event notifies the registered auto-sync handler', async () => {
+    setAutoSyncNotifier(mockNotifyAutoSyncNeeded);
+
+    await addOutboxEvent('inventory', 'inventory_1', 'update', {
+      name: 'Harina',
+    });
+
+    expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledWith('local_change');
+    expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not notify auto-sync when the outbox insert fails', async () => {
+    mockRunAsync.mockRejectedValueOnce(new Error('insert_failed'));
+
+    await expect(
+      addOutboxEvent('transactions', 'transaction_1', 'create', {
+        amount: 10,
+      }, {
+        notifyAutoSyncNeeded: mockNotifyAutoSyncNeeded,
+      }),
+    ).rejects.toThrow('insert_failed');
+
+    expect(mockNotifyAutoSyncNeeded).not.toHaveBeenCalled();
   });
 
   test('returns pending counts keyed by collection', async () => {

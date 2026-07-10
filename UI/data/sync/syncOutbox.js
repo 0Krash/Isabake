@@ -1,5 +1,6 @@
 import { initDatabase } from '../db/database';
 import { createLocalId } from '../db/localIds';
+import { notifyAutoSyncFromLocalChange } from './autoSyncNotifier';
 
 const nowIso = () => new Date().toISOString();
 
@@ -22,11 +23,7 @@ const notifyAutoSyncAfterOutboxWrite = (options = {}) => {
     return;
   }
 
-  import('./autoSyncService')
-    .then(({ notifyAutoSyncNeeded }) =>
-      notifyAutoSyncNeeded('local_change'),
-    )
-    .catch(() => {});
+  notifyAutoSyncFromLocalChange('local_change');
 };
 
 export const addOutboxEvent = async (
@@ -233,6 +230,20 @@ export const markOutboxEventAsFailed = async (id, error, options = {}) => {
 };
 
 export const markOutboxEventFailed = markOutboxEventAsFailed;
+
+export const requeueOutboxEvent = async (id, options = {}) => {
+  const db = options.db || (await initDatabase());
+
+  await db.runAsync(
+    `
+      UPDATE sync_outbox
+      SET status = 'pending',
+          lastError = NULL
+      WHERE id = ?;
+    `,
+    [id],
+  );
+};
 
 export const markOutboxEventConflict = async (id, conflict, options = {}) => {
   const db = options.db || (await initDatabase());

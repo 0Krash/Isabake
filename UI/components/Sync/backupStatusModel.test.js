@@ -100,13 +100,13 @@ describe('backupStatusModel', () => {
         currentWorkspace: sharedWorkspace,
         failedCount: 1,
         latestSyncHistory: {
-          safeErrorMessage: 'Network request failed',
+          safeErrorMessage: 'sync_timeout',
           status: 'failed',
         },
       }),
     ).toEqual(
       expect.objectContaining({
-        description: 'Network request failed',
+        description: 'La sincronización tardó demasiado. Intenta de nuevo.',
         statusKey: 'failed',
         title: 'No se pudo respaldar',
       }),
@@ -225,7 +225,7 @@ describe('backupStatusModel', () => {
       expect.objectContaining({
         description: 'Tus cambios siguen guardados en este dispositivo.',
         statusKey: 'backend_unreachable',
-        title: 'No se pudo conectar con el servidor',
+        title: 'Sin conexión con el servidor',
       }),
     );
     expect(
@@ -240,6 +240,23 @@ describe('backupStatusModel', () => {
         description: 'Falta configurar el servidor de respaldo.',
         statusKey: 'backup_not_configured',
         title: 'Respaldo no configurado',
+      }),
+    );
+  });
+
+  test('ignores stale auto-sync config errors when current network state is not missing config', () => {
+    expect(
+      getBackupStatus({
+        authStatus: 'authenticated',
+        autoSyncState: { autoSyncState: 'sync_url_missing' },
+        currentWorkspace: sharedWorkspace,
+        networkStatus: { networkState: 'backend_reachable' },
+        pendingCount: 248,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        statusKey: 'pending',
+        title: 'Cambios pendientes',
       }),
     );
   });
@@ -276,5 +293,49 @@ describe('backupStatusModel', () => {
     expect(renderedText).not.toMatch(
       /push|pull|cursor|groupId|serverVersion|token|hash|sync_outbox/i,
     );
+  });
+
+  test('maps timeout, backend unreachable, and retry states without technical details', () => {
+    expect(
+      getBackupStatus({
+        authStatus: 'authenticated',
+        currentWorkspace: sharedWorkspace,
+        latestSyncHistory: {
+          errorCode: 'sync_timeout',
+          status: 'failed',
+        },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        description: 'La sincronización tardó demasiado. Intenta de nuevo.',
+        title: 'No se pudo respaldar',
+      }),
+    );
+    expect(
+      getBackupStatus({
+        authStatus: 'authenticated',
+        autoSyncState: {
+          autoSyncState: 'failed',
+          lastErrorCode: 'backend_unreachable',
+        },
+        currentWorkspace: sharedWorkspace,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        description: 'Tus cambios siguen guardados en este dispositivo.',
+        title: 'No se pudo respaldar',
+      }),
+    );
+    expect(
+      getBackupStatus({
+        authStatus: 'authenticated',
+        currentWorkspace: sharedWorkspace,
+        failedCount: 1,
+        latestSyncHistory: {
+          safeErrorMessage: 'AbortError: stack trace groupId cursor',
+          status: 'failed',
+        },
+      }).description,
+    ).toBe('Revisa el respaldo e intenta de nuevo.');
   });
 });

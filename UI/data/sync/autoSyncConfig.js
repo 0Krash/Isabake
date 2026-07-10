@@ -4,13 +4,15 @@ export const AUTO_SYNC_STATE_ID = 'state';
 
 export const AUTO_SYNC_DEFAULTS = {
   cooldownMs: 45 * 1000,
-  debounceMs: 15 * 1000,
+  debounceMs: 1500,
   failureBackoffMs: 2 * 60 * 1000,
+  staleInFlightMs: 2 * 60 * 1000,
 };
 
 export const AUTO_SYNC_REASONS = {
   APP_ACTIVE: 'app_active',
   CONNECTIVITY_RESTORED: 'connectivity_restored',
+  LOGIN_SUCCESS: 'login_success',
   LOCAL_CHANGE: 'local_change',
   RETRY_AFTER_FAILURE: 'retry_after_failure',
 };

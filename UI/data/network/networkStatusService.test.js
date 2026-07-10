@@ -46,6 +46,24 @@ describe('networkStatusService', () => {
     );
   });
 
+  test('clears stale missing-url state when current config is valid', async () => {
+    await expect(refreshNetworkStatus({ baseUrl: '' })).resolves.toEqual(
+      expect.objectContaining({
+        networkState: NETWORK_STATES.SYNC_URL_MISSING,
+      }),
+    );
+
+    expect(
+      getNetworkStatus({ baseUrl: 'https://api.example.test' }),
+    ).toEqual(
+      expect.objectContaining({
+        networkState: NETWORK_STATES.UNKNOWN,
+        syncBaseUrlConfigured: true,
+        syncBaseUrlHost: 'api.example.test',
+      }),
+    );
+  });
+
   test('marks backend reachable when fetch resolves', async () => {
     const listener = jest.fn();
     subscribeToNetworkStatus(listener);

@@ -21,6 +21,7 @@ export const SYNC_OPERATIONS = {
 export const DEFAULT_SYNC_ENDPOINTS = {
   PULL: '/sync/pull',
   PUSH: '/sync/push',
+  VERIFY_DOCUMENTS: '/sync/verify-documents',
 };
 
 export const SHARED_SYNC_COLLECTIONS = [

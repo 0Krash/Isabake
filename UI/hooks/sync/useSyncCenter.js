@@ -13,6 +13,11 @@ import {
   runSync,
 } from '../../data/sync/syncService';
 import {
+  checkSyncIntegrity,
+  runSyncRepair,
+  SYNC_REPAIR_SCOPES,
+} from '../../data/sync/syncIntegrityService';
+import {
   finishSyncHistoryRun,
   getSyncHistoryAuthState,
   getSyncHistoryWorkspaceName,
@@ -92,6 +97,9 @@ const getHistoryContext = (status = {}) => ({
   workspaceName: getSyncHistoryWorkspaceName(status.currentWorkspace),
 });
 
+const getSyncResultError = (result = {}) =>
+  result.error || result.push?.error || result.pull?.error || null;
+
 export const runManualSyncAction = async ({
   action,
   client,
@@ -154,15 +162,22 @@ export const runManualSyncAction = async ({
   }
 
   const after = await loadStatus();
+  const syncResultError = getSyncResultError(result);
 
   await safelyRecordSyncHistory(() =>
     finishSyncHistoryRun({
       authState: getSyncHistoryAuthState(after),
+      error: syncResultError,
       pendingAfter: after.pendingCount ?? null,
       result,
       run: historyRun,
+      status: syncResultError ? 'failed' : null,
     }),
   );
+
+  if (syncResultError) {
+    throw new Error(syncResultError);
+  }
 
   return {
     after,
@@ -179,6 +194,8 @@ export default function useSyncCenter({ autoLoad = true, client } = {}) {
   const [error, setError] = useState(null);
   const [failedCount, setFailedCount] = useState(0);
   const [lastResult, setLastResult] = useState(null);
+  const [integrityReport, setIntegrityReport] = useState(null);
+  const [lastRepairResult, setLastRepairResult] = useState(null);
   const [lastSyncState, setLastSyncState] = useState(null);
   const [loading, setLoading] = useState(Boolean(autoLoad));
   const [pendingCount, setPendingCount] = useState(0);
@@ -256,6 +273,58 @@ export default function useSyncCenter({ autoLoad = true, client } = {}) {
     [applyStatus, client],
   );
 
+  const reviewBackup = useCallback(async () => {
+    setSyncing(true);
+    setError(null);
+
+    try {
+      const before = await loadSyncCenterStatus();
+      const groupId = requireSharedSyncReady(before);
+      const report = await checkSyncIntegrity({
+        client,
+        groupId,
+        verifyRemote: true,
+      });
+
+      setIntegrityReport(report);
+      applyStatus(await loadSyncCenterStatus());
+      return report;
+    } catch (nextError) {
+      const message = getUserSafeSyncError(nextError);
+      setError(message);
+      throw nextError;
+    } finally {
+      setSyncing(false);
+    }
+  }, [applyStatus, client]);
+
+  const repairBackup = useCallback(async () => {
+    setSyncing(true);
+    setError(null);
+
+    try {
+      const before = await loadSyncCenterStatus();
+      const groupId = requireSharedSyncReady(before);
+      const result = await runSyncRepair({
+        client,
+        confirm: true,
+        groupId,
+        scope: SYNC_REPAIR_SCOPES.FULL,
+        verifyRemote: true,
+      });
+
+      setLastRepairResult(result);
+      applyStatus(await loadSyncCenterStatus());
+      return result;
+    } catch (nextError) {
+      const message = getUserSafeSyncError(nextError);
+      setError(message);
+      throw nextError;
+    } finally {
+      setSyncing(false);
+    }
+  }, [applyStatus, client]);
+
   useEffect(() => {
     if (autoLoad) {
       refreshStatus().catch(() => {});
@@ -268,12 +337,16 @@ export default function useSyncCenter({ autoLoad = true, client } = {}) {
     currentWorkspace,
     error,
     failedCount,
+    integrityReport,
+    lastRepairResult,
     lastResult,
     lastSyncState,
     loading,
     pendingCount,
     readiness,
     refreshStatus,
+    repairBackup,
+    reviewBackup,
     runFullSync: () => runAction('full'),
     runPull: () => runAction('pull'),
     runPush: () => runAction('push'),

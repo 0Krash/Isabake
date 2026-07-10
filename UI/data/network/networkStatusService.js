@@ -34,6 +34,29 @@ const setNetworkStatus = (nextStatus = {}) => {
   return currentStatus;
 };
 
+const isSyncUrlConfigState = (networkState) =>
+  networkState === NETWORK_STATES.SYNC_URL_MISSING ||
+  networkState === NETWORK_STATES.SYNC_URL_INVALID;
+
+const reconcileCurrentStatusWithConfig = (options = {}) => {
+  if (!isSyncUrlConfigState(currentStatus.networkState)) {
+    return currentStatus;
+  }
+
+  const { status } = evaluateSyncUrlStatus(options);
+
+  if (isSyncUrlConfigState(status.networkState)) {
+    return currentStatus;
+  }
+
+  currentStatus = {
+    ...status,
+    lastCheckedAt: currentStatus.lastCheckedAt,
+  };
+
+  return currentStatus;
+};
+
 const fetchWithTimeout = async (
   url,
   {
@@ -79,7 +102,8 @@ export const stopNetworkMonitoring = () => {
   monitoring = false;
 };
 
-export const getNetworkStatus = () => currentStatus;
+export const getNetworkStatus = (options = {}) =>
+  reconcileCurrentStatusWithConfig(options);
 
 export const subscribeToNetworkStatus = (listener) => {
   listeners.add(listener);

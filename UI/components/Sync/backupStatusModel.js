@@ -16,6 +16,24 @@ const sanitizeText = (value, fallback = 'Revisa el respaldo e intenta de nuevo.'
   return text.slice(0, 120);
 };
 
+const getFriendlyFailureDescription = (value) => {
+  const text = String(value || '').trim();
+
+  if (text === 'sync_timeout') {
+    return 'La sincronización tardó demasiado. Intenta de nuevo.';
+  }
+
+  if (text === 'backend_unreachable' || text === 'network_error') {
+    return 'Tus cambios siguen guardados en este dispositivo.';
+  }
+
+  if (text === 'request_aborted') {
+    return 'La sincronización se detuvo. Intenta de nuevo.';
+  }
+
+  return sanitizeText(text);
+};
+
 const toDate = (value) => {
   const date = value ? new Date(value) : null;
 
@@ -217,16 +235,14 @@ export const getBackupStatus = ({
       secondaryActionLabel: null,
       showInMainScreens: true,
       statusKey: 'backend_unreachable',
-      title: 'No se pudo conectar con el servidor',
+      title: 'Sin conexión con el servidor',
       tone: 'warning',
     };
   }
 
   if (
     effectiveNetworkState === 'sync_url_missing' ||
-    effectiveNetworkState === 'sync_url_invalid' ||
-    autoSyncStateKey === 'sync_url_missing' ||
-    autoSyncStateKey === 'sync_url_invalid'
+    effectiveNetworkState === 'sync_url_invalid'
   ) {
     return {
       description: 'Falta configurar el servidor de respaldo.',
@@ -239,15 +255,30 @@ export const getBackupStatus = ({
     };
   }
 
+  if (isAutoSyncState(autoSyncState, ['backoff'])) {
+    return {
+      description: 'Se intentará de nuevo más tarde.',
+      primaryActionLabel: null,
+      secondaryActionLabel: null,
+      showInMainScreens: true,
+      statusKey: 'failed',
+      title: 'No se pudo respaldar',
+      tone: 'error',
+    };
+  }
+
   if (
     failedCount > 0 ||
     latestSyncHistory?.status === 'failed' ||
-    isAutoSyncState(autoSyncState, ['failed', 'backoff'])
+    isAutoSyncState(autoSyncState, ['failed'])
   ) {
     return {
-      description: isAutoSyncState(autoSyncState, ['failed', 'backoff'])
-        ? 'Se intentará de nuevo más tarde.'
-        : sanitizeText(latestSyncHistory?.safeErrorMessage),
+      description: getFriendlyFailureDescription(
+        autoSyncState?.lastErrorCode ||
+          autoSyncState?.lastErrorMessage ||
+          latestSyncHistory?.errorCode ||
+          latestSyncHistory?.safeErrorMessage,
+      ),
       primaryActionLabel: null,
       secondaryActionLabel: null,
       showInMainScreens: true,
@@ -327,6 +358,18 @@ export const getBackupStatus = ({
     if (autoSyncStateKey === 'cooldown') {
       return {
         description: 'Se respaldarán después de la pausa automática.',
+        primaryActionLabel: null,
+        secondaryActionLabel: null,
+        showInMainScreens: true,
+        statusKey: 'pending',
+        title: 'Cambios pendientes',
+        tone: 'info',
+      };
+    }
+
+    if (autoSyncStateKey === 'failed') {
+      return {
+        description: 'Puedes intentar sincronizar ahora.',
         primaryActionLabel: null,
         secondaryActionLabel: null,
         showInMainScreens: true,

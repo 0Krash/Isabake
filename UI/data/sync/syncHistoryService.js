@@ -5,21 +5,31 @@ import {
   getRecentSyncHistory,
   getSyncHistoryCount,
   insertSyncHistoryRecord,
+  recoverStartedSyncHistoryOlderThan,
   updateSyncHistoryRecord,
 } from './syncHistoryRepository';
 
 const DEFAULT_KEEP_LATEST = 100;
+export const DEFAULT_STALE_SYNC_HISTORY_MS = 2 * 60 * 1000;
 const SAFE_ERROR_CODES = new Set([
   'auth_required',
+  'auto_sync_disabled',
   'backend_unreachable',
   'conflict_detected',
+  'conflicts_pending',
   'groupId_required',
   'local_only',
   'local_only_mode',
   'membership_required',
+  'no_auth',
+  'no_pending_outbox',
+  'no_shared_workspace',
+  'no_shared_workspace_after_login',
   'network_error',
   'network_offline',
+  'request_aborted',
   'session_expired',
+  'sync_timeout',
   'sync_url_invalid',
   'sync_url_missing',
   'unknown_sync_error',
@@ -83,6 +93,20 @@ export const sanitizeSyncHistoryError = (error) => {
     return {
       errorCode: 'network_error',
       safeErrorMessage: 'network_error',
+    };
+  }
+
+  if (/timeout|timed out|tard[oó] demasiado|sync_timeout/i.test(rawMessage)) {
+    return {
+      errorCode: 'sync_timeout',
+      safeErrorMessage: 'La sincronizacion tardo demasiado.',
+    };
+  }
+
+  if (/abort|request_aborted|AbortError/i.test(rawMessage)) {
+    return {
+      errorCode: 'request_aborted',
+      safeErrorMessage: 'request_aborted',
     };
   }
 
@@ -197,6 +221,8 @@ export const startSyncHistoryRun = async ({
   triggerSource = 'manual',
   workspaceName = null,
 } = {}) => {
+  await recoverStaleSyncHistoryRuns().catch(() => null);
+
   const timestamp = nowIso();
   const runId = createLocalId('sync_run');
   const record = {
@@ -218,6 +244,21 @@ export const startSyncHistoryRun = async ({
   await insertSyncHistoryRecord(record);
   await clearOldSyncHistory({ keepLatest: DEFAULT_KEEP_LATEST });
   return record;
+};
+
+export const recoverStaleSyncHistoryRuns = async ({
+  olderThanMs = DEFAULT_STALE_SYNC_HISTORY_MS,
+  now = Date.now(),
+} = {}) => {
+  const finishedAt = new Date(now).toISOString();
+  const olderThanIso = new Date(now - olderThanMs).toISOString();
+
+  return recoverStartedSyncHistoryOlderThan({
+    errorCode: 'sync_timeout',
+    finishedAt,
+    olderThanIso,
+    safeErrorMessage: 'La sincronizacion tardo demasiado.',
+  });
 };
 
 export const finishSyncHistoryRun = async ({
@@ -311,6 +352,7 @@ export default {
   getSyncHistoryCount,
   getSyncHistoryWorkspaceName,
   recordSkippedSyncRun,
+  recoverStaleSyncHistoryRuns,
   safelyRecordSyncHistory,
   sanitizeSyncHistoryError,
   startSyncHistoryRun,

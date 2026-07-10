@@ -1,21 +1,26 @@
 import { API_HOST, URL_Sync } from '@env';
 
+export const DEFAULT_SYNC_REQUEST_TIMEOUT_MS = 25 * 1000;
+
 const trimTrailingSlash = (value) => String(value || '').trim().replace(/\/+$/, '');
 
 const getEnv = () =>
   typeof process !== 'undefined' && process.env ? process.env : {};
 
 export const getSyncBaseUrl = (options = {}) => {
-  if (Object.prototype.hasOwnProperty.call(options, 'baseUrl')) {
+  if (
+    Object.prototype.hasOwnProperty.call(options, 'baseUrl') &&
+    options.baseUrl !== undefined
+  ) {
     return trimTrailingSlash(options.baseUrl);
   }
 
   const environment = getEnv();
 
   return trimTrailingSlash(
-    URL_Sync ||
-      environment.EXPO_PUBLIC_SYNC_API_URL ||
+    environment.EXPO_PUBLIC_SYNC_API_URL ||
       environment.EXPO_PUBLIC_API_URL ||
+      URL_Sync ||
       API_HOST ||
       '',
   );
@@ -52,6 +57,7 @@ export const validateSyncConfig = (options = {}) => {
 };
 
 export default {
+  DEFAULT_SYNC_REQUEST_TIMEOUT_MS,
   getSyncBaseUrl,
   validateSyncConfig,
 };

@@ -13,11 +13,16 @@ jest.mock('./authTokenStore', () => {
   };
 });
 
+jest.mock('../sync/postLoginSyncBootstrapRequest', () => ({
+  requestPostLoginSyncBootstrap: jest.fn(),
+}));
+
 import {
   clearStoredAuthSession,
   loadAuthSession,
   saveAuthSession,
 } from './authTokenStore';
+import { requestPostLoginSyncBootstrap } from '../sync/postLoginSyncBootstrapRequest';
 import {
   getFreshAuthHeaders,
   getAuthHeaders,
@@ -55,6 +60,11 @@ const authResponse = {
   },
 };
 
+const flushPostLoginBootstrap = () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
 describe('authService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -90,6 +100,8 @@ describe('authService', () => {
       password: 'password123',
     });
     expect(saveAuthSession).toHaveBeenCalled();
+    await flushPostLoginBootstrap();
+    expect(requestPostLoginSyncBootstrap).toHaveBeenCalledWith('login_success');
   });
 
   test('login stores session and exposes only bearer auth header', async () => {
@@ -111,6 +123,8 @@ describe('authService', () => {
       email: 'ana@example.test',
       password: 'password123',
     });
+    await flushPostLoginBootstrap();
+    expect(requestPostLoginSyncBootstrap).toHaveBeenCalledWith('login_success');
   });
 
   test('loads and clears session without deleting local data', async () => {

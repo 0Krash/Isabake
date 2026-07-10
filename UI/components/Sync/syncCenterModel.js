@@ -66,6 +66,14 @@ export const getUserSafeSyncError = (error) => {
     return 'session_expired';
   }
 
+  if (message.includes('sync_timeout')) {
+    return 'La sincronizacion tardo demasiado. Intenta de nuevo.';
+  }
+
+  if (message.includes('request_aborted')) {
+    return 'La sincronizacion se detuvo. Intenta de nuevo.';
+  }
+
   if (message.includes('workspace_membership_required')) {
     return 'workspace_membership_required';
   }
@@ -77,7 +85,11 @@ export const getUserSafeSyncError = (error) => {
   if (
     message.includes('Network') ||
     message.includes('fetch') ||
+    message.includes('backend_unreachable') ||
+    message.includes('network_error') ||
     message.includes('Sync API URL') ||
+    message.includes('sync_url_missing') ||
+    message.includes('sync_url_invalid') ||
     message.includes('Auth API URL')
   ) {
     return 'network_or_backend_unavailable';

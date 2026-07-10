@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -101,6 +102,27 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
     const status = await refreshNetworkStatus();
     setNetworkStatus(status);
     await syncCenter.refreshStatus({ recordHistory: true });
+  };
+
+  const confirmRepairBackup = () => {
+    Alert.alert(
+      'Reparar respaldo',
+      'Se reintentara respaldar registros locales con estado de sincronizacion incompleto. No se borraran datos locales.',
+      [
+        {
+          style: 'cancel',
+          text: 'Cancelar',
+        },
+        {
+          onPress: () =>
+            runAction(
+              syncCenter.repairBackup,
+              'Respaldo reparado. Sincroniza ahora para enviar los cambios.',
+            ),
+          text: 'Reparar',
+        },
+      ],
+    );
   };
 
   useEffect(() => {
@@ -281,6 +303,25 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
             >
               Recibir cambios
             </AppButton>
+            <AppButton
+              disabled={!canRunSharedSync}
+              onPress={() =>
+                runAction(
+                  syncCenter.reviewBackup,
+                  'Revision de respaldo finalizada.',
+                )
+              }
+              variant="secondary"
+            >
+              Revisar respaldo
+            </AppButton>
+            <AppButton
+              disabled={!canRunSharedSync}
+              onPress={confirmRepairBackup}
+              variant="secondary"
+            >
+              Reparar respaldo
+            </AppButton>
           </>
         ) : null}
         {onOpenConflicts ? (
@@ -311,6 +352,30 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
       {message ? (
         <Text style={[styles.message, { color: colors.primaryText }]}>
           {message}
+        </Text>
+      ) : null}
+      {syncCenter.integrityReport ? (
+        <AppCard>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            Revision de respaldo
+          </Text>
+          <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+            Documentos revisados: {syncCenter.integrityReport.localDocumentCount}
+          </Text>
+          <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+            Pendientes: {syncCenter.integrityReport.pendingOutboxCount}
+          </Text>
+          <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+            Problemas detectados: {syncCenter.integrityReport.issues?.length || 0}
+          </Text>
+          <Text style={[styles.summaryLine, { color: colors.textSecondary }]}>
+            Reparables: {syncCenter.integrityReport.repairableCount || 0}
+          </Text>
+        </AppCard>
+      ) : null}
+      {syncCenter.lastRepairResult ? (
+        <Text style={[styles.message, { color: colors.primaryText }]}>
+          Reparados: {syncCenter.lastRepairResult.repairedCount || 0}
         </Text>
       ) : null}
     </AppScreen>

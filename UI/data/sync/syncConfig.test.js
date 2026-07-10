@@ -15,6 +15,14 @@ describe('syncConfig', () => {
     });
   });
 
+  test('ignores undefined baseUrl override and falls back to env config', () => {
+    expect(validateSyncConfig({ baseUrl: undefined })).toEqual({
+      baseUrl: expect.stringMatching(/^https?:\/\//),
+      error: null,
+      ok: true,
+    });
+  });
+
   test('rejects invalid sync base URL', () => {
     expect(validateSyncConfig({ baseUrl: 'not a url' })).toEqual({
       baseUrl: 'not a url',

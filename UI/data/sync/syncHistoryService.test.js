@@ -8,12 +8,16 @@ jest.mock('./syncHistoryRepository', () => ({
   getRecentSyncHistory: jest.fn(),
   getSyncHistoryCount: jest.fn(),
   insertSyncHistoryRecord: jest.fn(async (record) => record),
+  recoverStartedSyncHistoryOlderThan: jest.fn(async () => ({
+    recoveredCount: 0,
+  })),
   updateSyncHistoryRecord: jest.fn(),
 }));
 
 import {
   clearOldSyncHistory,
   insertSyncHistoryRecord,
+  recoverStartedSyncHistoryOlderThan,
   updateSyncHistoryRecord,
 } from './syncHistoryRepository';
 import {
@@ -21,6 +25,7 @@ import {
   getSyncHistoryAuthState,
   getSyncHistoryWorkspaceName,
   recordSkippedSyncRun,
+  recoverStaleSyncHistoryRuns,
   sanitizeSyncHistoryError,
   startSyncHistoryRun,
   summarizeSyncHistoryResult,
@@ -43,6 +48,14 @@ describe('syncHistoryService', () => {
     expect(sanitizeSyncHistoryError('Sync API URL is not configured')).toEqual({
       errorCode: 'backend_unreachable',
       safeErrorMessage: 'backend_unreachable',
+    });
+    expect(sanitizeSyncHistoryError('sync_timeout')).toEqual({
+      errorCode: 'sync_timeout',
+      safeErrorMessage: 'sync_timeout',
+    });
+    expect(sanitizeSyncHistoryError('AbortError')).toEqual({
+      errorCode: 'request_aborted',
+      safeErrorMessage: 'request_aborted',
     });
     expect(sanitizeSyncHistoryError('unexpected stack trace details')).toEqual({
       errorCode: 'unknown_sync_error',
@@ -146,6 +159,26 @@ describe('syncHistoryService', () => {
       }),
     );
     expect(clearOldSyncHistory).toHaveBeenCalledWith({ keepLatest: 100 });
+  });
+
+  test('recovers stale started sync history runs safely', async () => {
+    recoverStartedSyncHistoryOlderThan.mockResolvedValueOnce({
+      recoveredCount: 2,
+    });
+
+    await expect(
+      recoverStaleSyncHistoryRuns({
+        now: Date.parse('2026-01-01T00:05:00.000Z'),
+        olderThanMs: 120000,
+      }),
+    ).resolves.toEqual({ recoveredCount: 2 });
+
+    expect(recoverStartedSyncHistoryOlderThan).toHaveBeenCalledWith({
+      errorCode: 'sync_timeout',
+      finishedAt: '2026-01-01T00:05:00.000Z',
+      olderThanIso: '2026-01-01T00:03:00.000Z',
+      safeErrorMessage: 'La sincronizacion tardo demasiado.',
+    });
   });
 
   test('records skipped sync safely', async () => {

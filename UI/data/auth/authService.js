@@ -5,6 +5,7 @@ import {
   loadAuthSession,
   saveAuthSession,
 } from './authTokenStore';
+import { requestPostLoginSyncBootstrap } from '../sync/postLoginSyncBootstrapRequest';
 
 const REFRESH_LEEWAY_MS = 60 * 1000;
 
@@ -104,6 +105,7 @@ export const register = async ({ client, ...payload } = {}) => {
 
   await saveAuthSession(session);
   await setAuthSession(session);
+  requestPostLoginSyncBootstrap('login_success');
   return session;
 };
 
@@ -117,6 +119,7 @@ export const login = async ({ client, ...payload } = {}) => {
 
   await saveAuthSession(session);
   await setAuthSession(session);
+  requestPostLoginSyncBootstrap('login_success');
   return session;
 };
 

@@ -519,4 +519,40 @@ describe('syncService safe failures', () => {
     expect(result.ok).toBe(true);
     expect(calls).toEqual(['push', 'pull']);
   });
+
+  test('runSync returns safe sync_timeout failures for push and pull', async () => {
+    getPendingOutboxEvents.mockResolvedValue([
+      {
+        collection: 'recipes',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        documentId: 'recipe_local_1',
+        id: 'outbox_1',
+        operation: 'create',
+        payload: {},
+      },
+    ]);
+    getDocument.mockResolvedValue({
+      collection: 'recipes',
+      data: { name: 'Pastel' },
+      groupId: 'group_1',
+      id: 'recipe_local_1',
+      localVersion: 1,
+      syncStatus: 'pending',
+    });
+    const client = {
+      pullChanges: jest.fn(async () => {
+        throw new Error('sync_timeout');
+      }),
+      pushChanges: jest.fn(async () => {
+        throw new Error('sync_timeout');
+      }),
+    };
+
+    const result = await runSync({ client, groupId: 'group_1' });
+
+    expect(result.ok).toBe(false);
+    expect(result.push.error).toBe('sync_timeout');
+    expect(result.pull.error).toBe('sync_timeout');
+    expect(String(result.push.error)).not.toMatch(/Bearer|Authorization|events/i);
+  });
 });

@@ -9,7 +9,7 @@ export {
   storeLastSyncCursor,
 } from './syncService';
 
-export { createSyncClient } from './syncClient';
+export { SyncRequestError, createSyncClient } from './syncClient';
 export {
   getConflictResolutionCapabilities,
   getConflictDetails,
@@ -26,18 +26,36 @@ export {
   resolveConflictPreferLocal,
   resolveConflictPreferRemote,
 } from './conflictService';
-export { getSyncBaseUrl, validateSyncConfig } from './syncConfig';
 export {
+  checkSyncIntegrity,
+  previewSyncRepair,
+  repairMissingBackendDocuments,
+  runSyncRepair,
+  SYNC_REPAIR_SCOPES,
+} from './syncIntegrityService';
+export {
+  DEFAULT_SYNC_REQUEST_TIMEOUT_MS,
+  getSyncBaseUrl,
+  validateSyncConfig,
+} from './syncConfig';
+export {
+  clearAutoSyncDecisionTraceForTests,
+  getAutoSyncDecisionTrace,
   getAutoSyncDiagnostics,
   getAutoSyncState,
   handleAutoSyncAppStateChange,
   initializeAutoSync,
   notifyAutoSyncNeeded,
+  recoverStaleAutoSyncState,
   runAutoSyncNow,
   setAutoSyncEnabled,
   startAutoSync,
   stopAutoSync,
 } from './autoSyncService';
+export {
+  runPostLoginSyncBootstrap,
+  runPostLoginSyncBootstrapCheck,
+} from './postLoginSyncBootstrap';
 export {
   clearOldSyncHistory,
   finishSyncHistoryRun,
@@ -45,6 +63,7 @@ export {
   getRecentSyncHistory,
   getSyncHistoryCount,
   recordSkippedSyncRun,
+  recoverStaleSyncHistoryRuns,
   sanitizeSyncHistoryError,
   startSyncHistoryRun,
 } from './syncHistoryService';

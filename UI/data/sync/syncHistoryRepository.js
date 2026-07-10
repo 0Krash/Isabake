@@ -173,6 +173,47 @@ export const getSyncHistoryCount = async (options = {}) => {
   return Number(row?.count || 0);
 };
 
+export const recoverStartedSyncHistoryOlderThan = async ({
+  errorCode = 'sync_timeout',
+  finishedAt = nowIso(),
+  olderThanIso,
+  safeErrorMessage = 'La sincronizacion tardo demasiado.',
+  db,
+} = {}) => {
+  if (!olderThanIso) {
+    return {
+      recoveredCount: 0,
+    };
+  }
+
+  const database = db || (await initDatabase());
+  const result = await database.runAsync(
+    `
+      UPDATE sync_history
+      SET status = 'failed',
+          finishedAt = ?,
+          durationMs = MAX(0, strftime('%s', ?) * 1000 - strftime('%s', startedAt) * 1000),
+          errorCode = ?,
+          safeErrorMessage = ?,
+          updatedAt = ?
+      WHERE status = 'started'
+        AND startedAt < ?;
+    `,
+    [
+      finishedAt,
+      finishedAt,
+      errorCode,
+      safeErrorMessage,
+      finishedAt,
+      olderThanIso,
+    ],
+  );
+
+  return {
+    recoveredCount: Number(result?.changes || 0),
+  };
+};
+
 export const clearOldSyncHistory = async ({ keepLatest = DEFAULT_HISTORY_LIMIT, db } = {}) => {
   const database = db || (await initDatabase());
 
@@ -196,5 +237,6 @@ export default {
   getRecentSyncHistory,
   getSyncHistoryCount,
   insertSyncHistoryRecord,
+  recoverStartedSyncHistoryOlderThan,
   updateSyncHistoryRecord,
 };
