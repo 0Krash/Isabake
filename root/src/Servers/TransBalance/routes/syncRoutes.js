@@ -8,5 +8,6 @@ router.use(requireAuth);
 
 router.route('/push').post(syncController.pushChanges);
 router.route('/pull').get(syncController.pullChanges);
+router.route('/verify-documents').post(syncController.verifyDocuments);
 
 module.exports = router;

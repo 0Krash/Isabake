@@ -23,6 +23,26 @@ class MongooseSyncRepository {
     );
   }
 
+  async findDocumentsByRemoteIds({ documents = [], groupId }) {
+    const clauses = documents
+      .filter((document) => document.collection && document.remoteId)
+      .map((document) => ({
+        collection: document.collection,
+        remoteId: document.remoteId,
+      }));
+
+    if (!clauses.length) {
+      return [];
+    }
+
+    return (
+      await SyncDocument.find({
+        groupId,
+        $or: clauses,
+      })
+    ).map(toPlainObject);
+  }
+
   async getNextServerVersion(groupId) {
     const latestDocument = await SyncDocument.findOne({ groupId }).sort({
       serverVersion: -1,

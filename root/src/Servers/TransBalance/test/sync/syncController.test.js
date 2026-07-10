@@ -1,11 +1,13 @@
 const mockPushChanges = jest.fn();
 const mockPullChanges = jest.fn();
+const mockVerifyDocuments = jest.fn();
 const mockAssertCanSyncWorkspace = jest.fn();
 
 jest.mock('../../services/syncService', () => ({
   SyncService: jest.fn(() => ({
     pullChanges: mockPullChanges,
     pushChanges: mockPushChanges,
+    verifyDocuments: mockVerifyDocuments,
   })),
 }));
 
@@ -153,5 +155,60 @@ describe('syncController direct handlers', () => {
       cursor: '5',
       groupId: 'group_1',
     });
+  });
+
+  test('verifyDocuments requires membership and returns safe results', async () => {
+    mockVerifyDocuments.mockResolvedValueOnce({
+      groupId: 'group_1',
+      results: [
+        {
+          collection: 'recipes',
+          deleted: false,
+          exists: true,
+          remoteId: 'remote_1',
+          serverVersion: 1,
+          status: 'ok',
+        },
+      ],
+    });
+    const res = createResponse();
+
+    await invoke(
+      syncController.verifyDocuments,
+      {
+        body: {
+          documents: [
+            {
+              collection: 'recipes',
+              remoteId: 'remote_1',
+              serverVersion: 1,
+            },
+          ],
+          groupId: 'group_1',
+        },
+        user: {
+          userId: 'user_1',
+        },
+      },
+      res,
+    );
+
+    expect(mockAssertCanSyncWorkspace).toHaveBeenCalledWith({
+      action: 'pull',
+      groupId: 'group_1',
+      userId: 'user_1',
+    });
+    expect(mockVerifyDocuments).toHaveBeenCalledWith({
+      documents: [
+        {
+          collection: 'recipes',
+          remoteId: 'remote_1',
+          serverVersion: 1,
+        },
+      ],
+      groupId: 'group_1',
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body.results[0].document).toBeUndefined();
   });
 });

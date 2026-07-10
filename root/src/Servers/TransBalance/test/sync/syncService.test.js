@@ -300,3 +300,144 @@ describe('SyncService pull', () => {
     );
   });
 });
+
+describe('SyncService verifyDocuments', () => {
+  test('returns ok for existing document without raw payload', async () => {
+    const repository = new MemorySyncRepository();
+    const service = new SyncService(repository);
+    const created = await push(service, [createEvent()]);
+    const result = await service.verifyDocuments({
+      documents: [
+        {
+          collection: 'recipes',
+          remoteId: created.accepted[0].remoteId,
+          serverVersion: 1,
+        },
+      ],
+      groupId: 'group_a',
+    });
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        collection: 'recipes',
+        deleted: false,
+        exists: true,
+        remoteId: created.accepted[0].remoteId,
+        serverVersion: 1,
+        status: 'ok',
+      }),
+    ]);
+    expect(result.results[0].document).toBeUndefined();
+  });
+
+  test('returns missing for absent document', async () => {
+    const service = new SyncService(new MemorySyncRepository());
+    const result = await service.verifyDocuments({
+      documents: [
+        {
+          collection: 'recipes',
+          remoteId: 'missing_remote',
+          serverVersion: 1,
+        },
+      ],
+      groupId: 'group_a',
+    });
+
+    expect(result.results[0]).toEqual(
+      expect.objectContaining({
+        exists: false,
+        status: 'missing',
+      }),
+    );
+  });
+
+  test('returns deleted for tombstone and stale for older backend version', async () => {
+    const repository = new MemorySyncRepository();
+    const service = new SyncService(repository);
+    const created = await push(service, [createEvent()]);
+    const remoteId = created.accepted[0].remoteId;
+
+    await push(service, [
+      createEvent({
+        baseServerVersion: 1,
+        document: {
+          localId: 'recipe_local_1',
+          remoteId,
+        },
+        eventId: 'delete_event',
+        operation: 'delete',
+      }),
+    ]);
+    await push(service, [
+      createEvent({
+        documentId: 'recipe_local_2',
+        document: {
+          localId: 'recipe_local_2',
+          name: 'Pan',
+        },
+        eventId: 'event_2',
+      }),
+    ]);
+    const staleRemoteId = repository.documents.find(
+      (document) => document.document.localId === 'recipe_local_2',
+    ).remoteId;
+
+    const result = await service.verifyDocuments({
+      documents: [
+        {
+          collection: 'recipes',
+          remoteId,
+          serverVersion: 2,
+        },
+        {
+          collection: 'recipes',
+          remoteId: staleRemoteId,
+          serverVersion: 99,
+        },
+      ],
+      groupId: 'group_a',
+    });
+
+    expect(result.results.map((item) => item.status)).toEqual([
+      'deleted',
+      'stale',
+    ]);
+  });
+
+  test('does not verify documents from another group', async () => {
+    const repository = new MemorySyncRepository();
+    const service = new SyncService(repository);
+    const created = await push(service, [createEvent()]);
+    const result = await service.verifyDocuments({
+      documents: [
+        {
+          collection: 'recipes',
+          remoteId: created.accepted[0].remoteId,
+          serverVersion: 1,
+        },
+      ],
+      groupId: 'group_b',
+    });
+
+    expect(result.results[0].status).toBe('missing');
+  });
+
+  test('returns unknown for malformed verify entries', async () => {
+    const service = new SyncService(new MemorySyncRepository());
+    const result = await service.verifyDocuments({
+      documents: [
+        {
+          collection: 'recipes',
+        },
+      ],
+      groupId: 'group_a',
+    });
+
+    expect(result.results[0]).toEqual(
+      expect.objectContaining({
+        remoteId: null,
+        status: 'unknown',
+      }),
+    );
+  });
+});

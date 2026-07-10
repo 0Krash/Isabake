@@ -65,6 +65,18 @@ const validatePushRequest = ({ deviceId, events, groupId }) => {
   return null;
 };
 
+const validateVerifyDocumentsRequest = ({ documents, groupId }) => {
+  if (!groupId) {
+    return 'groupId_required';
+  }
+
+  if (!Array.isArray(documents)) {
+    return 'documents_array_required';
+  }
+
+  return null;
+};
+
 const validateEvent = (event) => {
   if (!event || typeof event !== 'object') {
     return 'invalid_event';
@@ -267,6 +279,95 @@ class SyncService {
       groupId,
     };
   }
+
+  async verifyDocuments({ documents, groupId } = {}) {
+    const requestError = validateVerifyDocumentsRequest({ documents, groupId });
+
+    if (requestError) {
+      return {
+        error: requestError,
+        groupId,
+        results: [],
+      };
+    }
+
+    const requestedDocuments = documents.map((document) => ({
+      collection: document?.collection ? String(document.collection) : null,
+      remoteId: document?.remoteId ? String(document.remoteId) : null,
+      serverVersion:
+        document?.serverVersion === null || document?.serverVersion === undefined
+          ? null
+          : Number(document.serverVersion),
+    }));
+    const storedDocuments = await this.repository.findDocumentsByRemoteIds({
+      documents: requestedDocuments,
+      groupId,
+    });
+    const storedByKey = new Map(
+      storedDocuments.map((document) => [
+        `${document.collection}:${document.remoteId}`,
+        document,
+      ]),
+    );
+    const results = requestedDocuments.map((document) => {
+      if (!document.collection || !document.remoteId) {
+        return {
+          collection: document.collection,
+          deleted: false,
+          exists: false,
+          remoteId: document.remoteId,
+          serverVersion: null,
+          status: 'unknown',
+        };
+      }
+
+      const storedDocument = storedByKey.get(
+        `${document.collection}:${document.remoteId}`,
+      );
+
+      if (!storedDocument) {
+        return {
+          collection: document.collection,
+          deleted: false,
+          exists: false,
+          remoteId: document.remoteId,
+          serverVersion: null,
+          status: 'missing',
+        };
+      }
+
+      if (storedDocument.deletedAt) {
+        return {
+          collection: document.collection,
+          deleted: true,
+          exists: true,
+          remoteId: document.remoteId,
+          serverVersion: storedDocument.serverVersion || null,
+          status: 'deleted',
+        };
+      }
+
+      const storedVersion = Number(storedDocument.serverVersion || 0);
+      const requestedVersion = Number(document.serverVersion || 0);
+
+      return {
+        collection: document.collection,
+        deleted: false,
+        exists: true,
+        remoteId: document.remoteId,
+        serverVersion: storedDocument.serverVersion || null,
+        status:
+          requestedVersion && storedVersion < requestedVersion
+            ? 'stale'
+            : 'ok',
+      };
+    });
+
+    return {
+      groupId,
+      results,
+    };
+  }
 }
 
 module.exports = {
@@ -275,4 +376,5 @@ module.exports = {
   toPullChange,
   validateEvent,
   validatePushRequest,
+  validateVerifyDocumentsRequest,
 };

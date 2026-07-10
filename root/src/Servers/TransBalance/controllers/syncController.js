@@ -66,3 +66,28 @@ exports.pullChanges = asyncHandler(async (req, res) => {
 
   res.status(200).json(result);
 });
+
+exports.verifyDocuments = asyncHandler(async (req, res) => {
+  const groupId = req.body?.groupId;
+
+  if (!groupId) {
+    return sendBadRequest(res, 'groupId_required');
+  }
+
+  if (!Array.isArray(req.body?.documents)) {
+    return sendBadRequest(res, 'documents_array_required');
+  }
+
+  await workspaceService.assertCanSyncWorkspace({
+    action: 'pull',
+    groupId,
+    userId: req.user?.userId,
+  });
+
+  const result = await syncService.verifyDocuments({
+    documents: req.body.documents,
+    groupId,
+  });
+
+  res.status(200).json(result);
+});

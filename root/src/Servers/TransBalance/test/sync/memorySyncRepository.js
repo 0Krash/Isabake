@@ -24,6 +24,18 @@ class MemorySyncRepository {
     );
   }
 
+  async findDocumentsByRemoteIds({ documents = [], groupId }) {
+    const keys = new Set(
+      documents.map((document) => `${document.collection}:${document.remoteId}`),
+    );
+
+    return this.documents.filter(
+      (document) =>
+        document.groupId === groupId &&
+        keys.has(`${document.collection}:${document.remoteId}`),
+    );
+  }
+
   async getNextServerVersion(groupId) {
     return (
       Math.max(
