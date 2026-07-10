@@ -18,6 +18,7 @@ export { createSecondaryMenuItems };
 export default function AppSecondaryMenu({
   devToolsEnabled = false,
   onClose,
+  onDismiss,
   onSelect,
   visible,
 }) {
@@ -26,7 +27,9 @@ export default function AppSecondaryMenu({
   return (
     <Modal
       animationType="fade"
+      onDismiss={onDismiss}
       onRequestClose={onClose}
+      presentationStyle="overFullScreen"
       transparent
       visible={visible}
     >

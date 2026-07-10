@@ -115,6 +115,7 @@ describe('invitationAcceptModel', () => {
       'pushPendingChanges',
       'pullRemoteChanges',
       'notifyAutoSyncNeeded',
+      'runPostLoginSyncBootstrap',
       'runAutoSyncNow',
     ];
 
@@ -125,6 +126,6 @@ describe('invitationAcceptModel', () => {
     expect(appSource).not.toMatch(
       /runSync\(|pushPendingChanges|pullRemoteChanges/,
     );
-    expect(appSource).toContain("notifyAutoSyncNeeded('connectivity_restored')");
+    expect(appSource).not.toContain('connectivity_restored');
   });
 });

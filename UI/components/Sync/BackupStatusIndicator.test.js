@@ -37,6 +37,6 @@ describe('BackupStatusIndicator integration', () => {
     expect(appSource).not.toMatch(
       /runSync\(|pushPendingChanges|pullRemoteChanges/,
     );
-    expect(appSource).toContain("notifyAutoSyncNeeded('connectivity_restored')");
+    expect(appSource).not.toContain('connectivity_restored');
   });
 });

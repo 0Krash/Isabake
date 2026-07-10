@@ -511,6 +511,7 @@ export default function InventoryScreen({
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deleteIsProcessing, setDeleteIsProcessing] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
+  const [pendingMenuAction, setPendingMenuAction] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [formIsVisible, setFormIsVisible] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -655,10 +656,39 @@ export default function InventoryScreen({
   ]);
 
   const handleOpenStoreManager = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('stores');
+      setMenuIsVisible(false);
+      return;
+    }
+
     setMenuIsVisible(false);
     setTimeout(() => {
       setAddStoreModalIsVisible(true);
     }, 90);
+  };
+
+  const handleOpenAppOptions = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('app-options');
+      setMenuIsVisible(false);
+      return;
+    }
+
+    setMenuIsVisible(false);
+    onOpenAppMenu?.();
+  };
+
+  const handleMenuDismiss = () => {
+    if (pendingMenuAction === 'stores') {
+      setAddStoreModalIsVisible(true);
+    }
+
+    if (pendingMenuAction === 'app-options') {
+      onOpenAppMenu?.();
+    }
+
+    setPendingMenuAction(null);
   };
 
   const openCreateForm = () => {
@@ -1184,11 +1214,9 @@ export default function InventoryScreen({
 
       <TransactionMenu
         isVisible={menuIsVisible}
+        onAfterClose={handleMenuDismiss}
         onClose={() => setMenuIsVisible(false)}
-        onOpenAppOptions={() => {
-          setMenuIsVisible(false);
-          onOpenAppMenu?.();
-        }}
+        onOpenAppOptions={handleOpenAppOptions}
         onOpenStoreManager={handleOpenStoreManager}
       />
 

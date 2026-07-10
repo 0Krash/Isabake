@@ -77,12 +77,15 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
 
 export default function TransactionMenu({
   isVisible,
+  onAfterClose,
   onClose,
+  onDismiss,
   onOpenAppOptions,
   onOpenStoreManager,
 }) {
   const { colorScheme, colors } = useTransactionBalanceTheme();
   const [shouldRender, setShouldRender] = useState(isVisible);
+  const onAfterCloseRef = useRef(onAfterClose);
   const translateX = useRef(new Animated.Value(MENU_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const menuItems = [
@@ -114,6 +117,10 @@ export default function TransactionMenu({
       value: 'Abrir',
     },
   ];
+
+  useEffect(() => {
+    onAfterCloseRef.current = onAfterClose;
+  }, [onAfterClose]);
 
   useEffect(() => {
     if (isVisible) {
@@ -152,6 +159,9 @@ export default function TransactionMenu({
     ]).start(({ finished }) => {
       if (finished) {
         setShouldRender(false);
+        requestAnimationFrame(() => {
+          onAfterCloseRef.current?.();
+        });
       }
     });
   }, [backdropOpacity, isVisible, translateX]);
@@ -163,7 +173,9 @@ export default function TransactionMenu({
   return (
     <Modal
       animationType="none"
+      onDismiss={onDismiss}
       onRequestClose={onClose}
+      presentationStyle="overFullScreen"
       transparent
       visible={shouldRender}
     >

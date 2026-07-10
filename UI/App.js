@@ -1,6 +1,7 @@
 import {
   AppState,
   Linking,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -21,13 +22,10 @@ import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
-import { NETWORK_STATES } from './data/network/networkStatusModel';
 import {
   initializeNetworkStatus,
-  refreshNetworkStatus,
   startNetworkMonitoring,
   stopNetworkMonitoring,
-  subscribeToNetworkStatus,
 } from './data/network/networkStatusService';
 import AppBottomNavigation from './components/AppBottomNavigation';
 import AppSecondaryMenu from './components/AppSecondaryMenu';
@@ -37,7 +35,6 @@ import { initDatabase } from './data/db/database';
 import {
   handleAutoSyncAppStateChange,
   initializeAutoSync,
-  notifyAutoSyncNeeded,
   startAutoSync,
   stopAutoSync,
 } from './data/sync/autoSyncService';
@@ -49,6 +46,7 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
+  const [pendingSecondaryTab, setPendingSecondaryTab] = useState(null);
   const [secondaryMenuVisible, setSecondaryMenuVisible] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
   const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
@@ -88,26 +86,10 @@ export default function App() {
 
     const subscription = AppState.addEventListener('change', (nextState) => {
       handleAutoSyncAppStateChange(nextState);
-
-      if (nextState === 'active') {
-        refreshNetworkStatus()
-          .then((status) => {
-            if (status.networkState === NETWORK_STATES.BACKEND_REACHABLE) {
-              notifyAutoSyncNeeded('connectivity_restored');
-            }
-          })
-          .catch(() => {});
-      }
-    });
-    const unsubscribeNetworkStatus = subscribeToNetworkStatus((status) => {
-      if (status.networkState === NETWORK_STATES.BACKEND_REACHABLE) {
-        notifyAutoSyncNeeded('connectivity_restored');
-      }
     });
 
     return () => {
       subscription?.remove?.();
-      unsubscribeNetworkStatus?.();
       stopNetworkMonitoring();
       stopAutoSync();
     };
@@ -222,9 +204,23 @@ export default function App() {
   };
 
   const openSecondaryScreen = (tabKey) => {
-    setSecondaryMenuVisible(false);
     setSaleRecipe(null);
-    setActiveTab(tabKey);
+
+    if (Platform.OS !== 'ios') {
+      setSecondaryMenuVisible(false);
+      setActiveTab(tabKey);
+      return;
+    }
+
+    setPendingSecondaryTab(tabKey);
+    setSecondaryMenuVisible(false);
+  };
+
+  const handleSecondaryMenuDismiss = () => {
+    if (pendingSecondaryTab) {
+      setActiveTab(pendingSecondaryTab);
+      setPendingSecondaryTab(null);
+    }
   };
 
   if (!dbReady || dbError) {
@@ -263,6 +259,7 @@ export default function App() {
         <AppSecondaryMenu
           devToolsEnabled={devSyncDiagnosticsEnabled}
           onClose={() => setSecondaryMenuVisible(false)}
+          onDismiss={handleSecondaryMenuDismiss}
           onSelect={openSecondaryScreen}
           visible={secondaryMenuVisible && !saleRecipe}
         />

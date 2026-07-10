@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Keyboard, StyleSheet, View, Text } from 'react-native';
+import { Keyboard, Platform, StyleSheet, View, Text } from 'react-native';
 
 import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
@@ -26,6 +26,7 @@ const TransactionBalanceScreen = ({
     useState(false);
   const [deleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
     useState(false);
+  const [pendingMenuAction, setPendingMenuAction] = useState(null);
   const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
     useState(false);
   const [transactionMenuIsVisible, setTransactionMenuIsVisible] =
@@ -48,10 +49,39 @@ const TransactionBalanceScreen = ({
   };
 
   const handleOpenStoreManager = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('stores');
+      setTransactionMenuIsVisible(false);
+      return;
+    }
+
     setTransactionMenuIsVisible(false);
     setTimeout(() => {
       setAddStoreModalIsVisible(true);
     }, 90);
+  };
+
+  const handleOpenAppOptions = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('app-options');
+      setTransactionMenuIsVisible(false);
+      return;
+    }
+
+    setTransactionMenuIsVisible(false);
+    onOpenAppMenu?.();
+  };
+
+  const handleMenuDismiss = () => {
+    if (pendingMenuAction === 'stores') {
+      setAddStoreModalIsVisible(true);
+    }
+
+    if (pendingMenuAction === 'app-options') {
+      onOpenAppMenu?.();
+    }
+
+    setPendingMenuAction(null);
   };
 
   return (
@@ -92,11 +122,9 @@ const TransactionBalanceScreen = ({
       />
       <TransactionMenu
         isVisible={transactionMenuIsVisible}
+        onAfterClose={handleMenuDismiss}
         onClose={() => setTransactionMenuIsVisible(false)}
-        onOpenAppOptions={() => {
-          setTransactionMenuIsVisible(false);
-          onOpenAppMenu?.();
-        }}
+        onOpenAppOptions={handleOpenAppOptions}
         onOpenStoreManager={handleOpenStoreManager}
       />
       {addTransactionModalIsVisible && (

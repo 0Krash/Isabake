@@ -268,6 +268,7 @@ export default function RecipeBookScreen({
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
+  const [pendingMenuAction, setPendingMenuAction] = useState(null);
   const [recipeName, setRecipeName] = useState('');
   const [recipeNameIsFocused, setRecipeNameIsFocused] = useState(false);
   const [recipeType, setRecipeType] = useState('');
@@ -845,10 +846,39 @@ export default function RecipeBookScreen({
   }, [modalIsVisible]);
 
   const handleOpenStoreManager = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('stores');
+      setMenuIsVisible(false);
+      return;
+    }
+
     setMenuIsVisible(false);
     setTimeout(() => {
       setAddStoreModalIsVisible(true);
     }, 90);
+  };
+
+  const handleOpenAppOptions = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('app-options');
+      setMenuIsVisible(false);
+      return;
+    }
+
+    setMenuIsVisible(false);
+    onOpenAppMenu?.();
+  };
+
+  const handleMenuDismiss = () => {
+    if (pendingMenuAction === 'stores') {
+      setAddStoreModalIsVisible(true);
+    }
+
+    if (pendingMenuAction === 'app-options') {
+      onOpenAppMenu?.();
+    }
+
+    setPendingMenuAction(null);
   };
 
   const handleOpenInventoryFromPicker = () => {
@@ -1885,11 +1915,9 @@ export default function RecipeBookScreen({
 
       <TransactionMenu
         isVisible={menuIsVisible}
+        onAfterClose={handleMenuDismiss}
         onClose={() => setMenuIsVisible(false)}
-        onOpenAppOptions={() => {
-          setMenuIsVisible(false);
-          onOpenAppMenu?.();
-        }}
+        onOpenAppOptions={handleOpenAppOptions}
         onOpenStoreManager={handleOpenStoreManager}
       />
 
