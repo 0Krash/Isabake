@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
+  BackHandler,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -11,657 +12,423 @@ import AppHeader from '../../components/layout/AppHeader';
 import AppScreen from '../../components/layout/AppScreen';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { refreshNetworkStatus } from '../../data/network/networkStatusService';
+import {
+  isInvitationAttentionSeen,
+  markInvitationAttentionSeen,
+} from '../../data/workspace/invitationAttentionState';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
+  BusinessContextCard,
+  BusinessShareTabs,
+  InvitationsTab,
+  TeamTab,
+  WorkspacesTab,
+} from './WorkspaceScreenParts';
+import {
+  dedupeWorkspaceDisplayList,
   formatWorkspaceError,
-  formatWorkspaceName,
-  formatWorkspaceRole,
-  getInvitationActionState,
-  getWorkspaceEmptyState,
+  getInvitationFormState,
+  getVisibleMembersForDisplay,
   getWorkspaceListKey,
   getWorkspaceModeLabel,
-  isValidInvitationEmail,
-  sanitizeInvitationForDisplay,
-  sanitizeMemberForDisplay,
+  getWorkspaceNameFormState,
 } from './workspaceUiModel';
 
-const roleOptions = ['owner', 'admin', 'member', 'viewer'];
-const statusOptions = ['active', 'invited', 'removed'];
 const adminRoles = new Set(['owner', 'admin']);
 
-export { getWorkspaceListKey, getWorkspaceModeLabel, sanitizeMemberForDisplay };
+export { getWorkspaceListKey, getWorkspaceModeLabel };
 
-export default function WorkspaceScreen({ onOpenAccount }) {
+export default function WorkspaceScreen({ onBack }) {
   const { colors } = useTransactionBalanceTheme();
   const workspaceState = useWorkspaces();
-  const [adminToolsOpen, setAdminToolsOpen] = useState(false);
-  const [memberUserId, setMemberUserId] = useState('');
+  const [activeTab, setActiveTab] = useState('team');
   const [message, setMessage] = useState(null);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
-  const [role, setRole] = useState('member');
-  const [status, setStatus] = useState('active');
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
+  const [workspaceMenuKey, setWorkspaceMenuKey] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const currentWorkspace = workspaceState.currentWorkspace;
   const currentRole = currentWorkspace?.workspaceRole || 'local';
   const canAdminWorkspace = adminRoles.has(currentRole);
+  const visibleMembers = getVisibleMembersForDisplay(workspaceState.members);
+  const visibleWorkspaces = dedupeWorkspaceDisplayList(
+    workspaceState.workspaces,
+    currentWorkspace,
+  );
+  const showInvitationAttention =
+    activeTab !== 'invitations' &&
+    workspaceState.myInvitations.length > 0 &&
+    !isInvitationAttentionSeen(workspaceState.myInvitations);
 
   useEffect(() => {
-    if (currentWorkspace?.isRemote) {
-      workspaceState.refreshMembers(currentWorkspace).catch(() => {});
-      workspaceState.refreshInvitations(currentWorkspace).catch(() => {});
+    if (!currentWorkspace?.isRemote || !currentWorkspace.groupId) {
+      return;
     }
-  }, [currentWorkspace?.groupId]);
+
+    if (activeTab === 'team') {
+      workspaceState.refreshMembers(currentWorkspace).catch(() => {});
+      return;
+    }
+
+    if (activeTab === 'invitations') {
+      workspaceState.refreshMyInvitations().catch(() => {});
+      workspaceState.refreshMembers(currentWorkspace).catch(() => {});
+
+      if (canAdminWorkspace) {
+        workspaceState.refreshInvitations(currentWorkspace).catch(() => {});
+      }
+    }
+  }, [activeTab, canAdminWorkspace, currentWorkspace?.groupId]);
+
+  useEffect(() => {
+    setWorkspaceNameDraft(currentWorkspace?.name || '');
+  }, [currentWorkspace?.groupId, currentWorkspace?.name]);
+
+  useEffect(() => {
+    if (activeTab === 'invitations' && workspaceState.myInvitations.length) {
+      markInvitationAttentionSeen(workspaceState.myInvitations);
+    }
+  }, [activeTab, workspaceState.myInvitations]);
+
+  useEffect(() => {
+    if (activeTab !== 'workspaces') {
+      setWorkspaceMenuKey(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!onBack) {
+      return undefined;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        onBack();
+        return true;
+      },
+    );
+
+    return () => subscription.remove();
+  }, [onBack]);
 
   const runAction = async (action, successMessage) => {
     setMessage(null);
 
     try {
-      await action();
+      const result = await action();
       setMessage(successMessage);
+      return { ok: true, result };
     } catch (error) {
       setMessage(formatWorkspaceError(error));
+      return { error, ok: false };
     }
   };
 
-  const createWorkspace = () =>
-    runAction(
-      () => workspaceState.createWorkspace({ name: newWorkspaceName }),
-      'Workspace compartido creado y seleccionado. Sync sigue manual.',
-    );
+  const handlePullToSync = useCallback(async () => {
+    setRefreshing(true);
+    setMessage(null);
 
-  const disconnect = () =>
-    runAction(
-      () => workspaceState.disconnectLocalWorkspace({ leaveRemote: false }),
-      'Modo local activado. No se elimino ningun dato local.',
-    );
+    try {
+      const [workspaceResult] = await Promise.all([
+        workspaceState.refreshWorkspaces(),
+        refreshNetworkStatus(),
+      ]);
+      const nextWorkspace =
+        workspaceResult?.currentWorkspace || workspaceState.currentWorkspace;
 
-  const leaveWorkspace = () =>
-    runAction(
-      () => workspaceState.leaveWorkspace({ leaveRemote: true }),
-      'Saliste del workspace compartido. Los datos locales permanecen.',
-    );
+      if (nextWorkspace?.isRemote) {
+        await Promise.allSettled([
+          workspaceState.refreshMembers(nextWorkspace),
+          workspaceState.refreshInvitations(nextWorkspace),
+        ]);
+      }
 
-  const addMember = () =>
-    runAction(
-      () =>
-        workspaceState.addMember({
-          role,
-          status,
-          userId: memberUserId,
-        }),
-      'Miembro actualizado.',
-    );
+      setMessage('Compartir proyecto actualizado.');
+    } catch (error) {
+      setMessage(formatWorkspaceError(error));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [workspaceState]);
 
-  const createInvitation = () => {
-    if (!isValidInvitationEmail(inviteEmail)) {
-      setMessage('Correo de invitacion invalido.');
+  const createWorkspace = async () => {
+    const formState = getWorkspaceNameFormState({
+      existingWorkspaces: workspaceState.workspaces,
+      name: newWorkspaceName,
+    });
+
+    if (!formState.canSubmit) {
+      setMessage(formState.error || 'Agrega un nombre para el proyecto.');
       return null;
     }
 
-    return runAction(
+    const result = await runAction(
+      () => workspaceState.createWorkspace({ name: formState.normalizedName }),
+      'Proyecto compartido creado y seleccionado. Sync sigue manual.',
+    );
+
+    if (result.ok) {
+      setNewWorkspaceName('');
+    }
+
+    return result;
+  };
+
+  const updateWorkspaceName = async (workspace = currentWorkspace) => {
+    const currentKey = getWorkspaceListKey(workspace || {});
+    const formState = getWorkspaceNameFormState({
+      existingWorkspaces: workspaceState.workspaces,
+      name: workspaceNameDraft,
+      workspaceId: currentKey,
+    });
+
+    if (!formState.canSubmit) {
+      setMessage(formState.error || 'Agrega un nombre para el proyecto.');
+      return null;
+    }
+
+    const result = await runAction(
+      () =>
+        workspaceState.updateWorkspaceName({
+          name: formState.normalizedName,
+          workspace,
+        }),
+      'Nombre del proyecto actualizado.',
+    );
+
+    if (result.ok) {
+      setWorkspaceNameDraft(formState.normalizedName);
+    }
+
+    return result;
+  };
+
+  const createInvitation = async () => {
+    const formState = getInvitationFormState({
+      email: inviteEmail,
+      existingInvitations: workspaceState.invitations,
+      existingMembers: visibleMembers,
+    });
+
+    if (!formState.canSubmit) {
+      setMessage(formState.error || 'Correo de invitacion invalido.');
+      return null;
+    }
+
+    const result = await runAction(
       () =>
         workspaceState.createInvitation({
-          email: inviteEmail,
+          email: formState.normalizedEmail,
           role: inviteRole,
         }),
       'Invitacion creada.',
     );
+
+    if (result.ok) {
+      setInviteEmail('');
+    }
+
+    return result;
+  };
+
+  const confirmRevokeInvitation = (invitationId) => {
+    Alert.alert(
+      'Revocar invitacion',
+      'La persona invitada ya no podra aceptar esta invitacion.',
+      [
+        { style: 'cancel', text: 'Cancelar' },
+        {
+          onPress: () =>
+            runAction(
+              () => workspaceState.revokeInvitation(invitationId),
+              'Invitacion revocada.',
+            ),
+          style: 'destructive',
+          text: 'Revocar',
+        },
+      ],
+    );
+  };
+
+  const leaveCurrentWorkspace = (workspace = currentWorkspace) =>
+    runAction(
+      () =>
+        workspaceState.leaveWorkspace({
+          leaveRemote: true,
+          workspace,
+        }),
+      'Saliste del proyecto compartido. Los datos locales permanecen.',
+    );
+
+  const deleteCurrentWorkspace = (workspace = currentWorkspace) =>
+    runAction(
+      () => workspaceState.deleteWorkspace(workspace),
+      'Proyecto eliminado. Volviste al workspace local.',
+    );
+
+  const confirmRemoveMember = (member) => {
+    const userId = member?.userId || member;
+    const isCurrentUser = Boolean(member?.isCurrentUser);
+    const isOwner = member?.roleKey === 'owner';
+
+    Alert.alert(
+      isCurrentUser ? 'Salir del proyecto compartido' : 'Remover colaborador',
+      isCurrentUser && isOwner
+        ? 'Perderas acceso a este proyecto compartido. Si eres el unico propietario, antes debes asignar un nuevo propietario.'
+        : isCurrentUser
+          ? 'Perderas acceso a este proyecto compartido y dejara de aparecer en tu lista de proyectos.'
+          : 'Esta persona perdera acceso a este proyecto compartido.',
+      [
+        { style: 'cancel', text: 'Cancelar' },
+        {
+          onPress: () =>
+            runAction(
+              () =>
+                isCurrentUser
+                  ? workspaceState.leaveWorkspace({ leaveRemote: true })
+                  : workspaceState.removeMember(userId),
+              isCurrentUser
+                ? 'Saliste del proyecto compartido.'
+                : 'Colaborador removido.',
+            ),
+          style: 'destructive',
+          text: isCurrentUser ? 'Salir' : 'Remover',
+        },
+      ],
+    );
   };
 
   return (
-    <AppScreen>
+    <AppScreen
+      contentContainerStyle={styles.screenContent}
+      onRefresh={handlePullToSync}
+      refreshing={refreshing || workspaceState.loading}
+    >
+      {activeTab === 'workspaces' && workspaceMenuKey ? (
+        <Pressable
+          accessibilityLabel="Cerrar menu de proyecto"
+          onPress={() => setWorkspaceMenuKey(null)}
+          style={styles.screenDismissLayer}
+        />
+      ) : null}
       <AppHeader
-        actionLabel={onOpenAccount ? 'Cuenta' : null}
-        onAction={onOpenAccount}
-        subtitle="Colaboradores, invitaciones y modo local."
-        title="Compartir negocio"
+        subtitle="Usuarios, invitaciones y espacios de trabajo."
+        title="Compartir proyecto"
       />
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Modo actual
-        </Text>
-        <Text style={[styles.body, { color: colors.textSecondary }]}>
-          {getWorkspaceModeLabel(currentWorkspace)}
-        </Text>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>
-          {formatWorkspaceName(currentWorkspace)}
-        </Text>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Rol: {formatWorkspaceRole(currentRole)}
-        </Text>
-      </View>
+      <BusinessContextCard
+        colors={colors}
+        onChangeWorkspace={() => setActiveTab('workspaces')}
+        role={currentRole}
+        workspace={currentWorkspace}
+      />
 
       {workspaceState.authRequired ? (
-        <View style={[styles.panel, { borderColor: colors.border }]}>
+        <View style={[styles.notice, { borderColor: colors.border }]}>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
             Cuenta requerida
           </Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Inicia sesion para crear o administrar workspaces compartidos. El
+            Inicia sesion para crear o administrar proyectos compartidos. El
             modo local sigue disponible.
           </Text>
         </View>
       ) : null}
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Crear negocio compartido
-        </Text>
-        <TextInput
-          onChangeText={setNewWorkspaceName}
-          placeholder="Nombre del workspace"
-          placeholderTextColor={colors.textMuted}
-          style={[
-            styles.input,
-            { borderColor: colors.border, color: colors.textPrimary },
-          ]}
-          value={newWorkspaceName}
-        />
-        <Pressable
-          disabled={workspaceState.loading}
-          onPress={createWorkspace}
-          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-        >
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-            Crear y seleccionar
-          </Text>
-        </Pressable>
-      </View>
+      <BusinessShareTabs
+        activeTab={activeTab}
+        colors={colors}
+        onChange={setActiveTab}
+        showInvitationAttention={showInvitationAttention}
+      />
 
-      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Negocios disponibles
-        </Text>
-        {workspaceState.workspaces.length ? (
-          workspaceState.workspaces.map((workspace) => (
-            <View
-              key={getWorkspaceListKey(workspace)}
-              style={[styles.row, { borderColor: colors.border }]}
-            >
-              <View style={styles.rowText}>
-                <Text style={[styles.body, { color: colors.textPrimary }]}>
-                  {formatWorkspaceName(workspace)}
-                </Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>
-                  {getWorkspaceModeLabel(workspace)}
-                </Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>
-                  {formatWorkspaceRole(
-                    workspace.workspaceRole || workspace.syncStatus || 'local',
-                  )}
-                </Text>
-              </View>
-              <Pressable
-                disabled={workspaceState.loading}
-                onPress={() =>
-                  runAction(
-                    () => workspaceState.selectWorkspace(workspace),
-                    'Workspace seleccionado. Sync sigue manual.',
-                  )
-                }
-                style={[styles.smallButton, { borderColor: colors.border }]}
-              >
-                <Text
-                  style={[styles.secondaryText, { color: colors.textPrimary }]}
-                >
-                  Seleccionar
-                </Text>
-              </Pressable>
-            </View>
-          ))
-        ) : (
-          <Text style={[styles.meta, { color: colors.textMuted }]}>
-            {getWorkspaceEmptyState({
-              authRequired: workspaceState.authRequired,
-              currentWorkspace,
-              error: workspaceState.error,
-              loading: workspaceState.loading,
-              type: 'workspaces',
-            })}
-          </Text>
-        )}
-        <Pressable
-          disabled={workspaceState.loading}
-          onPress={() => workspaceState.refreshWorkspaces()}
-          style={[styles.secondaryButton, { borderColor: colors.border }]}
-        >
-          <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-            Actualizar lista
-          </Text>
-        </Pressable>
-        <Pressable
-          disabled={workspaceState.loading}
-          onPress={() =>
+      {activeTab === 'team' ? (
+        <TeamTab
+          canAdminWorkspace={Boolean(currentWorkspace?.isRemote && canAdminWorkspace)}
+          colors={colors}
+          isLocalWorkspace={!currentWorkspace?.isRemote}
+          loading={workspaceState.loading}
+          members={visibleMembers}
+          onInviteUser={() => setActiveTab('invitations')}
+          onRemove={confirmRemoveMember}
+          onUpdateRole={(userId, nextRole) =>
             runAction(
-              workspaceState.refreshMyInvitations,
-              'Invitaciones personales actualizadas.',
+              () =>
+                workspaceState.updateMemberRole({
+                  role: nextRole,
+                  userId,
+                }),
+              'Rol de usuario actualizado.',
             )
           }
-          style={[styles.secondaryButton, { borderColor: colors.border }]}
-        >
-          <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-            Ver mis invitaciones
-          </Text>
-        </Pressable>
-      </View>
-
-      {workspaceState.myInvitations.length ? (
-        <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Mis invitaciones
-          </Text>
-          {workspaceState.myInvitations.map((rawInvitation) => {
-            const invitation = sanitizeInvitationForDisplay(rawInvitation);
-
-            return (
-              <View
-                key={invitation.invitationId}
-                style={[styles.row, { borderColor: colors.border }]}
-              >
-                <View style={styles.rowText}>
-                  <Text style={[styles.body, { color: colors.textPrimary }]}>
-                    {invitation.email}
-                  </Text>
-                  <Text style={[styles.meta, { color: colors.textMuted }]}>
-                    {invitation.role} · {invitation.status}
-                  </Text>
-                </View>
-                <View style={styles.inlineActions}>
-                  <Pressable
-                    disabled={workspaceState.loading}
-                    onPress={() =>
-                      runAction(
-                        () =>
-                          workspaceState.acceptInvitation(
-                            invitation.invitationId,
-                          ),
-                        'Invitacion aceptada. Sync sigue manual.',
-                      )
-                    }
-                    style={[styles.smallButton, { borderColor: colors.border }]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Aceptar
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={workspaceState.loading}
-                    onPress={() =>
-                      runAction(
-                        () =>
-                          workspaceState.declineInvitation(
-                            invitation.invitationId,
-                          ),
-                        'Invitacion rechazada.',
-                      )
-                    }
-                    style={[styles.smallButton, { borderColor: colors.border }]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Rechazar
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
-      {!workspaceState.myInvitations.length ? (
-        <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Mis invitaciones
-          </Text>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>
-            {getWorkspaceEmptyState({
-              loading: workspaceState.loading,
-              type: 'myInvitations',
-            })}
-          </Text>
-        </View>
+          role={currentRole}
+        />
       ) : null}
 
-      {currentWorkspace?.isRemote ? (
-        <View style={[styles.panel, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Colaboradores
-          </Text>
-          {!canAdminWorkspace ? (
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              Puedes ver el negocio compartido y salir o desconectarte. Solo
-              propietarios y administradores gestionan colaboradores.
-            </Text>
-          ) : null}
-          {canAdminWorkspace ? (
-            <Pressable
-              disabled={workspaceState.loading}
-              onPress={() => setAdminToolsOpen((open) => !open)}
-              style={[styles.secondaryButton, { borderColor: colors.border }]}
-            >
-              <Text
-                style={[styles.secondaryText, { color: colors.textPrimary }]}
-              >
-                {adminToolsOpen
-                  ? 'Ocultar herramientas'
-                  : 'Administrar colaboradores'}
-              </Text>
-            </Pressable>
-          ) : null}
-          {canAdminWorkspace && adminToolsOpen ? (
-          <View style={styles.memberForm}>
-            <TextInput
-              autoCapitalize="none"
-              keyboardType="email-address"
-              onChangeText={setInviteEmail}
-              placeholder="Correo para invitar"
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.input,
-                { borderColor: colors.border, color: colors.textPrimary },
-              ]}
-              value={inviteEmail}
-            />
-            <View style={styles.optionRow}>
-              {roleOptions
-                .filter((option) => option !== 'owner')
-                .map((option) => (
-                  <Pressable
-                    key={option}
-                    onPress={() => setInviteRole(option)}
-                    style={[
-                      styles.option,
-                      {
-                        backgroundColor:
-                          inviteRole === option
-                            ? colors.primary
-                            : colors.surfaceMuted,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        {
-                          color:
-                            inviteRole === option
-                              ? colors.textInverse
-                              : colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </Pressable>
-                ))}
-            </View>
-            <Pressable
-              disabled={workspaceState.loading || !inviteEmail}
-              onPress={createInvitation}
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-                Invitar por correo
-              </Text>
-            </Pressable>
+      {activeTab === 'invitations' ? (
+        <InvitationsTab
+          canAdminWorkspace={Boolean(currentWorkspace?.isRemote && canAdminWorkspace)}
+          colors={colors}
+          inviteEmail={inviteEmail}
+          inviteRole={inviteRole}
+          invitations={workspaceState.myInvitations}
+          loading={workspaceState.loading}
+          members={visibleMembers}
+          onAccept={(invitationId) =>
+            runAction(
+              () => workspaceState.acceptInvitation(invitationId),
+              'Invitacion aceptada. Sync sigue manual.',
+            )
+          }
+          onCreateInvitation={createInvitation}
+          onDecline={(invitationId) =>
+            runAction(
+              () => workspaceState.declineInvitation(invitationId),
+              'Invitacion rechazada.',
+            )
+          }
+          onRegenerate={(invitationId) =>
+            runAction(
+              () => workspaceState.regenerateInvitationLink(invitationId),
+              'Invitacion reenviada si el proveedor esta configurado.',
+            )
+          }
+          onRevoke={confirmRevokeInvitation}
+          onSetInviteEmail={setInviteEmail}
+          onSetInviteRole={setInviteRole}
+          outgoingInvitations={workspaceState.invitations}
+        />
+      ) : null}
 
-            {workspaceState.invitations.map((rawInvitation) => {
-              const invitation = sanitizeInvitationForDisplay(rawInvitation);
-              const actionState = getInvitationActionState({
-                invitation: {
-                  status: invitation.statusKey,
-                },
-                loading: workspaceState.loading,
-                role: currentRole,
-              });
-
-              return (
-                <View
-                  key={invitation.invitationId}
-                  style={[styles.row, { borderColor: colors.border }]}
-                >
-                  <View style={styles.rowText}>
-                    <Text style={[styles.body, { color: colors.textPrimary }]}>
-                      {invitation.email}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {invitation.role} · {invitation.status}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      Link:{' '}
-                      {invitation.inviteTokenExpiresAt
-                        ? `activo hasta ${invitation.inviteTokenExpiresAt}`
-                        : 'no disponible'}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {invitation.emailDeliveryLabel}
-                    </Text>
-                    {actionState.disabledReason ? (
-                      <Text style={[styles.meta, { color: colors.textMuted }]}>
-                        {actionState.disabledReason}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.inlineActions}>
-                    <Pressable
-                      disabled={!actionState.canRegenerate}
-                      onPress={() =>
-                        runAction(
-                          () =>
-                            workspaceState.regenerateInvitationLink(
-                              invitation.invitationId,
-                            ),
-                          'Link regenerado y email reenviado si el proveedor esta configurado.',
-                        )
-                      }
-                      style={[styles.smallButton, { borderColor: colors.border }]}
-                    >
-                      <Text
-                        style={[
-                          styles.secondaryText,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        Reenviar link
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={!actionState.canRevoke}
-                      onPress={() =>
-                        runAction(
-                          () =>
-                            workspaceState.revokeInvitation(
-                              invitation.invitationId,
-                            ),
-                          'Invitacion revocada.',
-                        )
-                      }
-                      style={[styles.smallButton, { borderColor: colors.border }]}
-                    >
-                      <Text
-                        style={[
-                          styles.secondaryText,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        Revocar
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-            {!workspaceState.invitations.length ? (
-              <Text style={[styles.meta, { color: colors.textMuted }]}>
-                {getWorkspaceEmptyState({
-                  loading: workspaceState.loading,
-                  type: 'invitations',
-                })}
-              </Text>
-            ) : null}
-
-            <TextInput
-              autoCapitalize="none"
-              onChangeText={setMemberUserId}
-              placeholder="userId o correo"
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.input,
-                { borderColor: colors.border, color: colors.textPrimary },
-              ]}
-              value={memberUserId}
-            />
-            <View style={styles.optionRow}>
-              {roleOptions.map((option) => (
-                <Pressable
-                  key={option}
-                  onPress={() => setRole(option)}
-                  style={[
-                    styles.option,
-                    {
-                      backgroundColor:
-                        role === option ? colors.primary : colors.surfaceMuted,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      {
-                        color:
-                          role === option
-                            ? colors.textInverse
-                            : colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.optionRow}>
-              {statusOptions.map((option) => (
-                <Pressable
-                  key={option}
-                  onPress={() => setStatus(option)}
-                  style={[
-                    styles.option,
-                    {
-                      backgroundColor:
-                        status === option
-                          ? colors.primary
-                          : colors.surfaceMuted,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      {
-                        color:
-                          status === option
-                            ? colors.textInverse
-                            : colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    {option}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              disabled={workspaceState.loading || !memberUserId}
-              onPress={addMember}
-              style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-                Agregar o actualizar
-              </Text>
-            </Pressable>
-          </View>
-          ) : null}
-
-          {workspaceState.members.map((rawMember) => {
-            const member = sanitizeMemberForDisplay(rawMember);
-
-            return (
-              <View
-                key={member.userId}
-                style={[styles.row, { borderColor: colors.border }]}
-              >
-                <View style={styles.rowText}>
-                  <Text style={[styles.body, { color: colors.textPrimary }]}>
-                    {member.userId}
-                  </Text>
-                  <Text style={[styles.meta, { color: colors.textMuted }]}>
-                    {member.role} · {member.status}
-                  </Text>
-                </View>
-                {canAdminWorkspace ? (
-                  <Pressable
-                    disabled={workspaceState.loading}
-                    onPress={() =>
-                      runAction(
-                        () => workspaceState.removeMember(member.userId),
-                        'Colaborador removido.',
-                      )
-                    }
-                    style={[styles.smallButton, { borderColor: colors.border }]}
-                  >
-                    <Text
-                      style={[
-                        styles.secondaryText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Remover
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            );
-          })}
-          {!workspaceState.members.length ? (
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              {getWorkspaceEmptyState({
-                loading: workspaceState.loading,
-                type: 'members',
-              })}
-            </Text>
-          ) : null}
-
-          <Pressable
-            disabled={workspaceState.loading}
-            onPress={disconnect}
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Desconectar localmente
-            </Text>
-          </Pressable>
-          <Pressable
-            disabled={workspaceState.loading}
-            onPress={leaveWorkspace}
-            style={[styles.secondaryButton, { borderColor: colors.border }]}
-          >
-            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
-              Salir del negocio compartido
-            </Text>
-          </Pressable>
-        </View>
+      {activeTab === 'workspaces' ? (
+        <WorkspacesTab
+          colors={colors}
+          currentWorkspace={currentWorkspace}
+          loading={workspaceState.loading}
+          members={visibleMembers}
+          newWorkspaceName={newWorkspaceName}
+          onCreateWorkspace={createWorkspace}
+          onDeleteWorkspace={deleteCurrentWorkspace}
+          onLeave={leaveCurrentWorkspace}
+          onRefreshMembers={workspaceState.refreshMembers}
+          onRenameWorkspace={updateWorkspaceName}
+          onSelectWorkspace={(workspace) =>
+            runAction(
+              () => workspaceState.selectWorkspace(workspace),
+              'Proyecto seleccionado. Sync sigue manual.',
+            )
+          }
+          onSetNewWorkspaceName={setNewWorkspaceName}
+          onSetWorkspaceMenuKey={setWorkspaceMenuKey}
+          onSetWorkspaceNameDraft={setWorkspaceNameDraft}
+          workspaceMenuKey={workspaceMenuKey}
+          workspaceNameDraft={workspaceNameDraft}
+          workspaces={visibleWorkspaces}
+        />
       ) : null}
 
       {workspaceState.error ? (
@@ -683,30 +450,8 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
   },
-  buttonText: {
-    fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.semibold,
-  },
   error: {
     fontSize: typography.sizes.bodySmall,
-  },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  input: {
-    borderRadius: 8,
-    borderWidth: 1,
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
-  memberForm: {
-    gap: 10,
-  },
-  inlineActions: {
-    gap: 8,
   },
   message: {
     fontSize: typography.sizes.bodySmall,
@@ -715,76 +460,22 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.label,
     marginTop: 4,
   },
-  option: {
-    borderRadius: 8,
-    minHeight: 36,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  optionText: {
-    fontSize: typography.sizes.label,
-    fontWeight: typography.weights.semibold,
-  },
-  panel: {
-    borderRadius: 8,
-    borderWidth: 0,
-    gap: 10,
-    padding: 14,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
-  row: {
-    alignItems: 'center',
+  notice: {
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-    padding: 10,
+    gap: 6,
+    padding: 12,
   },
-  rowText: {
-    flex: 1,
+  screenContent: {
+    paddingBottom: 88,
+    position: 'relative',
   },
-  secondaryButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
-  secondaryText: {
-    fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.semibold,
-  },
-  sectionTitle: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.bold,
-  },
-  smallButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 36,
-    paddingHorizontal: 10,
-  },
-  subtitle: {
-    fontSize: typography.sizes.bodySmall,
-    marginTop: 4,
-  },
-  title: {
-    fontSize: typography.sizes.heading,
-    fontWeight: typography.weights.bold,
+  screenDismissLayer: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 20,
   },
 });
