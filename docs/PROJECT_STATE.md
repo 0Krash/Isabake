@@ -139,14 +139,37 @@
   - legacy socket.io disabled by default
   - mobile socket client inert by default
   - InvitationAcceptScreen does not rethrow handled UI errors
+- Workspace-first UX and scoped business data:
+  - account/session verification runs automatically after local DB startup and
+    stays non-blocking; local use remains available if auth is offline or
+    expired
+  - the main business header separates the app menu on the left from account
+    access on the right
+  - Transacciones, Recetas, and Inventario show the active business context
+  - recipes, inventory, and transactions read/create against the active
+    workspace group so switching workspace refreshes business data without
+    cross-workspace leakage
+  - local-only is presented as a local business state, not as a separate
+    technical "Workspace local" concept
+  - collaborator lists prefer safe display name/email labels, hide removed
+    members from the active list, and avoid raw user IDs in normal UI
+- Workspace screen UI/UX relayout:
+  - Compartir negocio now uses internal Equipo, Invitaciones, and Negocios tabs
+    under a compact current-workspace context card
+  - Equipo focuses on active collaborators and invite entry point
+  - Invitaciones focuses on inviting users plus received/sent pending
+    invitations
+  - Negocios focuses on workspace switching, creating shared businesses, and
+    advanced shared-workspace actions
+  - destructive workspace/invitation actions require confirmation
+  - no sync architecture, background sync, WebSockets, startup behavior, or
+    release/build work was changed
 
 ## Current Next Phase
 
-- Phase 35: implemented/completed. Post-login sync bootstrap is in place and
-  remains guarded by auth, selected shared workspace, conflicts, network state,
-  debounce, and the existing foreground auto-sync controls.
-- Phase 36: current next phase. Scope is QA hardening and release readiness
-  validation, not sync architecture redesign.
+- Phase 40: implemented/completed as workspace screen UI/UX relayout.
+- Next phase: pending definition. Release/build work remains intentionally
+  paused unless explicitly requested.
 
 ## Important Backend Paths
 
@@ -167,6 +190,7 @@
 - `UI/app.json`
 - `UI/data/workspace/*`
 - `UI/hooks/workspace/useWorkspaces.js`
+- `UI/hooks/workspace/useCurrentWorkspaceScope.js`
 - `UI/screens/Workspace/*`
 - `UI/screens/Sync/*`
 - `UI/data/auth/*`
@@ -179,6 +203,12 @@
 - Phase 36 manual QA gates remain open until the current app build is checked
   on iOS, Android USB/Expo, backend sync storage, auto-sync diagnostics, and
   local-only/logout flows.
+- Phase 39 manual QA gates remain open until workspace switching, scoped
+  recipes/inventory/transactions, account/menu separation, and collaborator
+  identity display are verified on device.
+- Phase 40 manual QA gates remain open until the tabbed workspace screen,
+  destructive confirmations, invitation validation, and safe-area behavior are
+  verified on Android and iOS.
 - Backend full suite must be run outside sandbox if Supertest fails with `listen EPERM`.
 - Production app links require real domain, certs, Android SHA-256 signing
   fingerprint, Apple Team ID, and final iOS bundle identifier.
