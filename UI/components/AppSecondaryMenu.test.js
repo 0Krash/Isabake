@@ -4,14 +4,9 @@ describe('AppSecondaryMenu model', () => {
   test('secondary menu exposes friendly non-primary destinations', () => {
     expect(createSecondaryMenuItems()).toEqual([
       {
-        description: 'Sesion y seguridad',
-        key: 'account',
-        label: 'Cuenta',
-      },
-      {
         description: 'Colaboradores e invitaciones',
         key: 'workspace',
-        label: 'Compartir negocio',
+        label: 'Compartir proyecto',
       },
       {
         description: 'Enviar o recibir cambios manualmente',
@@ -24,6 +19,9 @@ describe('AppSecondaryMenu model', () => {
         label: 'Cambios por revisar',
       },
     ]);
+    expect(
+      createSecondaryMenuItems().some((item) => item.key === 'account'),
+    ).toBe(false);
   });
 
   test('dev tools are hidden unless dev tools are explicitly enabled', () => {

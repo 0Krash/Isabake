@@ -38,6 +38,7 @@ import {
   startAutoSync,
   stopAutoSync,
 } from './data/sync/autoSyncService';
+import { restoreAccountSessionOnStartup } from './data/auth/startupAccountSession';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -49,6 +50,8 @@ export default function App() {
   const [pendingSecondaryTab, setPendingSecondaryTab] = useState(null);
   const [secondaryMenuVisible, setSecondaryMenuVisible] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
+  const [accountStatus, setAccountStatus] = useState('checking');
+  const [workspaceBackTab, setWorkspaceBackTab] = useState('home');
   const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
   useEffect(() => {
@@ -84,11 +87,25 @@ export default function App() {
       return undefined;
     }
 
+    let isMounted = true;
+    restoreAccountSessionOnStartup()
+      .then(({ status }) => {
+        if (isMounted) {
+          setAccountStatus(status);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAccountStatus('local');
+        }
+      });
+
     const subscription = AppState.addEventListener('change', (nextState) => {
       handleAutoSyncAppStateChange(nextState);
     });
 
     return () => {
+      isMounted = false;
       subscription?.remove?.();
       stopNetworkMonitoring();
       stopAutoSync();
@@ -126,6 +143,11 @@ export default function App() {
     };
   }, []);
 
+  const openWorkspaceFrom = (tabKey) => {
+    setWorkspaceBackTab(tabKey || activeTab || 'home');
+    setActiveTab('workspace');
+  };
+
   const renderScreen = () => {
     if (saleRecipe) {
       return (
@@ -139,9 +161,12 @@ export default function App() {
     if (activeTab === 'recipes') {
       return (
         <RecipeBookScreen
+          accountStatus={accountStatus}
+          onOpenAccount={() => setActiveTab('account')}
           onOpenInventory={() => setActiveTab('inventory')}
           onOpenAppMenu={() => setSecondaryMenuVisible(true)}
-          onOpenConflicts={() => setActiveTab('conflicts')}
+          onOpenSync={() => setActiveTab('sync')}
+          onOpenWorkspace={() => openWorkspaceFrom('recipes')}
           onOpenRecipeSale={setSaleRecipe}
         />
       );
@@ -150,8 +175,11 @@ export default function App() {
     if (activeTab === 'inventory') {
       return (
         <InventoryScreen
+          accountStatus={accountStatus}
+          onOpenAccount={() => setActiveTab('account')}
           onOpenAppMenu={() => setSecondaryMenuVisible(true)}
-          onOpenConflicts={() => setActiveTab('conflicts')}
+          onOpenSync={() => setActiveTab('sync')}
+          onOpenWorkspace={() => openWorkspaceFrom('inventory')}
         />
       );
     }
@@ -174,11 +202,16 @@ export default function App() {
     }
 
     if (activeTab === 'account') {
-      return <AuthStatusScreen onOpenWorkspaces={() => setActiveTab('workspace')} />;
+      return <AuthStatusScreen onOpenWorkspaces={() => openWorkspaceFrom('account')} />;
     }
 
     if (activeTab === 'workspace') {
-      return <WorkspaceScreen onOpenAccount={() => setActiveTab('account')} />;
+      return (
+        <WorkspaceScreen
+          onBack={() => setActiveTab(workspaceBackTab || 'home')}
+          onOpenAccount={() => setActiveTab('account')}
+        />
+      );
     }
 
     if (activeTab === 'invite') {
@@ -197,8 +230,11 @@ export default function App() {
 
     return (
       <TransactionBalanceScreen
+        accountStatus={accountStatus}
+        onOpenAccount={() => setActiveTab('account')}
         onOpenAppMenu={() => setSecondaryMenuVisible(true)}
-        onOpenConflicts={() => setActiveTab('conflicts')}
+        onOpenSync={() => setActiveTab('sync')}
+        onOpenWorkspace={() => openWorkspaceFrom('home')}
       />
     );
   };
@@ -208,7 +244,11 @@ export default function App() {
 
     if (Platform.OS !== 'ios') {
       setSecondaryMenuVisible(false);
-      setActiveTab(tabKey);
+      if (tabKey === 'workspace') {
+        openWorkspaceFrom(activeTab);
+      } else {
+        setActiveTab(tabKey);
+      }
       return;
     }
 
@@ -218,7 +258,11 @@ export default function App() {
 
   const handleSecondaryMenuDismiss = () => {
     if (pendingSecondaryTab) {
-      setActiveTab(pendingSecondaryTab);
+      if (pendingSecondaryTab === 'workspace') {
+        openWorkspaceFrom(activeTab);
+      } else {
+        setActiveTab(pendingSecondaryTab);
+      }
       setPendingSecondaryTab(null);
     }
   };

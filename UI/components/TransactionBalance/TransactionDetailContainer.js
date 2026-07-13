@@ -7,6 +7,7 @@ import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThem
 
 export default function TransactionDetailContainer(props) {
   const { colors } = useTransactionBalanceTheme();
+  const canWrite = props.canWrite !== false;
   const {
     amount = '',
     category = '',
@@ -41,6 +42,10 @@ export default function TransactionDetailContainer(props) {
         props.setTransactionDetail(props.data);
       }}
       onLongPress={() => {
+        if (!canWrite) {
+          return;
+        }
+
         props.setDeleteTransactionModalIsVisible(true);
         props.setTransactionDetail(props.data);
       }}

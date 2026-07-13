@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { inventoryRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 const normalizeQuality = (quality) => {
   const qualityMap = {
@@ -105,6 +106,7 @@ const sortInventoryItems = (items) =>
   );
 
 export default function useInventoryLocal({ autoLoad = true } = {}) {
+  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
   const [inventoryItems, setInventoryItems] = useState([]);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   const [error, setError] = useState(null);
@@ -114,7 +116,7 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localInventoryItems = await inventoryRepository.getAll();
+      const localInventoryItems = await inventoryRepository.getAll({ groupId });
       const normalizedInventoryItems = sortInventoryItems(
         localInventoryItems.map(normalizeInventoryItem),
       );
@@ -126,18 +128,21 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
     } finally {
       setIsLoadingInventory(false);
     }
-  }, []);
+  }, [groupId]);
 
   const createInventoryItem = useCallback(
     async (data, options = {}) => {
       const item = normalizeInventoryItem(
-        await inventoryRepository.create(toApiInventoryItem(data), options),
+        await inventoryRepository.create(toApiInventoryItem(data), {
+          ...(groupId ? { groupId } : {}),
+          ...options,
+        }),
       );
       requestLocalChangeSync();
       await refreshInventory();
       return item;
     },
-    [refreshInventory],
+    [groupId, refreshInventory],
   );
 
   const updateInventoryItem = useCallback(
@@ -183,7 +188,7 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
     refreshInventory().catch((requestError) => {
       console.warn('Error al cargar inventario local:', requestError);
     });
-  }, [autoLoad, refreshInventory]);
+  }, [autoLoad, groupId, refreshInventory]);
 
   return {
     createInventoryItem,

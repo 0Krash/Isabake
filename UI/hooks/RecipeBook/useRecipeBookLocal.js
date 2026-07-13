@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { recipeRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 const formatRecipeCost = (cost) => {
   if (typeof cost === 'string' && cost.trim().startsWith('$')) {
@@ -72,6 +73,7 @@ const sortRecipes = (recipes) =>
   );
 
 export default function useRecipeBookLocal({ autoLoad = true } = {}) {
+  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
   const [recipes, setRecipes] = useState([]);
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
   const [error, setError] = useState(null);
@@ -81,7 +83,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localRecipes = await recipeRepository.getAll();
+      const localRecipes = await recipeRepository.getAll({ groupId });
       const normalizedRecipes = sortRecipes(localRecipes.map(normalizeRecipe));
       setRecipes(normalizedRecipes);
       return normalizedRecipes;
@@ -91,18 +93,21 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
     } finally {
       setIsLoadingRecipes(false);
     }
-  }, []);
+  }, [groupId]);
 
   const createRecipe = useCallback(
     async (data, options = {}) => {
       const recipe = normalizeRecipe(
-        await recipeRepository.create(toApiRecipe(data), options),
+        await recipeRepository.create(toApiRecipe(data), {
+          ...(groupId ? { groupId } : {}),
+          ...options,
+        }),
       );
       requestLocalChangeSync();
       await refreshRecipes();
       return recipe;
     },
-    [refreshRecipes],
+    [groupId, refreshRecipes],
   );
 
   const updateRecipe = useCallback(
@@ -148,7 +153,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
     refreshRecipes().catch((requestError) => {
       console.warn('Error al cargar recetas locales:', requestError);
     });
-  }, [autoLoad, refreshRecipes]);
+  }, [autoLoad, groupId, refreshRecipes]);
 
   return {
     createRecipe,

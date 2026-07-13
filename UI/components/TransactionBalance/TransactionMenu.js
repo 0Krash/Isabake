@@ -12,7 +12,6 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import { TRANSACTIONS_PAGE_SIZE } from '../../hooks/TransactionBalance/useTransactionBalanceData';
 
 const MENU_WIDTH = 280;
 const ANIMATION_DURATION = 240;
@@ -76,42 +75,53 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
 };
 
 export default function TransactionMenu({
+  canWrite = true,
   isVisible,
   onAfterClose,
   onClose,
   onDismiss,
+  onOpenAccount,
   onOpenAppOptions,
+  onOpenSync,
   onOpenStoreManager,
+  onOpenWorkspace,
 }) {
-  const { colorScheme, colors } = useTransactionBalanceTheme();
+  const { colors } = useTransactionBalanceTheme();
   const [shouldRender, setShouldRender] = useState(isVisible);
   const onAfterCloseRef = useRef(onAfterClose);
   const translateX = useRef(new Animated.Value(MENU_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const menuItems = [
     {
-      description: 'Respeta el modo claro u oscuro del telefono.',
-      label: 'Tema del telefono',
-      value: colorScheme === 'dark' ? 'Oscuro' : 'Claro',
+      description: 'Sesion, acceso y dispositivos.',
+      label: 'Cuenta',
+      onPress: onOpenAccount,
+      value: 'Abrir',
     },
     {
-      description: 'Formato usado para importes y reportes.',
-      label: 'Moneda',
-      value: 'MXN',
+      description: 'Equipo, invitaciones y proyectos disponibles.',
+      label: 'Compartir proyecto',
+      onPress: onOpenWorkspace,
+      value: 'Abrir',
     },
     {
-      description: 'Movimientos que se cargan al bajar la lista.',
-      label: 'Registros por carga',
-      value: `${TRANSACTIONS_PAGE_SIZE}`,
+      description: 'Enviar, recibir y revisar el respaldo manual.',
+      label: 'Respaldo y sync',
+      onPress: onOpenSync,
+      value: 'Abrir',
     },
+    ...(canWrite
+      ? [
+          {
+            description: 'Agrega o administra los puntos de venta disponibles.',
+            label: 'Tiendas',
+            onPress: onOpenStoreManager,
+            value: 'Administrar',
+          },
+        ]
+      : []),
     {
-      description: 'Agrega o administra los puntos de venta disponibles.',
-      label: 'Tiendas',
-      onPress: onOpenStoreManager,
-      value: 'Administrar',
-    },
-    {
-      description: 'Cuenta, respaldo, negocio compartido y cambios por revisar.',
+      description: 'Cambios por revisar y herramientas disponibles.',
       label: 'Opciones de la app',
       onPress: onOpenAppOptions,
       value: 'Abrir',

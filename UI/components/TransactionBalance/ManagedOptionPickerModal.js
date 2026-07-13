@@ -17,6 +17,7 @@ import typography from '../../constants/TransactionBalance/Typography';
 
 const ManagedOptionPickerModal = ({
   addLabel = 'Agregar',
+  canManage = true,
   colors,
   deleteAccessibilityLabel,
   emptyLabel,
@@ -116,7 +117,7 @@ const ManagedOptionPickerModal = ({
                   >
                     {label}
                   </Text>
-                  {!!option.name && onDelete && (
+                  {canManage && !!option.name && onDelete && (
                     <TouchableOpacity
                       accessibilityLabel={
                         deleteAccessibilityLabel
@@ -142,6 +143,7 @@ const ManagedOptionPickerModal = ({
               );
             })}
           </ScrollView>
+          {canManage ? (
           <View style={styles.newOptionContainer}>
             <TextInput
               onChangeText={onChangeNewValue}
@@ -182,6 +184,7 @@ const ManagedOptionPickerModal = ({
               </Text>
             </TouchableOpacity>
           </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>

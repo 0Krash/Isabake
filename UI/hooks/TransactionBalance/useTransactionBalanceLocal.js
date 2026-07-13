@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { transactionRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 export const TRANSACTIONS_PAGE_SIZE = 20;
 
@@ -175,6 +176,7 @@ export default function useTransactionBalanceLocal(
   transactionType,
   { autoLoad = true } = {},
 ) {
+  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
   const [transactions, setTransactions] = useState([]);
   const [totalAmountByCategory, setTotalAmountByCategory] = useState([]);
   const [totalAmountByDateCategory, setTotalAmountByDateCategory] = useState(
@@ -195,6 +197,7 @@ export default function useTransactionBalanceLocal(
       const response = await transactionRepository.getPage({
         limit: TRANSACTIONS_PAGE_SIZE,
         page,
+        groupId,
         transactionType,
       });
 
@@ -206,7 +209,7 @@ export default function useTransactionBalanceLocal(
         },
       };
     },
-    [transactionType],
+    [groupId, transactionType],
   );
 
   const refreshTransactions = useCallback(async () => {
@@ -216,7 +219,7 @@ export default function useTransactionBalanceLocal(
     try {
       const [transactionsResponse, allTransactions] = await Promise.all([
         fetchTransactionsPage(1),
-        transactionRepository.getAll(),
+        transactionRepository.getAll({ groupId }),
       ]);
       const normalizedTransactions = allTransactions.map(normalizeTransaction);
 
@@ -240,7 +243,7 @@ export default function useTransactionBalanceLocal(
       setIsLoading(false);
       isLoadingMoreTransactionsRef.current = false;
     }
-  }, [fetchTransactionsPage]);
+  }, [fetchTransactionsPage, groupId]);
 
   const loadMoreTransactions = useCallback(async () => {
     if (
@@ -300,13 +303,16 @@ export default function useTransactionBalanceLocal(
   const createTransaction = useCallback(
     async (data, options = {}) => {
       const transaction = normalizeTransaction(
-        await transactionRepository.create(toStorageTransaction(data), options),
+        await transactionRepository.create(toStorageTransaction(data), {
+          ...(groupId ? { groupId } : {}),
+          ...options,
+        }),
       );
       requestLocalChangeSync();
       await refreshTransactions();
       return transaction;
     },
-    [refreshTransactions],
+    [groupId, refreshTransactions],
   );
 
   const updateTransaction = useCallback(
@@ -353,7 +359,7 @@ export default function useTransactionBalanceLocal(
     }
 
     refreshTransactions().catch(() => {});
-  }, [autoLoad, refreshTransactions]);
+  }, [autoLoad, groupId, refreshTransactions]);
 
   return {
     createTransaction,

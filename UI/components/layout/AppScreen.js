@@ -3,20 +3,24 @@ import {
   SafeAreaView,
   ScrollView,
   Platform,
+  RefreshControl,
   StyleSheet,
+  StatusBar,
   View,
 } from 'react-native';
 
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import {
   APP_HORIZONTAL_PADDING,
-  APP_SCREEN_TOP_PADDING,
   getScrollContentBottomPadding,
+  getScreenContentTopPadding,
 } from './layoutMetrics';
 
 export default function AppScreen({
   children,
   contentContainerStyle,
+  onRefresh,
+  refreshing = false,
   scroll = true,
   style,
 }) {
@@ -28,7 +32,13 @@ export default function AppScreen({
   ];
   const contentStyle = [
     styles.content,
-    { paddingBottom: getScrollContentBottomPadding({ platform: Platform.OS }) },
+    {
+      paddingBottom: getScrollContentBottomPadding({ platform: Platform.OS }),
+      paddingTop: getScreenContentTopPadding({
+        platform: Platform.OS,
+        statusBarHeight: StatusBar.currentHeight,
+      }),
+    },
     contentContainerStyle,
   ];
 
@@ -45,6 +55,15 @@ export default function AppScreen({
       <ScrollView
         contentContainerStyle={contentStyle}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              onRefresh={onRefresh}
+              refreshing={Boolean(refreshing)}
+              tintColor={colors.primary}
+            />
+          ) : undefined
+        }
       >
         {children}
       </ScrollView>
@@ -57,7 +76,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: 14,
     paddingHorizontal: APP_HORIZONTAL_PADDING,
-    paddingTop: APP_SCREEN_TOP_PADDING,
   },
   safeArea: {
     flex: 1,

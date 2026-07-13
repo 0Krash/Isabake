@@ -11,14 +11,9 @@ export const createSecondaryMenuItems = ({
   showConflicts = true,
 } = {}) => [
   {
-    description: 'Sesion y seguridad',
-    key: 'account',
-    label: 'Cuenta',
-  },
-  {
     description: 'Colaboradores e invitaciones',
     key: 'workspace',
-    label: 'Compartir negocio',
+    label: 'Compartir proyecto',
   },
   {
     description: 'Enviar o recibir cambios manualmente',

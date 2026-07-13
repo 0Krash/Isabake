@@ -18,6 +18,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -25,18 +26,23 @@ import {
   View,
 } from 'react-native';
 
-import TransactionMenu, {
-  TransactionMenuButton,
-} from '../../components/TransactionBalance/TransactionMenu';
+import TransactionMenu from '../../components/TransactionBalance/TransactionMenu';
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
-import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
+import {
+  MAIN_SCREEN_TOP_PADDING,
+  getScreenContentTopPadding,
+} from '../../components/layout/layoutMetrics';
+import WorkspaceContextIndicator from '../../components/workspace/WorkspaceContextIndicator';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { refreshNetworkStatus } from '../../data/network/networkStatusService';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import useStoresLocal from '../../hooks/Stores/useStoresLocal';
+import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
+import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { createLocalId } from '../../data/db/localIds';
 import { idsMatch } from '../../utils/idUtils';
 
@@ -491,15 +497,21 @@ function useBottomSheet(isVisible, onClose) {
 }
 
 export default function InventoryScreen({
+  onOpenAccount,
   onOpenAppMenu,
-  onOpenConflicts,
+  onOpenSync,
+  onOpenWorkspace,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
+  const { canWrite } = useCurrentWorkspaceScope();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const {
     createInventoryItem: createInventoryItemLocal,
     deleteInventoryItem: deleteInventoryItemLocal,
     inventoryItems,
     isLoadingInventory,
+    refreshInventory,
     setInventoryItems,
     updateInventoryItem: updateInventoryItemLocal,
   } = useInventoryData();
@@ -679,6 +691,41 @@ export default function InventoryScreen({
     onOpenAppMenu?.();
   };
 
+  const handleOpenMenuScreen = (action) => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction(action);
+      setMenuIsVisible(false);
+      return;
+    }
+
+    setMenuIsVisible(false);
+
+    if (action === 'account') {
+      onOpenAccount?.();
+    }
+    if (action === 'sync') {
+      onOpenSync?.();
+    }
+    if (action === 'workspace') {
+      onOpenWorkspace?.();
+    }
+  };
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await Promise.allSettled([
+        refreshNetworkStatus(),
+        runManualSyncAction({ action: 'full' }),
+      ]);
+      await refreshInventory();
+      setRefreshKey((currentKey) => currentKey + 1);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshInventory]);
+
   const handleMenuDismiss = () => {
     if (pendingMenuAction === 'stores') {
       setAddStoreModalIsVisible(true);
@@ -687,11 +734,24 @@ export default function InventoryScreen({
     if (pendingMenuAction === 'app-options') {
       onOpenAppMenu?.();
     }
+    if (pendingMenuAction === 'account') {
+      onOpenAccount?.();
+    }
+    if (pendingMenuAction === 'sync') {
+      onOpenSync?.();
+    }
+    if (pendingMenuAction === 'workspace') {
+      onOpenWorkspace?.();
+    }
 
     setPendingMenuAction(null);
   };
 
   const openCreateForm = () => {
+    if (!canWrite) {
+      return;
+    }
+
     setEditingItemId(null);
     setInventoryForm(emptyInventoryForm);
     setFormIsVisible(true);
@@ -716,6 +776,10 @@ export default function InventoryScreen({
   };
 
   const saveInventoryItem = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     const name = inventoryForm.name.trim();
 
     if (!name) {
@@ -772,6 +836,10 @@ export default function InventoryScreen({
   };
 
   const addLotToSelectedItem = async (lotForm, lotIdToUpdate = null) => {
+    if (!canWrite) {
+      return null;
+    }
+
     if (!selectedItem) {
       return false;
     }
@@ -825,6 +893,10 @@ export default function InventoryScreen({
   };
 
   const removeLotFromSelectedItem = async (lotId, lotIndexToRemove = null) => {
+    if (!canWrite) {
+      return;
+    }
+
     if (!selectedItem) {
       return;
     }
@@ -887,6 +959,10 @@ export default function InventoryScreen({
   };
 
   const confirmDeleteInventoryItem = (item) => {
+    if (!canWrite) {
+      return;
+    }
+
     requestDeleteConfirmation({
       confirmLabel: 'Eliminar',
       message: `Se eliminará ${item.name} y todos sus lotes del inventario.`,
@@ -912,6 +988,10 @@ export default function InventoryScreen({
   };
 
   const confirmDeleteInventoryCategory = (category) => {
+    if (!canWrite) {
+      return;
+    }
+
     requestDeleteConfirmation({
       confirmLabel: 'Eliminar',
       message: `Se quitará la categoría "${category.name}" de los ingredientes que la usan.`,
@@ -958,6 +1038,7 @@ export default function InventoryScreen({
 
   const inventorySearchIsActive = searchText.trim().length > 0;
   const inventoryFilterIsActive = Boolean(selectedInventoryCategoryFilter);
+  const hasInventoryItems = inventoryItems.length > 0;
   const activeFilterSummary = [
     inventorySearchIsActive ? `"${searchText.trim()}"` : '',
     inventoryFilterIsActive ? selectedInventoryCategoryFilter : '',
@@ -980,110 +1061,93 @@ export default function InventoryScreen({
   return (
     <View
       style={[
-        styles.mainContainer,
-        { backgroundColor: colors.screenBackground },
+        styles.screenShell,
+        {
+          backgroundColor: colors.appBackground || colors.screenBackground,
+          paddingTop: getScreenContentTopPadding({
+            basePadding: MAIN_SCREEN_TOP_PADDING,
+            platform: Platform.OS,
+            statusBarHeight: StatusBar.currentHeight,
+          }),
+        },
       ]}
     >
-      <View style={styles.headerContainer}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Inventario
-        </Text>
-        <TransactionMenuButton
-          isOpen={menuIsVisible}
-          onPress={() => {
-            Keyboard.dismiss();
-            setMenuIsVisible(true);
-          }}
-        />
-      </View>
-
-      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
-
-      <View style={styles.searchContainer}>
-        <TextInput
-          accessibilityLabel="Buscar ingrediente, categoría o almacén"
-          onChangeText={setSearchText}
-          placeholder="Buscar ingrediente, categoría o almacén..."
-          placeholderTextColor={colors.textMuted}
-          style={[
-            styles.searchInput,
-            {
-              backgroundColor: colors.fieldBackground,
-              borderColor: colors.border,
-              color: colors.textPrimary,
-            },
-          ]}
-          value={searchText}
-        />
-        {searchText.length > 0 && (
-          <Pressable
-            accessibilityLabel="Limpiar búsqueda"
-            accessibilityRole="button"
-            onPress={() => {
-              Keyboard.dismiss();
-              setSearchText('');
-            }}
-            style={[
-              styles.clearButton,
-              { backgroundColor: colors.surfaceMuted },
-            ]}
-          >
-            <Text
-              style={[styles.clearButtonText, { color: colors.textSecondary }]}
-            >
-              x
-            </Text>
-          </Pressable>
-        )}
-      </View>
-      <QuickFilterChips
-        colors={colors}
-        filters={inventoryFilterOptions}
-        getAccessibilityLabel={(filter) =>
-          `Filtrar inventario por ${filter.category || 'todos los ingredientes'}: ${filter.count} ingredientes`
-        }
-        getKey={(filter) => filter.category}
-        getLabel={(filter) => filter.category || 'Todos'}
-        getValue={(filter) => filter.count}
-        inactiveTextColor={colors.textMuted}
-        onSelect={(filter) =>
-          setSelectedInventoryCategoryFilter(filter.category)
-        }
-        scrollStyle={styles.inventoryFilterScroll}
-        selectedKey={selectedInventoryCategoryFilter}
-        showValues={false}
+      <WorkspaceContextIndicator
+        menuIsVisible={menuIsVisible}
+        onOpenMenu={() => setMenuIsVisible(true)}
+        onOpenSync={onOpenSync}
+        onOpenWorkspace={onOpenWorkspace}
+        refreshKey={refreshKey}
       />
-      {(inventorySearchIsActive || inventoryFilterIsActive) && (
-        <View style={styles.activeFilterBar}>
-          <Text style={[styles.activeFilterText, { color: colors.textMuted }]}>
-            {activeFilterSummary}
-          </Text>
-          <TouchableOpacity
-            accessibilityLabel="Limpiar filtros de inventario"
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            onPress={() => {
-              Keyboard.dismiss();
-              setSearchText('');
-              setSelectedInventoryCategoryFilter('');
-            }}
-          >
-            <Text style={[styles.resetText, { color: colors.primaryText }]}>
-              Limpiar filtros
-            </Text>
-          </TouchableOpacity>
+      <View style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            accessibilityLabel="Buscar ingrediente, categoría..."
+            onChangeText={setSearchText}
+            placeholder="Buscar ingrediente, categoría..."
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.searchInput,
+              {
+                backgroundColor: colors.fieldBackground,
+                borderColor: colors.border,
+                color: colors.textPrimary,
+              },
+            ]}
+            value={searchText}
+          />
+          {searchText.length > 0 && (
+            <Pressable
+              accessibilityLabel="Limpiar búsqueda"
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                setSearchText('');
+              }}
+              style={[
+                styles.clearButton,
+                { backgroundColor: colors.surfaceMuted },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                x
+              </Text>
+            </Pressable>
+          )}
         </View>
-      )}
-
-      <FlatList
-        contentContainerStyle={styles.inventoryList}
-        data={filteredItems}
-        initialNumToRender={LIST_INITIAL_RENDER_COUNT}
-        keyExtractor={(item) => String(item.id)}
-        keyboardShouldPersistTaps="handled"
-        maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
-        removeClippedSubviews={Platform.OS === 'android'}
-        renderItem={({ item }) => {
+        <QuickFilterChips
+          colors={colors}
+          filters={inventoryFilterOptions}
+          getAccessibilityLabel={(filter) =>
+            `Filtrar inventario por ${filter.category || 'todos los ingredientes'}: ${filter.count} ingredientes`
+          }
+          getKey={(filter) => filter.category}
+          getLabel={(filter) => filter.category || 'Todos'}
+          getValue={(filter) => filter.count}
+          inactiveTextColor={colors.textMuted}
+          onSelect={(filter) =>
+            setSelectedInventoryCategoryFilter(filter.category)
+          }
+          scrollStyle={styles.inventoryFilterScroll}
+          selectedKey={selectedInventoryCategoryFilter}
+          showValues={false}
+        />
+        <FlatList
+          contentContainerStyle={styles.inventoryList}
+          data={filteredItems}
+          initialNumToRender={LIST_INITIAL_RENDER_COUNT}
+          keyExtractor={(item) => String(item.id)}
+          keyboardShouldPersistTaps="handled"
+          maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+          onRefresh={handleRefresh}
+          removeClippedSubviews={Platform.OS === 'android'}
+          refreshing={refreshing}
+          renderItem={({ item }) => {
           const summary = item.inventoryStatus.summary;
 
           return (
@@ -1164,32 +1228,41 @@ export default function InventoryScreen({
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               {inventoryEmptyMessage}
             </Text>
-            {!isLoadingInventory &&
-              (inventorySearchIsActive || inventoryFilterIsActive) && (
-                <TouchableOpacity
-                  accessibilityLabel="Limpiar filtros de inventario"
-                  accessibilityRole="button"
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    Keyboard.dismiss();
+            {!isLoadingInventory && canWrite && (
+              <TouchableOpacity
+                accessibilityLabel={
+                  inventorySearchIsActive || inventoryFilterIsActive
+                    ? 'Limpiar filtros de inventario'
+                    : 'Agregar primer ingrediente'
+                }
+                accessibilityRole="button"
+                activeOpacity={0.75}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  if (inventorySearchIsActive || inventoryFilterIsActive) {
                     setSearchText('');
                     setSelectedInventoryCategoryFilter('');
-                  }}
+                  } else {
+                    openCreateForm();
+                  }
+                }}
+                style={[
+                  styles.emptyActionButton,
+                  { backgroundColor: colors.primaryMuted },
+                ]}
+              >
+                <Text
                   style={[
-                    styles.emptyActionButton,
-                    { backgroundColor: colors.primaryMuted },
+                    styles.emptyActionText,
+                    { color: colors.primaryText },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.emptyActionText,
-                      { color: colors.primaryText },
-                    ]}
-                  >
-                    Limpiar filtros
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  {inventorySearchIsActive || inventoryFilterIsActive
+                    ? 'Limpiar filtros'
+                    : 'Crear ingrediente'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -1197,27 +1270,33 @@ export default function InventoryScreen({
         windowSize={LIST_WINDOW_SIZE}
       />
 
-      <TouchableOpacity
-        accessibilityLabel="Agregar ingrediente"
-        accessibilityRole="button"
-        activeOpacity={0.75}
-        onPress={() => {
-          Keyboard.dismiss();
-          openCreateForm();
-        }}
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-      >
-        <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
-          +
-        </Text>
-      </TouchableOpacity>
+      {canWrite && hasInventoryItems && (
+        <TouchableOpacity
+          accessibilityLabel="Agregar ingrediente"
+          accessibilityRole="button"
+          activeOpacity={0.75}
+          onPress={() => {
+            Keyboard.dismiss();
+            openCreateForm();
+          }}
+          style={[styles.addButton, { backgroundColor: colors.primary }]}
+        >
+          <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
+            +
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <TransactionMenu
+        canWrite={canWrite}
         isVisible={menuIsVisible}
         onAfterClose={handleMenuDismiss}
         onClose={() => setMenuIsVisible(false)}
+        onOpenAccount={() => handleOpenMenuScreen('account')}
         onOpenAppOptions={handleOpenAppOptions}
+        onOpenSync={() => handleOpenMenuScreen('sync')}
         onOpenStoreManager={handleOpenStoreManager}
+        onOpenWorkspace={() => handleOpenMenuScreen('workspace')}
       />
 
       {addStoreModalIsVisible && (
@@ -1234,6 +1313,7 @@ export default function InventoryScreen({
         colors={colors}
         inventoryItems={inventoryItems}
         item={selectedItem}
+        canWrite={canWrite}
         onAddLot={addLotToSelectedItem}
         onClose={() => {
           setSelectedItemId(null);
@@ -1257,6 +1337,7 @@ export default function InventoryScreen({
       />
 
       <InventoryFormModal
+        canManageOptions={canWrite}
         categoryOptions={inventoryCategoryOptions}
         colors={colors}
         form={inventoryForm}
@@ -1414,11 +1495,13 @@ export default function InventoryScreen({
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </View>
     </View>
   );
 }
 
 const InventoryDetailModal = ({
+  canWrite = true,
   colors,
   inventoryItems,
   item,
@@ -1456,7 +1539,9 @@ const InventoryDetailModal = ({
   const isVisible = Boolean(item);
   const detailSheet = useBottomSheet(isVisible, onClose);
   const lotCreationIsActive =
-    !editingLotId && (Boolean(focusedLotField) || hasLotFormChanges(lotForm));
+    canWrite &&
+    !editingLotId &&
+    (Boolean(focusedLotField) || hasLotFormChanges(lotForm));
   const lotFormIsValid = Boolean(
     lotForm.brand.trim() && Number(lotForm.quantity || 0) && lotForm.supplier,
   );
@@ -1598,6 +1683,10 @@ const InventoryDetailModal = ({
   };
 
   const handleAddLot = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     if (isSavingLotRef.current || !lotFormIsValid) {
       return;
     }
@@ -1656,6 +1745,10 @@ const InventoryDetailModal = ({
   };
 
   const duplicateLot = async (lot) => {
+    if (!canWrite) {
+      return;
+    }
+
     setEditingLotId(null);
     const duplicatedLot = await onAddLot({
       ...emptyLotForm,
@@ -1675,6 +1768,10 @@ const InventoryDetailModal = ({
   };
 
   const editLot = (lot) => {
+    if (!canWrite) {
+      return;
+    }
+
     feedbackAnimationId.current += 1;
     setFeedbackLotId(null);
     setLotFeedbackMessage('');
@@ -1927,7 +2024,7 @@ const InventoryDetailModal = ({
                   {lotFeedbackMessage}
                 </Text>
               </Animated.View>
-            ) : (
+            ) : canWrite ? (
               <View style={styles.lotActionRow}>
                 <TouchableOpacity
                   accessibilityLabel={`Editar lote ${lot.brand}`}
@@ -1993,7 +2090,7 @@ const InventoryDetailModal = ({
                   </Text>
                 </TouchableOpacity>
               </View>
-            )}
+            ) : null}
           </View>
         );
       })}
@@ -2068,6 +2165,7 @@ const InventoryDetailModal = ({
                   >
                     {item.name}
                   </Text>
+                  {canWrite ? (
                   <TouchableOpacity
                     accessibilityLabel="Editar ingrediente"
                     accessibilityRole="button"
@@ -2086,6 +2184,7 @@ const InventoryDetailModal = ({
                   >
                     <Edit3Icon color={colors.textSecondary} />
                   </TouchableOpacity>
+                  ) : null}
                 </View>
                 <Text
                   style={[styles.detailSubtitle, { color: colors.textMuted }]}
@@ -2132,6 +2231,7 @@ const InventoryDetailModal = ({
 
               {renderLotsSection()}
 
+              {canWrite ? (
               <Text
                 onLayout={(event) => {
                   lotFormTitleY.current = event.nativeEvent.layout.y;
@@ -2140,6 +2240,8 @@ const InventoryDetailModal = ({
               >
                 {editingLotId ? 'Editar lote' : 'Agregar lote'}
               </Text>
+              ) : null}
+              {canWrite ? (
               <View
                 onLayout={(event) => {
                   lotFormY.current = event.nativeEvent.layout.y;
@@ -2347,7 +2449,9 @@ const InventoryDetailModal = ({
                 />
                 {renderLotFormActions(styles.lotFormActionsInline)}
               </View>
+              ) : null}
 
+              {canWrite ? (
               <TouchableOpacity
                 accessibilityLabel={`Eliminar ingrediente ${item.name}`}
                 accessibilityRole="button"
@@ -2367,6 +2471,7 @@ const InventoryDetailModal = ({
                   Eliminar ingrediente
                 </Text>
               </TouchableOpacity>
+              ) : null}
             </ScrollView>
             <UnitPickerModal
               colors={colors}
@@ -2977,6 +3082,7 @@ const StorePickerModal = ({
 };
 
 const InventoryFormModal = ({
+  canManageOptions = true,
   categoryOptions,
   colors,
   form,
@@ -3150,6 +3256,7 @@ const InventoryFormModal = ({
           </Animated.View>
         </KeyboardAvoidingView>
         <ManagedOptionPickerModal
+          canManage={canManageOptions}
           colors={colors}
           deleteAccessibilityLabel={(category) =>
             `Eliminar categoría ${category.name}`
@@ -3722,12 +3829,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 15,
-    marginTop: 15,
-  },
   ingredientInfo: {
     flex: 1,
     minWidth: 0,
@@ -3915,11 +4016,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   mainContainer: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     flex: 1,
     marginHorizontal: 8,
-    marginTop: 50,
+    marginTop: 6,
   },
   primaryButton: {
     alignItems: 'center',
@@ -4002,6 +4103,9 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 15,
     paddingRight: 48,
+  },
+  screenShell: {
+    flex: 1,
   },
   resetText: {
     fontSize: typography.sizes.caption,

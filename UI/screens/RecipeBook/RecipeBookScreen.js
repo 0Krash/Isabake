@@ -20,6 +20,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -28,19 +29,24 @@ import {
   View,
 } from 'react-native';
 
-import TransactionMenu, {
-  TransactionMenuButton,
-} from '../../components/TransactionBalance/TransactionMenu';
+import TransactionMenu from '../../components/TransactionBalance/TransactionMenu';
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
-import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
+import {
+  MAIN_SCREEN_TOP_PADDING,
+  getScreenContentTopPadding,
+} from '../../components/layout/layoutMetrics';
+import WorkspaceContextIndicator from '../../components/workspace/WorkspaceContextIndicator';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { refreshNetworkStatus } from '../../data/network/networkStatusService';
 import useRecipeBookData from '../../hooks/RecipeBook/useRecipeBookData';
 import useRecipeSectionsData from '../../hooks/RecipeBook/useRecipeSectionsData';
 import useRecipeTypesData from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
+import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
+import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { calculateRecipeCost } from '../../utils/recipeCost';
 import { idsMatch } from '../../utils/idUtils';
 
@@ -233,13 +239,18 @@ function useBottomSheet(isVisible, onClose) {
 }
 
 export default function RecipeBookScreen({
+  onOpenAccount,
   onOpenAppMenu,
-  onOpenConflicts,
+  onOpenSync,
+  onOpenWorkspace,
   onOpenInventory,
   onOpenRecipeSale,
 }) {
   const { colors } = useTransactionBalanceTheme();
+  const { canWrite } = useCurrentWorkspaceScope();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const {
     createRecipe: createRecipeLocal,
     deleteRecipe: deleteRecipeLocal,
@@ -249,7 +260,8 @@ export default function RecipeBookScreen({
     setRecipes,
     updateRecipe: updateRecipeLocal,
   } = useRecipeBookData();
-  const { inventoryItems, isLoadingInventory } = useInventoryData();
+  const { inventoryItems, isLoadingInventory, refreshInventory } =
+    useInventoryData();
   const {
     createRecipeSection,
     deleteRecipeSection: deleteRecipeSectionLocal,
@@ -264,6 +276,30 @@ export default function RecipeBookScreen({
     refreshRecipeTypes,
     setRecipeTypes,
   } = useRecipeTypesData();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await Promise.allSettled([
+        refreshNetworkStatus(),
+        runManualSyncAction({ action: 'full' }),
+      ]);
+      await Promise.allSettled([
+        refreshRecipes(),
+        refreshInventory(),
+        refreshRecipeSections(),
+        refreshRecipeTypes(),
+      ]);
+      setRefreshKey((currentKey) => currentKey + 1);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    refreshInventory,
+    refreshRecipeSections,
+    refreshRecipeTypes,
+    refreshRecipes,
+  ]);
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
@@ -869,6 +905,26 @@ export default function RecipeBookScreen({
     onOpenAppMenu?.();
   };
 
+  const handleOpenMenuScreen = (action) => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction(action);
+      setMenuIsVisible(false);
+      return;
+    }
+
+    setMenuIsVisible(false);
+
+    if (action === 'account') {
+      onOpenAccount?.();
+    }
+    if (action === 'sync') {
+      onOpenSync?.();
+    }
+    if (action === 'workspace') {
+      onOpenWorkspace?.();
+    }
+  };
+
   const handleMenuDismiss = () => {
     if (pendingMenuAction === 'stores') {
       setAddStoreModalIsVisible(true);
@@ -876,6 +932,15 @@ export default function RecipeBookScreen({
 
     if (pendingMenuAction === 'app-options') {
       onOpenAppMenu?.();
+    }
+    if (pendingMenuAction === 'account') {
+      onOpenAccount?.();
+    }
+    if (pendingMenuAction === 'sync') {
+      onOpenSync?.();
+    }
+    if (pendingMenuAction === 'workspace') {
+      onOpenWorkspace?.();
     }
 
     setPendingMenuAction(null);
@@ -899,6 +964,10 @@ export default function RecipeBookScreen({
   }, []);
 
   const createRecipe = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     const name = capitalizeFirstLetter(recipeName);
 
     if (!name) {
@@ -933,6 +1002,10 @@ export default function RecipeBookScreen({
   };
 
   const deleteSelectedRecipe = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     if (!selectedRecipe) {
       return;
     }
@@ -950,6 +1023,10 @@ export default function RecipeBookScreen({
   };
 
   const confirmDeleteRecipe = () => {
+    if (!canWrite) {
+      return;
+    }
+
     if (!selectedRecipe) {
       return;
     }
@@ -1080,7 +1157,7 @@ export default function RecipeBookScreen({
   };
 
   const updateSelectedRecipe = (updater) => {
-    if (!selectedRecipe) {
+    if (!canWrite || !selectedRecipe) {
       return;
     }
 
@@ -1095,7 +1172,7 @@ export default function RecipeBookScreen({
   };
 
   const updateServings = (nextServings) => {
-    if (!selectedRecipe) {
+    if (!canWrite || !selectedRecipe) {
       return;
     }
 
@@ -1130,7 +1207,7 @@ export default function RecipeBookScreen({
   };
 
   const saveRecipeNameEdition = () => {
-    if (!selectedRecipe) {
+    if (!canWrite || !selectedRecipe) {
       return;
     }
 
@@ -1153,6 +1230,10 @@ export default function RecipeBookScreen({
   };
 
   const addIngredientSection = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     const section = capitalizeFirstLetter(newIngredientSection);
 
     if (!section) {
@@ -1186,6 +1267,10 @@ export default function RecipeBookScreen({
   };
 
   const deleteIngredientSection = async (sectionToDelete) => {
+    if (!canWrite) {
+      return;
+    }
+
     if (!sectionToDelete?.name) {
       return;
     }
@@ -1239,12 +1324,12 @@ export default function RecipeBookScreen({
   };
 
   const selectRecipeType = (typeName) => {
-    if (selectedRecipe) {
+    if (selectedRecipe && canWrite) {
       updateSelectedRecipe((recipe) => ({
         ...recipe,
         type: typeName,
       }));
-    } else {
+    } else if (!selectedRecipe) {
       setRecipeType(typeName);
     }
 
@@ -1252,6 +1337,10 @@ export default function RecipeBookScreen({
   };
 
   const addRecipeType = async () => {
+    if (!canWrite) {
+      return;
+    }
+
     const type = capitalizeFirstLetter(newRecipeType);
 
     if (!type) {
@@ -1284,6 +1373,10 @@ export default function RecipeBookScreen({
   };
 
   const deleteRecipeType = async (typeToDelete) => {
+    if (!canWrite) {
+      return;
+    }
+
     if (!typeToDelete?.name) {
       return;
     }
@@ -1325,6 +1418,10 @@ export default function RecipeBookScreen({
   };
 
   const saveIngredient = () => {
+    if (!canWrite) {
+      return;
+    }
+
     const ingredientIdBeingUpdated = editingIngredientId;
     const name = selectedInventoryIngredient?.name || ingredientName.trim();
     const quantity = ingredientQuantity.trim();
@@ -1375,7 +1472,7 @@ export default function RecipeBookScreen({
   };
 
   const addIngredient = () => {
-    if (isSavingIngredientRef.current) {
+    if (!canWrite || isSavingIngredientRef.current) {
       return;
     }
 
@@ -1415,6 +1512,10 @@ export default function RecipeBookScreen({
   };
 
   const editIngredient = (ingredient) => {
+    if (!canWrite) {
+      return;
+    }
+
     const inventoryIngredient = inventoryItems.find((item) =>
       idsMatch(item.inventoryId, ingredient.inventoryId),
     );
@@ -1458,6 +1559,10 @@ export default function RecipeBookScreen({
   };
 
   const removeIngredient = (ingredientId) => {
+    if (!canWrite) {
+      return;
+    }
+
     const ingredient = selectedRecipe?.ingredients.find(
       (currentIngredient) => currentIngredient.id === ingredientId,
     );
@@ -1478,7 +1583,7 @@ export default function RecipeBookScreen({
   };
 
   const savePreparationStep = () => {
-    if (isSavingStepRef.current) {
+    if (!canWrite || isSavingStepRef.current) {
       return;
     }
 
@@ -1537,6 +1642,10 @@ export default function RecipeBookScreen({
   };
 
   const editPreparationStep = (step) => {
+    if (!canWrite) {
+      return;
+    }
+
     stepFeedbackAnimationId.current += 1;
     setFeedbackStepId(null);
     setStepFeedbackMessage('');
@@ -1560,6 +1669,10 @@ export default function RecipeBookScreen({
   };
 
   const removePreparationStep = (stepId) => {
+    if (!canWrite) {
+      return;
+    }
+
     requestDeleteConfirmation({
       confirmLabel: 'Eliminar',
       message: 'Se eliminara este paso de preparacion.',
@@ -1587,6 +1700,10 @@ export default function RecipeBookScreen({
   };
 
   const movePreparationStep = (stepId, targetOrder) => {
+    if (!canWrite) {
+      return;
+    }
+
     LayoutAnimation.configureNext({
       duration: 180,
       update: {
@@ -1623,17 +1740,7 @@ export default function RecipeBookScreen({
     });
   };
 
-  const hasActiveRecipeFilters = Boolean(
-    recipeSearchIsActive || selectedRecipeTypeFilter,
-  );
   const hasRecipes = recipes.length > 0;
-  const activeFilterSummary = [
-    `${filteredRecipes.length} resultado${filteredRecipes.length === 1 ? '' : 's'}`,
-    recipeSearchIsActive ? `para "${recipeSearchQuery}"` : '',
-    selectedRecipeTypeFilter ? `· ${selectedRecipeTypeFilter}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
   const emptyRecipeMessage = recipeSearchIsActive
     ? `No hay recetas para "${recipeSearchQuery}".`
     : selectedRecipeTypeFilter
@@ -1643,111 +1750,94 @@ export default function RecipeBookScreen({
   return (
     <View
       style={[
-        styles.mainContainer,
-        { backgroundColor: colors.screenBackground },
+        styles.screenShell,
+        {
+          backgroundColor: colors.appBackground || colors.screenBackground,
+          paddingTop: getScreenContentTopPadding({
+            basePadding: MAIN_SCREEN_TOP_PADDING,
+            platform: Platform.OS,
+            statusBarHeight: StatusBar.currentHeight,
+          }),
+        },
       ]}
     >
-      <View style={styles.headerContainer}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Recetario
-        </Text>
-        <TransactionMenuButton
-          isOpen={menuIsVisible}
-          onPress={() => {
-            Keyboard.dismiss();
-            setMenuIsVisible(true);
-          }}
-        />
-      </View>
-
-      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
-
-      <View style={styles.searchContainer}>
-        <TextInput
-          accessibilityLabel="Buscar receta o tipo"
-          onChangeText={setSearchText}
-          placeholder="Buscar receta o tipo..."
-          placeholderTextColor={colors.textMuted}
-          style={[
-            styles.searchInput,
-            {
-              backgroundColor: colors.fieldBackground,
-              borderColor: colors.border,
-              color: colors.textPrimary,
-            },
-          ]}
-          value={searchText}
-        />
-        {searchText.length > 0 && (
-          <Pressable
-            accessibilityLabel="Limpiar búsqueda"
-            accessibilityRole="button"
-            onPress={() => {
-              Keyboard.dismiss();
-              setSearchText('');
-            }}
-            style={[
-              styles.clearButton,
-              { backgroundColor: colors.surfaceMuted },
-            ]}
-          >
-            <Text
-              style={[styles.clearButtonText, { color: colors.textSecondary }]}
-            >
-              x
-            </Text>
-          </Pressable>
-        )}
-      </View>
-      <QuickFilterChips
-        colors={colors}
-        filters={recipeTypeFilters}
-        getAccessibilityLabel={({ count, type }) =>
-          `Filtrar por ${type || 'todas las recetas'}: ${count} recetas`
-        }
-        getKey={({ type }) => type}
-        getLabel={({ type }) => type || 'Todos'}
-        getValue={({ count }) => count}
-        onSelect={({ type }) => setSelectedRecipeTypeFilter(type)}
-        selectedKey={selectedRecipeTypeFilter}
-        showValues={false}
+      <WorkspaceContextIndicator
+        menuIsVisible={menuIsVisible}
+        onOpenMenu={() => setMenuIsVisible(true)}
+        onOpenSync={onOpenSync}
+        onOpenWorkspace={onOpenWorkspace}
+        refreshKey={refreshKey}
       />
-      {hasActiveRecipeFilters && (
-        <View style={styles.activeFilterBar}>
-          <Text style={[styles.activeFilterText, { color: colors.textMuted }]}>
-            {activeFilterSummary}
-          </Text>
-          <TouchableOpacity
-            accessibilityLabel="Limpiar búsqueda y filtros"
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            onPress={() => {
-              Keyboard.dismiss();
-              setSearchText('');
-              setSelectedRecipeTypeFilter('');
-            }}
-          >
-            <Text style={[styles.resetText, { color: colors.primaryText }]}>
-              Limpiar filtros
-            </Text>
-          </TouchableOpacity>
+      <View style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            accessibilityLabel="Buscar receta o tipo"
+            onChangeText={setSearchText}
+            placeholder="Buscar receta o tipo..."
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.searchInput,
+              {
+                backgroundColor: colors.fieldBackground,
+                borderColor: colors.border,
+                color: colors.textPrimary,
+              },
+            ]}
+            value={searchText}
+          />
+          {searchText.length > 0 && (
+            <Pressable
+              accessibilityLabel="Limpiar búsqueda"
+              accessibilityRole="button"
+              onPress={() => {
+                Keyboard.dismiss();
+                setSearchText('');
+              }}
+              style={[
+                styles.clearButton,
+                { backgroundColor: colors.surfaceMuted },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                x
+              </Text>
+            </Pressable>
+          )}
         </View>
-      )}
-
-      <FlatList
-        columnWrapperStyle={
-          recipeGridColumns > 1 ? styles.recipeGridRow : undefined
-        }
-        contentContainerStyle={styles.recipeList}
-        data={filteredRecipes}
-        initialNumToRender={LIST_INITIAL_RENDER_COUNT}
-        key={recipeGridColumns}
-        keyExtractor={(item) => String(item.id)}
-        keyboardShouldPersistTaps="handled"
-        maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
-        numColumns={recipeGridColumns}
-        removeClippedSubviews={Platform.OS === 'android'}
-        renderItem={({ item }) => (
+        <QuickFilterChips
+          colors={colors}
+          filters={recipeTypeFilters}
+          getAccessibilityLabel={({ count, type }) =>
+            `Filtrar por ${type || 'todas las recetas'}: ${count} recetas`
+          }
+          getKey={({ type }) => type}
+          getLabel={({ type }) => type || 'Todos'}
+          getValue={({ count }) => count}
+          onSelect={({ type }) => setSelectedRecipeTypeFilter(type)}
+          selectedKey={selectedRecipeTypeFilter}
+          showValues={false}
+        />
+        <FlatList
+          columnWrapperStyle={
+            recipeGridColumns > 1 ? styles.recipeGridRow : undefined
+          }
+          contentContainerStyle={styles.recipeList}
+          data={filteredRecipes}
+          initialNumToRender={LIST_INITIAL_RENDER_COUNT}
+          key={recipeGridColumns}
+          keyExtractor={(item) => String(item.id)}
+          keyboardShouldPersistTaps="handled"
+          maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+          numColumns={recipeGridColumns}
+          onRefresh={handleRefresh}
+          removeClippedSubviews={Platform.OS === 'android'}
+          refreshing={refreshing}
+          renderItem={({ item }) => (
           <View
             style={[
               styles.recipeCard,
@@ -1819,6 +1909,7 @@ export default function RecipeBookScreen({
                   Detalle
                 </Text>
               </TouchableOpacity>
+              {canWrite ? (
               <TouchableOpacity
                 accessibilityLabel={`Vender ${item.name}`}
                 accessibilityRole="button"
@@ -1841,6 +1932,7 @@ export default function RecipeBookScreen({
                   Vender
                 </Text>
               </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         )}
@@ -1863,7 +1955,7 @@ export default function RecipeBookScreen({
                   ? emptyRecipeMessage
                   : 'Agrega una receta para calcular costos y venderla después.'}
             </Text>
-            {!isLoadingRecipes && (
+            {!isLoadingRecipes && (hasRecipes || canWrite) && (
               <TouchableOpacity
                 accessibilityLabel={
                   hasRecipes ? 'Limpiar filtros' : 'Agregar primera receta'
@@ -1875,7 +1967,7 @@ export default function RecipeBookScreen({
                   if (hasRecipes) {
                     setSearchText('');
                     setSelectedRecipeTypeFilter('');
-                  } else {
+                  } else if (canWrite) {
                     setModalIsVisible(true);
                   }
                 }}
@@ -1898,27 +1990,33 @@ export default function RecipeBookScreen({
         }
       />
 
-      <TouchableOpacity
-        accessibilityLabel="Agregar receta"
-        accessibilityRole="button"
-        activeOpacity={0.75}
-        onPress={() => {
-          Keyboard.dismiss();
-          setModalIsVisible(true);
-        }}
-        style={[styles.addButton, { backgroundColor: colors.primary }]}
-      >
-        <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
-          +
-        </Text>
-      </TouchableOpacity>
+      {canWrite && hasRecipes && (
+        <TouchableOpacity
+          accessibilityLabel="Agregar receta"
+          accessibilityRole="button"
+          activeOpacity={0.75}
+          onPress={() => {
+            Keyboard.dismiss();
+            setModalIsVisible(true);
+          }}
+          style={[styles.addButton, { backgroundColor: colors.primary }]}
+        >
+          <Text style={[styles.addButtonText, { color: colors.textInverse }]}>
+            +
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <TransactionMenu
+        canWrite={canWrite}
         isVisible={menuIsVisible}
         onAfterClose={handleMenuDismiss}
         onClose={() => setMenuIsVisible(false)}
+        onOpenAccount={() => handleOpenMenuScreen('account')}
         onOpenAppOptions={handleOpenAppOptions}
+        onOpenSync={() => handleOpenMenuScreen('sync')}
         onOpenStoreManager={handleOpenStoreManager}
+        onOpenWorkspace={() => handleOpenMenuScreen('workspace')}
       />
 
       {addStoreModalIsVisible && (
@@ -2086,6 +2184,7 @@ export default function RecipeBookScreen({
             </Animated.View>
           </KeyboardAvoidingView>
           <ManagedOptionPickerModal
+            canManage={canWrite}
             colors={colors}
             deleteAccessibilityLabel={(type) => `Eliminar tipo ${type.name}`}
             emptyLabel="Sin tipo"
@@ -2177,11 +2276,16 @@ export default function RecipeBookScreen({
                         ]}
                       >
                         <TextInput
+                          editable={canWrite}
                           onChangeText={setRecipeNameDraft}
-                          onEndEditing={saveRecipeNameEdition}
-                          onFocus={() =>
-                            setRecipeNameDraft(selectedRecipe.name)
+                          onEndEditing={
+                            canWrite ? saveRecipeNameEdition : undefined
                           }
+                          onFocus={() => {
+                            if (canWrite) {
+                              setRecipeNameDraft(selectedRecipe.name);
+                            }
+                          }}
                           placeholder="Nombre de la receta"
                           placeholderTextColor={colors.textMuted}
                           style={[
@@ -2190,7 +2294,8 @@ export default function RecipeBookScreen({
                           ]}
                           value={recipeNameDraft || selectedRecipe.name}
                         />
-                        {recipeNameDraft &&
+                        {canWrite &&
+                          recipeNameDraft &&
                           recipeNameDraft !== selectedRecipe.name && (
                             <TouchableOpacity
                               accessibilityLabel="Guardar nombre de receta"
@@ -2249,7 +2354,12 @@ export default function RecipeBookScreen({
                   >
                     <TouchableOpacity
                       activeOpacity={0.75}
+                      disabled={!canWrite}
                       onPress={() => {
+                        if (!canWrite) {
+                          return;
+                        }
+
                         Keyboard.dismiss();
                         setRecipeTypePickerIsVisible(true);
                       }}
@@ -2279,6 +2389,7 @@ export default function RecipeBookScreen({
                           Tipo de receta
                         </Text>
                       </View>
+                      {canWrite ? (
                       <Text
                         style={[
                           styles.sectionToggleText,
@@ -2287,6 +2398,7 @@ export default function RecipeBookScreen({
                       >
                         Cambiar
                       </Text>
+                      ) : null}
                     </TouchableOpacity>
                     <View
                       style={[
@@ -2316,6 +2428,7 @@ export default function RecipeBookScreen({
                         </Text>
                       </View>
                       <View style={styles.servingsStepper}>
+                        {canWrite ? (
                         <TouchableOpacity
                           activeOpacity={0.75}
                           onPress={() => {
@@ -2336,7 +2449,9 @@ export default function RecipeBookScreen({
                             -
                           </Text>
                         </TouchableOpacity>
+                        ) : null}
                         <TextInput
+                          editable={canWrite}
                           keyboardType="number-pad"
                           onBlur={() => {
                             const parsedValue = Number(servingsDraft);
@@ -2359,6 +2474,7 @@ export default function RecipeBookScreen({
                           ]}
                           value={servingsDraft}
                         />
+                        {canWrite ? (
                         <TouchableOpacity
                           activeOpacity={0.75}
                           onPress={() => {
@@ -2379,6 +2495,7 @@ export default function RecipeBookScreen({
                             +
                           </Text>
                         </TouchableOpacity>
+                        ) : null}
                       </View>
                     </View>
 
@@ -2527,6 +2644,7 @@ export default function RecipeBookScreen({
 
                                         return (
                                           <EditableIngredientRow
+                                            canWrite={canWrite}
                                             colors={colors}
                                             feedbackMessage={
                                               ingredientFeedbackMessage
@@ -2561,6 +2679,7 @@ export default function RecipeBookScreen({
 
                               return (
                                 <EditableIngredientRow
+                                  canWrite={canWrite}
                                   colors={colors}
                                   feedbackMessage={ingredientFeedbackMessage}
                                   feedbackOpacity={ingredientFeedbackOpacity}
@@ -2608,6 +2727,7 @@ export default function RecipeBookScreen({
                           </View>
                         ),
 
+                        canWrite ? (
                         <View
                           key="ingredient-form"
                           onLayout={(event) => {
@@ -2844,11 +2964,12 @@ export default function RecipeBookScreen({
                               </Text>
                             </TouchableOpacity>
                           )}
-                        </View>,
+                        </View>
+                        ) : null,
                       ]
                     ) : (
                       <>
-                        {(selectedRecipe.steps || []).length > 1 && (
+                        {canWrite && (selectedRecipe.steps || []).length > 1 && (
                           <Text
                             style={[
                               styles.stepHelpText,
@@ -2894,6 +3015,7 @@ export default function RecipeBookScreen({
 
                             return (
                               <DraggablePreparationStep
+                                canWrite={canWrite}
                                 colors={colors}
                                 displacement={displacement}
                                 feedbackMessage={stepFeedbackMessage}
@@ -2944,6 +3066,7 @@ export default function RecipeBookScreen({
                           </View>
                         )}
 
+                        {canWrite ? (
                         <View
                           onLayout={(event) => {
                             stepFormOffsetY.current =
@@ -3041,8 +3164,10 @@ export default function RecipeBookScreen({
                             </TouchableOpacity>
                           )}
                         </View>
+                        ) : null}
                       </>
                     )}
+                    {canWrite ? (
                     <TouchableOpacity
                       activeOpacity={0.75}
                       onPress={() => {
@@ -3063,6 +3188,7 @@ export default function RecipeBookScreen({
                         Eliminar receta
                       </Text>
                     </TouchableOpacity>
+                    ) : null}
                   </ScrollView>
                 </>
               )}
@@ -3296,6 +3422,7 @@ export default function RecipeBookScreen({
             </View>
           )}
           <ManagedOptionPickerModal
+            canManage={canWrite}
             colors={colors}
             deleteAccessibilityLabel={(section) =>
               `Eliminar sección ${section.name}`
@@ -3324,6 +3451,7 @@ export default function RecipeBookScreen({
             title="Sección del ingrediente"
           />
           <ManagedOptionPickerModal
+            canManage={canWrite}
             colors={colors}
             deleteAccessibilityLabel={(type) => `Eliminar tipo ${type.name}`}
             emptyLabel="Sin tipo"
@@ -3472,11 +3600,13 @@ export default function RecipeBookScreen({
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      </View>
     </View>
   );
 }
 
 const EditableIngredientRow = ({
+  canWrite = true,
   colors,
   feedbackMessage,
   feedbackOpacity,
@@ -3492,6 +3622,10 @@ const EditableIngredientRow = ({
       activeOpacity={0.82}
       onLayout={onLayout}
       onPress={() => {
+        if (!canWrite) {
+          return;
+        }
+
         Keyboard.dismiss();
         onEdit(ingredient);
       }}
@@ -3556,7 +3690,7 @@ const EditableIngredientRow = ({
             {feedbackMessage}
           </Text>
         </Animated.View>
-      ) : (
+      ) : canWrite ? (
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={(event) => {
@@ -3573,12 +3707,13 @@ const EditableIngredientRow = ({
             Eliminar
           </Text>
         </TouchableOpacity>
-      )}
+      ) : null}
     </TouchableOpacity>
   );
 };
 
 const DraggablePreparationStep = ({
+  canWrite = true,
   colors,
   displacement,
   feedbackMessage,
@@ -3743,6 +3878,10 @@ const DraggablePreparationStep = ({
       )}
       <Pressable
         onPress={() => {
+          if (!canWrite) {
+            return;
+          }
+
           Keyboard.dismiss();
           handlersRef.current.onEdit(step);
         }}
@@ -3796,7 +3935,7 @@ const DraggablePreparationStep = ({
                   {feedbackMessage}
                 </Text>
               </Animated.View>
-            ) : (
+            ) : canWrite ? (
               <TouchableOpacity
                 accessibilityLabel="Eliminar paso"
                 activeOpacity={0.75}
@@ -3813,12 +3952,12 @@ const DraggablePreparationStep = ({
                   Eliminar
                 </Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
       </Pressable>
       <View
-        {...panResponder.panHandlers}
+        {...(canWrite ? panResponder.panHandlers : {})}
         collapsable={false}
         style={[styles.stepDragRail, { borderLeftColor: colors.border }]}
       >
@@ -4065,18 +4204,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingTop: 8,
   },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 15,
-    marginTop: 15,
-  },
   mainContainer: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     flex: 1,
     marginHorizontal: 8,
-    marginTop: 50,
+    marginTop: 6,
   },
   modalActions: {
     flexDirection: 'row',
@@ -4503,6 +4636,9 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 15,
     paddingRight: 48,
+  },
+  screenShell: {
+    flex: 1,
   },
   title: {
     fontSize: typography.sizes.title,
