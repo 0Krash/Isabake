@@ -44,7 +44,7 @@ describe('workspaceListModel', () => {
     ]);
   });
 
-  test('dedupes duplicate local workspaces and keeps local-only visible', () => {
+  test('collapses local workspaces into one local-only entry', () => {
     const result = dedupeWorkspaces([
       {
         groupId: 'local_1',
@@ -65,7 +65,34 @@ describe('workspaceListModel', () => {
 
     expect(result).toEqual([
       expect.objectContaining({ groupId: 'local_1', name: 'Local B' }),
-      expect.objectContaining({ groupId: 'local_2', name: 'Local only' }),
+    ]);
+  });
+
+  test('keeps the current local workspace when old local duplicates exist', () => {
+    const result = dedupeWorkspaces(
+      [
+        {
+          groupId: 'local_1',
+          isRemote: false,
+          name: 'Old local',
+        },
+        {
+          groupId: 'local_2',
+          isRemote: false,
+          name: 'Current local',
+        },
+      ],
+      {
+        currentWorkspace: {
+          groupId: 'local_2',
+          isRemote: false,
+          name: 'Current local',
+        },
+      },
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({ groupId: 'local_2', name: 'Current local' }),
     ]);
   });
 

@@ -53,11 +53,61 @@ const mergeWorkspace = (existing, next, currentWorkspace) => {
   return merged;
 };
 
+const mergeLocalWorkspace = (existing, next, currentWorkspace) => {
+  if (!existing) {
+    return next;
+  }
+
+  if (isSameWorkspaceIdentity(existing, next)) {
+    return mergeWorkspace(existing, next, currentWorkspace);
+  }
+
+  if (currentWorkspace && isSameWorkspaceIdentity(next, currentWorkspace)) {
+    return {
+      ...existing,
+      ...next,
+    };
+  }
+
+  if (currentWorkspace && isSameWorkspaceIdentity(existing, currentWorkspace)) {
+    return {
+      ...next,
+      ...existing,
+    };
+  }
+
+  return existing;
+};
+
+const applyCurrentWorkspaceMetadata = (workspace, currentWorkspace) => {
+  if (!currentWorkspace || !isSameWorkspaceIdentity(workspace, currentWorkspace)) {
+    return workspace;
+  }
+
+  return {
+    ...currentWorkspace,
+    ...workspace,
+    isRemote: workspace.isRemote || currentWorkspace.isRemote,
+    workspaceRole: workspace.workspaceRole || currentWorkspace.workspaceRole,
+    workspaceStatus: workspace.workspaceStatus || currentWorkspace.workspaceStatus,
+  };
+};
+
 export const dedupeWorkspaces = (workspaces = [], { currentWorkspace } = {}) => {
   const byIdentity = new Map();
   const orderedIds = [];
+  let localWorkspace = null;
 
   workspaces.forEach((workspace) => {
+    if (!workspace?.isRemote) {
+      localWorkspace = mergeLocalWorkspace(
+        localWorkspace,
+        workspace,
+        currentWorkspace,
+      );
+      return;
+    }
+
     const id = normalizeWorkspaceId(workspace);
 
     if (!id) {
@@ -76,7 +126,20 @@ export const dedupeWorkspaces = (workspaces = [], { currentWorkspace } = {}) => 
     );
   });
 
-  return orderedIds.map((id) => byIdentity.get(id));
+  const remoteWorkspaces = orderedIds.map((id) =>
+    applyCurrentWorkspaceMetadata(byIdentity.get(id), currentWorkspace),
+  );
+
+  if (
+    localWorkspace &&
+    !remoteWorkspaces.some((workspace) =>
+      isSameWorkspaceIdentity(workspace, localWorkspace),
+    )
+  ) {
+    return [localWorkspace, ...remoteWorkspaces];
+  }
+
+  return remoteWorkspaces;
 };
 
 export default {

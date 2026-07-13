@@ -57,6 +57,7 @@ import {
   acceptWorkspaceInvitationByToken,
   createRemoteWorkspace,
   createWorkspaceInvitation,
+  deleteRemoteWorkspace,
   declineWorkspaceInvitation,
   declineWorkspaceInvitationByToken,
   disconnectLocalWorkspace,
@@ -68,6 +69,7 @@ import {
   revokeWorkspaceInvitation,
   selectWorkspace,
   toRemoteWorkspaceMetadata,
+  updateRemoteWorkspace,
 } from './workspaceService';
 import { getWorkspaceListKey } from './workspaceListModel';
 
@@ -93,6 +95,12 @@ describe('workspaceService', () => {
 
   test('loads local and remote workspaces', async () => {
     const client = {
+      listMyWorkspaceInvitations: jest.fn(async () => ({
+        invitations: [
+          { invitationId: 'mine_1', status: 'invited' },
+          { invitationId: 'mine_accepted', status: 'accepted' },
+        ],
+      })),
       listWorkspaces: jest.fn(async () => ({
         workspaces: [
           {
@@ -108,6 +116,9 @@ describe('workspaceService', () => {
     const result = await refreshWorkspaceState({ client });
 
     expect(result.authRequired).toBe(false);
+    expect(result.myInvitations).toEqual([
+      { invitationId: 'mine_1', status: 'invited' },
+    ]);
     expect(result.workspaces).toEqual([
       expect.objectContaining({ groupId: 'local_1', isRemote: false }),
       expect.objectContaining({
@@ -116,6 +127,51 @@ describe('workspaceService', () => {
         workspaceRole: 'admin',
       }),
     ]);
+  });
+
+  test('refresh updates current remote workspace membership metadata', async () => {
+    mockCurrentWorkspace = {
+      groupId: 'group_1',
+      isRemote: true,
+      name: 'Panaderia',
+      remoteGroupId: 'group_1',
+      syncStatus: 'remote',
+      workspaceId: 'group_1',
+      workspaceRole: null,
+      workspaceStatus: null,
+    };
+
+    const client = {
+      listMyWorkspaceInvitations: jest.fn(async () => ({ invitations: [] })),
+      listWorkspaces: jest.fn(async () => ({
+        workspaces: [
+          {
+            groupId: 'group_1',
+            membership: { role: 'owner', status: 'active' },
+            name: 'Panaderia',
+            ownerUserId: 'owner',
+            workspaceId: 'group_1',
+          },
+        ],
+      })),
+    };
+
+    const result = await refreshWorkspaceState({ client });
+
+    expect(result.currentWorkspace).toEqual(
+      expect.objectContaining({
+        groupId: 'group_1',
+        isRemote: true,
+        workspaceRole: 'owner',
+        workspaceStatus: 'active',
+      }),
+    );
+    expect(mockSetCurrentWorkspaceCalls.at(-1)).toEqual(
+      expect.objectContaining({
+        groupId: 'group_1',
+        workspaceRole: 'owner',
+      }),
+    );
   });
 
   test('dedupes local stored remote workspace with backend workspace', async () => {
@@ -163,6 +219,39 @@ describe('workspaceService', () => {
     ]);
   });
 
+  test('hides cached remote workspaces missing from authenticated backend list', async () => {
+    mockCurrentWorkspace = {
+      groupId: 'group_removed',
+      isRemote: true,
+      name: 'Cached removed workspace',
+      syncStatus: 'remote',
+      workspaceId: 'group_removed',
+      workspaceRole: 'member',
+    };
+    mockLocalWorkspaces.push(mockCurrentWorkspace);
+    const client = {
+      listWorkspaces: jest.fn(async () => ({
+        workspaces: [],
+      })),
+    };
+
+    const result = await refreshWorkspaceState({ client });
+
+    expect(result.authRequired).toBe(false);
+    expect(result.currentWorkspace).toEqual(
+      expect.objectContaining({ groupId: 'local_1', isRemote: false }),
+    );
+    expect(result.workspaces).toEqual([
+      expect.objectContaining({ groupId: 'local_1', isRemote: false }),
+    ]);
+    expect(
+      result.workspaces.some((workspace) => workspace.groupId === 'group_removed'),
+    ).toBe(false);
+    expect(mockSetCurrentWorkspaceCalls).toEqual([
+      expect.objectContaining({ groupId: 'local_1', isRemote: false }),
+    ]);
+  });
+
   test('returns local-only state when auth is missing', async () => {
     mockGetFreshAuthSession.mockRejectedValueOnce(new Error('auth_required'));
 
@@ -205,6 +294,42 @@ describe('workspaceService', () => {
     expect(mockSetCurrentWorkspaceCalls).toHaveLength(1);
   });
 
+  test('update remote workspace renames and selects metadata', async () => {
+    const client = {
+      updateWorkspace: jest.fn(async () => ({
+        workspace: {
+          groupId: 'group_1',
+          membership: { role: 'owner', status: 'active' },
+          name: 'Panaderia Norte',
+          ownerUserId: 'owner',
+          workspaceId: 'group_1',
+        },
+      })),
+    };
+
+    const result = await updateRemoteWorkspace({
+      client,
+      groupId: 'group_1',
+      name: 'Panaderia Norte',
+    });
+
+    expect(client.updateWorkspace).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      groupId: 'group_1',
+      name: 'Panaderia Norte',
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        groupId: 'group_1',
+        isRemote: true,
+        name: 'Panaderia Norte',
+      }),
+    );
+    expect(mockSetCurrentWorkspaceCalls).toEqual([
+      expect.objectContaining({ name: 'Panaderia Norte' }),
+    ]);
+  });
+
   test('select workspace updates local pointer without sync calls', async () => {
     const workspace = toRemoteWorkspaceMetadata({
       groupId: 'group_2',
@@ -217,6 +342,36 @@ describe('workspaceService', () => {
       expect.objectContaining({ groupId: 'group_2', isRemote: true }),
     );
     expect(mockSetCurrentWorkspaceCalls).toEqual([workspace]);
+  });
+
+  test('accept invitation selects accepted workspace metadata', async () => {
+    const client = {
+      acceptWorkspaceInvitation: jest.fn(async () => ({
+        invitation: {
+          groupId: 'group_invited',
+          role: 'member',
+          status: 'accepted',
+          workspace: { name: 'Panaderia Invitada' },
+          workspaceId: 'group_invited',
+        },
+        status: 'success',
+      })),
+    };
+
+    await acceptWorkspaceInvitation({
+      client,
+      invitationId: 'invitation_1',
+    });
+
+    expect(mockSetCurrentWorkspaceCalls).toEqual([
+      expect.objectContaining({
+        groupId: 'group_invited',
+        isRemote: true,
+        name: 'Panaderia Invitada',
+        workspaceRole: 'member',
+        workspaceStatus: 'active',
+      }),
+    ]);
   });
 
   test('disconnect switches to local workspace without deleting documents', async () => {
@@ -262,6 +417,23 @@ describe('workspaceService', () => {
     expect(mockSetCurrentWorkspaceCalls[0].groupId).toBe('local_1');
   });
 
+  test('delete remote workspace calls backend delete then switches to local workspace', async () => {
+    const client = {
+      deleteWorkspace: jest.fn(async () => ({ status: 'success' })),
+    };
+
+    await deleteRemoteWorkspace({
+      client,
+      groupId: 'group_1',
+    });
+
+    expect(client.deleteWorkspace).toHaveBeenCalledWith({
+      authHeaders: { Authorization: 'Bearer jwt_access' },
+      groupId: 'group_1',
+    });
+    expect(mockSetCurrentWorkspaceCalls[0].groupId).toBe('local_1');
+  });
+
   test('invitation APIs call backend with auth headers', async () => {
     const client = {
       acceptWorkspaceInvitation: jest.fn(async () => ({ status: 'success' })),
@@ -277,10 +449,16 @@ describe('workspaceService', () => {
         invitation: { email: 'invitee@example.test' },
       })),
       listMyWorkspaceInvitations: jest.fn(async () => ({
-        invitations: [{ invitationId: 'invitation_1' }],
+        invitations: [
+          { invitationId: 'invitation_1', status: 'invited' },
+          { invitationId: 'invitation_old', status: 'accepted' },
+        ],
       })),
       listWorkspaceInvitations: jest.fn(async () => ({
-        invitations: [{ invitationId: 'invitation_2' }],
+        invitations: [
+          { invitationId: 'invitation_2', status: 'invited' },
+          { invitationId: 'invitation_accepted', status: 'accepted' },
+        ],
       })),
       regenerateWorkspaceInvitationLink: jest.fn(async () => ({
         status: 'success',
@@ -298,8 +476,12 @@ describe('workspaceService', () => {
       client,
       token: 'invite_token_1',
     });
-    await loadWorkspaceInvitations({ client, groupId: 'group_1' });
-    await loadMyWorkspaceInvitations({ client });
+    await expect(
+      loadWorkspaceInvitations({ client, groupId: 'group_1' }),
+    ).resolves.toEqual([{ invitationId: 'invitation_2', status: 'invited' }]);
+    await expect(loadMyWorkspaceInvitations({ client })).resolves.toEqual([
+      { invitationId: 'invitation_1', status: 'invited' },
+    ]);
     await acceptWorkspaceInvitation({ client, invitationId: 'invitation_1' });
     await acceptWorkspaceInvitationByToken({
       client,

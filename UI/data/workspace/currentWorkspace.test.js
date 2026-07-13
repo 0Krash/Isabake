@@ -50,7 +50,12 @@ import {
   assignUngroupedLocalDataToCurrentWorkspace,
   getCurrentGroupId,
 } from './currentWorkspace';
-import { getCurrentWorkspace, setCurrentWorkspace } from './workspaceRepository';
+import {
+  getCurrentWorkspace,
+  createLocalWorkspace,
+  setCurrentWorkspace,
+  subscribeToCurrentWorkspaceChanges,
+} from './workspaceRepository';
 
 describe('currentWorkspace', () => {
   beforeEach(() => {
@@ -74,6 +79,38 @@ describe('currentWorkspace', () => {
           id: 'currentWorkspace',
         }),
       ]),
+    );
+  });
+
+  test('reuses the existing local workspace instead of creating another one', async () => {
+    await setCurrentWorkspace({
+      groupId: 'workspace_local_1',
+      isRemote: false,
+      name: 'Workspace local',
+      syncStatus: 'local',
+      workspaceId: 'workspace_local_1',
+    });
+    mockSavedDocuments.length = 0;
+
+    const workspace = await createLocalWorkspace({ name: 'Otro local' });
+
+    expect(workspace).toEqual(
+      expect.objectContaining({
+        groupId: 'workspace_local_1',
+        isRemote: false,
+        name: 'Workspace local',
+      }),
+    );
+    expect(
+      mockSavedDocuments.filter(
+        (document) => document.collection === '__local_workspaces',
+      ),
+    ).toHaveLength(1);
+    expect(mockSavedDocuments[0]).toEqual(
+      expect.objectContaining({
+        groupId: 'workspace_local_1',
+        id: 'workspace_local_1',
+      }),
     );
   });
 
@@ -141,5 +178,34 @@ describe('currentWorkspace', () => {
         workspaceRole: 'admin',
       }),
     );
+  });
+
+  test('notifies subscribers when current workspace changes', async () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeToCurrentWorkspaceChanges(listener);
+
+    await setCurrentWorkspace({
+      groupId: 'workspace_a',
+      name: 'Proyecto A',
+      workspaceId: 'workspace_a',
+    });
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'workspace_a',
+        name: 'Proyecto A',
+      }),
+    );
+
+    unsubscribe();
+    listener.mockClear();
+
+    await setCurrentWorkspace({
+      groupId: 'workspace_b',
+      name: 'Proyecto B',
+      workspaceId: 'workspace_b',
+    });
+
+    expect(listener).not.toHaveBeenCalled();
   });
 });

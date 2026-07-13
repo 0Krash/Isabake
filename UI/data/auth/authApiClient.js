@@ -61,6 +61,19 @@ export const createAuthApiClient = (options = {}) => ({
       headers: authHeaders,
       method: 'POST',
     }),
+  updateWorkspace: ({ authHeaders, groupId, name }) =>
+    requestJson(`/workspaces/${groupId}`, {
+      ...options,
+      body: { name },
+      headers: authHeaders,
+      method: 'PATCH',
+    }),
+  deleteWorkspace: ({ authHeaders, groupId }) =>
+    requestJson(`/workspaces/${groupId}`, {
+      ...options,
+      headers: authHeaders,
+      method: 'DELETE',
+    }),
   createWorkspaceInvitation: ({ authHeaders, email, groupId, role }) =>
     requestJson(`/workspaces/${groupId}/invitations`, {
       ...options,

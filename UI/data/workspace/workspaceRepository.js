@@ -8,6 +8,7 @@ import { createLocalId, getLocalDeviceId } from '../db/localIds';
 const WORKSPACE_COLLECTION = '__local_workspaces';
 const LOCAL_META_COLLECTION = '__local_meta';
 const CURRENT_WORKSPACE_DOCUMENT_ID = 'currentWorkspace';
+const currentWorkspaceListeners = new Set();
 
 const nowIso = () => new Date().toISOString();
 
@@ -27,6 +28,23 @@ const documentToWorkspace = (document) =>
         workspaceRole: document.data?.workspaceRole || null,
       }
     : null;
+
+export const subscribeToCurrentWorkspaceChanges = (listener) => {
+  if (typeof listener !== 'function') {
+    return () => {};
+  }
+
+  currentWorkspaceListeners.add(listener);
+  return () => {
+    currentWorkspaceListeners.delete(listener);
+  };
+};
+
+const notifyCurrentWorkspaceChanged = (workspace) => {
+  currentWorkspaceListeners.forEach((listener) => {
+    listener(workspace);
+  });
+};
 
 export const getCurrentWorkspace = async (options = {}) => {
   const pointerDocument = await getDocument(
@@ -124,10 +142,18 @@ export const setCurrentWorkspace = async (workspace, options = {}) => {
     },
   );
 
-  return getCurrentWorkspace(options);
+  const currentWorkspace = await getCurrentWorkspace(options);
+  notifyCurrentWorkspaceChanged(currentWorkspace);
+  return currentWorkspace;
 };
 
 export const createLocalWorkspace = async ({ name } = {}, options = {}) => {
+  const existingLocalWorkspace = await getFirstLocalOnlyWorkspace(options);
+
+  if (existingLocalWorkspace) {
+    return setCurrentWorkspace(existingLocalWorkspace, options);
+  }
+
   const workspaceId = createLocalId('workspace');
 
   return setCurrentWorkspace(
@@ -170,6 +196,7 @@ export const clearCurrentWorkspace = async (options = {}) => {
     },
   );
 
+  notifyCurrentWorkspaceChanged(null);
   return null;
 };
 
@@ -181,4 +208,5 @@ export default {
   getLocalWorkspaces,
   getOrCreateDefaultLocalWorkspace,
   setCurrentWorkspace,
+  subscribeToCurrentWorkspaceChanges,
 };
