@@ -6,7 +6,10 @@ const SENSITIVE_PATTERNS = [
   /groupId|cursor|serverVersion|sync_outbox|localId|remoteId/i,
 ];
 
-const sanitizeText = (value, fallback = 'Revisa el respaldo e intenta de nuevo.') => {
+const sanitizeText = (
+  value,
+  fallback = 'Revisa el respaldo e intenta de nuevo.',
+) => {
   const text = String(value || '').trim();
 
   if (!text || SENSITIVE_PATTERNS.some((pattern) => pattern.test(text))) {
@@ -140,7 +143,7 @@ export const getBackupStatus = ({
         secondaryActionLabel: null,
         showInMainScreens: true,
         statusKey: 'needs_workspace',
-        title: 'Selecciona un negocio compartido',
+        title: 'Selecciona un proyecto compartido',
         tone: 'warning',
       };
     }
@@ -151,7 +154,7 @@ export const getBackupStatus = ({
       secondaryActionLabel: null,
       showInMainScreens: true,
       statusKey: 'local_only',
-      title: 'Guardado en este dispositivo',
+      title: 'Privado',
       tone: 'neutral',
     };
   }
@@ -213,9 +216,10 @@ export const getBackupStatus = ({
     autoSyncStateKey === 'skipped_offline'
   ) {
     return {
-      description: pendingCount > 0
-        ? 'Se respaldarán cuando vuelva la conexión.'
-        : 'Tus cambios están guardados en este dispositivo.',
+      description:
+        pendingCount > 0
+          ? 'Se respaldarán cuando vuelva la conexión.'
+          : 'Tus cambios están guardados en este dispositivo.',
       primaryActionLabel: null,
       secondaryActionLabel: null,
       showInMainScreens: true,
@@ -326,7 +330,7 @@ export const getBackupStatus = ({
         secondaryActionLabel: null,
         showInMainScreens: true,
         statusKey: 'needs_workspace',
-        title: 'Selecciona un negocio compartido',
+        title: 'Selecciona un proyecto compartido',
         tone: 'warning',
       };
     }
@@ -380,9 +384,10 @@ export const getBackupStatus = ({
     }
 
     return {
-      description: autoSyncState?.autoSyncEnabled === false
-        ? 'Puedes sincronizar manualmente cuando quieras.'
-        : 'Se respaldarán automáticamente.',
+      description:
+        autoSyncState?.autoSyncEnabled === false
+          ? 'Puedes sincronizar manualmente cuando quieras.'
+          : 'Se respaldarán automáticamente.',
       primaryActionLabel: null,
       secondaryActionLabel: null,
       showInMainScreens: true,

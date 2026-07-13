@@ -172,7 +172,7 @@ export default function SyncCenterScreen({ onOpenConflicts, onOpenHistory } = {}
 
       <AppCard>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Negocio compartido
+          Proyecto compartido
         </Text>
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           {getSyncCenterModeLabel(workspace)}

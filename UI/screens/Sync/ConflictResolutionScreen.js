@@ -178,7 +178,7 @@ export default function ConflictResolutionScreen() {
             Todo limpio
           </Text>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-            Cuando haya cambios del negocio que necesiten decision, apareceran
+            Cuando haya cambios del proyecto que necesiten decision, apareceran
             aqui.
           </Text>
         </View>

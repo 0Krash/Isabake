@@ -1,9 +1,11 @@
 const mockGetFirstAsync = jest.fn();
+const mockGetAllAsync = jest.fn();
 const mockRunAsync = jest.fn();
 const mockAddOutboxEvent = jest.fn();
 
 jest.mock('./database', () => ({
   initDatabase: jest.fn(async () => ({
+    getAllAsync: mockGetAllAsync,
     getFirstAsync: mockGetFirstAsync,
     runAsync: mockRunAsync,
   })),
@@ -18,6 +20,7 @@ jest.mock('../sync/syncOutbox', () => ({
 }));
 
 import {
+  getDocumentsReadyToSync,
   saveDocument,
   softDeleteDocument,
 } from './documentStore';
@@ -26,6 +29,7 @@ describe('documentStore sync outbox wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAddOutboxEvent.mockResolvedValue('outbox_1');
+    mockGetAllAsync.mockResolvedValue([]);
     mockGetFirstAsync.mockResolvedValue(null);
     mockRunAsync.mockResolvedValue(undefined);
   });
@@ -72,5 +76,36 @@ describe('documentStore sync outbox wiring', () => {
         db: expect.any(Object),
       }),
     );
+  });
+
+  test('getDocumentsReadyToSync only reads pending shared documents', async () => {
+    mockGetAllAsync.mockResolvedValue([
+      {
+        collection: 'recipes',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        data: '{"name":"Pan"}',
+        deletedAt: null,
+        deviceId: 'device_1',
+        groupId: 'group_1',
+        id: 'recipe_1',
+        localVersion: 1,
+        remoteId: 'remote_1',
+        serverVersion: 1,
+        syncStatus: 'pending',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    const result = await getDocumentsReadyToSync();
+
+    expect(mockGetAllAsync.mock.calls[0][0]).toContain(
+      "AND syncStatus = 'pending'",
+    );
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'recipe_1',
+        syncStatus: 'pending',
+      }),
+    ]);
   });
 });

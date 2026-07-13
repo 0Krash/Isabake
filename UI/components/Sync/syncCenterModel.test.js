@@ -3,6 +3,7 @@ import {
   getAuthStatusLabel,
   getSyncCenterModeLabel,
   getSyncWarningMessage,
+  getUserFacingPendingCount,
   getUserSafeSyncStatus,
   getUserSafeSyncError,
 } from './syncCenterModel';
@@ -102,5 +103,37 @@ describe('syncCenterModel', () => {
       'network_or_backend_unavailable',
     );
     expect(getSyncCenterModeLabel({ isRemote: true })).toBe('Compartido');
+  });
+
+  test('uses syncable documents, not stale outbox rows, for main pending status', () => {
+    expect(
+      createSyncCenterSummary({
+        currentWorkspace: { groupId: 'group_1', isRemote: true },
+        readiness: {
+          pendingOutboxCount: 4,
+          readyToSyncCount: 0,
+        },
+        session: { sessionState: 'authenticated' },
+      }).pendingCount,
+    ).toBe(0);
+    expect(
+      getUserFacingPendingCount({
+        fallbackPendingCount: 4,
+        readiness: {
+          pendingOutboxCount: 4,
+          readyToSyncCount: 0,
+        },
+      }),
+    ).toBe(0);
+    expect(
+      getUserFacingPendingCount({
+        fallbackPendingCount: 4,
+        readiness: {
+          pendingOutboxCount: 4,
+          readyToSyncCount: 2,
+        },
+      }),
+    ).toBe(2);
+    expect(getUserFacingPendingCount({ fallbackPendingCount: 3 })).toBe(3);
   });
 });

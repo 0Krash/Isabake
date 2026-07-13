@@ -145,7 +145,7 @@ export const getSyncHistoryWorkspaceName = (workspace = {}) => {
   const name = String(workspace?.name || '').trim();
 
   if (!name || /^(phase_|ws_|workspace_|group_|local_)/i.test(name)) {
-    return workspace?.isRemote ? 'Negocio compartido' : 'Solo local';
+    return workspace?.isRemote ? 'Proyecto compartido' : 'Solo local';
   }
 
   return name.slice(0, 80);

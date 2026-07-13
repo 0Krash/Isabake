@@ -42,6 +42,10 @@ jest.mock('../../data/sync/syncHistoryService', () => ({
   })),
 }));
 
+jest.mock('../../data/sync/autoSyncStateRepository', () => ({
+  setAutoSyncState: jest.fn(async (state) => state),
+}));
+
 jest.mock('../../data/sync/syncStateRepository', () => ({
   getSyncState: jest.fn(),
 }));
@@ -50,6 +54,7 @@ import {
   loadSyncCenterStatus,
   runManualSyncAction,
 } from './useSyncCenter';
+import { setAutoSyncState } from '../../data/sync/autoSyncStateRepository';
 import {
   finishSyncHistoryRun,
   recordSkippedSyncRun,
@@ -178,6 +183,15 @@ describe('useSyncCenter helpers', () => {
         run: expect.objectContaining({ runId: 'sync_run_1' }),
       }),
     );
+    expect(setAutoSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoSyncState: 'idle',
+        lastReason: 'manual_push',
+        lastStatus: 'success',
+        pendingOutboxCount: 0,
+        syncInFlight: false,
+      }),
+    );
   });
 
   test('history write failure does not block manual sync', async () => {
@@ -296,6 +310,15 @@ describe('useSyncCenter helpers', () => {
       expect.objectContaining({
         error: 'sync_timeout',
         status: 'failed',
+      }),
+    );
+    expect(setAutoSyncState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoSyncState: 'idle',
+        lastReason: 'manual_full_sync',
+        lastStatus: 'failed',
+        pendingOutboxCount: 1,
+        syncInFlight: false,
       }),
     );
     expect(sync).toHaveBeenCalledTimes(1);

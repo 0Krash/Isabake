@@ -17,7 +17,7 @@ describe('backupStatusModel', () => {
       expect.objectContaining({
         description: 'Inicia sesión solo si quieres respaldar o compartir.',
         statusKey: 'local_only',
-        title: 'Guardado en este dispositivo',
+        title: 'Privado',
         tone: 'neutral',
       }),
     );
@@ -55,6 +55,22 @@ describe('backupStatusModel', () => {
         statusKey: 'backed_up',
         title: 'Todo respaldado',
         tone: 'success',
+      }),
+    );
+  });
+
+  test('ignores stale auto-sync pending state when there are no user-facing pending changes', () => {
+    expect(
+      getBackupStatus({
+        autoSyncState: { autoSyncState: 'scheduled', autoSyncEnabled: true },
+        authStatus: 'authenticated',
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 0,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        statusKey: 'backed_up',
+        title: 'Todo respaldado',
       }),
     );
   });
@@ -166,7 +182,7 @@ describe('backupStatusModel', () => {
       expect.objectContaining({
         description: 'Tus cambios están guardados localmente.',
         statusKey: 'needs_workspace',
-        title: 'Selecciona un negocio compartido',
+        title: 'Selecciona un proyecto compartido',
       }),
     );
     expect(

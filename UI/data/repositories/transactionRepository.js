@@ -55,8 +55,13 @@ const getAll = async (options = {}) => {
   return sortTransactions(filteredTransactions);
 };
 
-const getPage = async ({ limit = 20, page = 1, transactionType } = {}) => {
-  const allTransactions = await getAll({ transactionType });
+const getPage = async ({
+  groupId,
+  limit = 20,
+  page = 1,
+  transactionType,
+} = {}) => {
+  const allTransactions = await getAll({ groupId, transactionType });
   const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const normalizedPage = Math.max(Number(page) || 1, 1);
   const start = (normalizedPage - 1) * normalizedLimit;

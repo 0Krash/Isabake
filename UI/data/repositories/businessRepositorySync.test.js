@@ -1,7 +1,8 @@
+const mockGetCollection = jest.fn(async () => []);
 const mockSaveDocument = jest.fn();
 
 jest.mock('../db/documentStore', () => ({
-  getCollection: jest.fn(async () => []),
+  getCollection: (...args) => mockGetCollection(...args),
   getDocument: jest.fn(),
   saveDocument: (...args) => mockSaveDocument(...args),
   softDeleteDocument: jest.fn(),
@@ -23,6 +24,7 @@ import transactionRepository from './transactionRepository';
 describe('business repositories sync coverage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCollection.mockResolvedValue([]);
     mockSaveDocument.mockImplementation(async (collection, id, data, options) => ({
       collection,
       data,
@@ -179,6 +181,28 @@ describe('business repositories sync coverage', () => {
         groupId: 'group_1',
         skipOutbox: undefined,
       }),
+    );
+  });
+
+  test('business reads can be scoped by active workspace groupId', async () => {
+    await recipeRepository.getAll({ groupId: 'workspace_b' });
+    await inventoryRepository.getAll({ groupId: 'workspace_b' });
+    await transactionRepository.getPage({
+      groupId: 'workspace_b',
+      transactionType: 'Ventas',
+    });
+
+    expect(mockGetCollection).toHaveBeenCalledWith(
+      'recipes',
+      expect.objectContaining({ groupId: 'workspace_b' }),
+    );
+    expect(mockGetCollection).toHaveBeenCalledWith(
+      'inventory',
+      expect.objectContaining({ groupId: 'workspace_b' }),
+    );
+    expect(mockGetCollection).toHaveBeenCalledWith(
+      'transactions',
+      expect.objectContaining({ groupId: 'workspace_b' }),
     );
   });
 

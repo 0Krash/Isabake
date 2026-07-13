@@ -20,6 +20,7 @@ import {
   runTwoWorkspaceIsolationDevCheck,
 } from './runSyncIntegrationChecks';
 import { runDevDataReset } from './runDevChecks';
+import { createDevSampleBusinessData } from './devSampleDataSeeder';
 import { createDevAuthSession } from '../auth/authSession';
 
 export const DEV_SYNC_GROUP_ID = 'phase_13_sync_dev_group';
@@ -53,6 +54,7 @@ export const createSyncDiagnosticsActions = ({
     runServerSessionRevocationDevCheck,
     runTwoWorkspaceIsolationDevCheck,
     runDevDataReset,
+    createDevSampleBusinessData,
   },
 } = {}) => [
   {
@@ -65,6 +67,11 @@ export const createSyncDiagnosticsActions = ({
         confirm: true,
         scope: 'full_local_dev_reset',
       }),
+  },
+  {
+    key: 'createSampleBusinessData',
+    label: 'Create sample inventory, recipes, and transactions',
+    run: () => runners.createDevSampleBusinessData(),
   },
   {
     key: 'authWorkspace',

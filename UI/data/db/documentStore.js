@@ -418,6 +418,7 @@ export const getDocumentsReadyToSync = async (options = {}) => {
       WHERE collection IN (${placeholders})
         AND groupId IS NOT NULL
         AND groupId != ''
+        AND syncStatus = 'pending'
       ORDER BY collection ASC, updatedAt ASC;
     `,
     sharedCollections,

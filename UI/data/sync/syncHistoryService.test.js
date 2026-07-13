@@ -210,7 +210,7 @@ describe('syncHistoryService', () => {
     ).toBe('authenticated');
     expect(
       getSyncHistoryWorkspaceName({ isRemote: true, name: 'ws_phase_29' }),
-    ).toBe('Negocio compartido');
+    ).toBe('Proyecto compartido');
     expect(
       getSyncHistoryWorkspaceName({ isRemote: true, name: 'Panaderia Norte' }),
     ).toBe('Panaderia Norte');
