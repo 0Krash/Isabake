@@ -56,6 +56,41 @@ jest.mock('../../models/workspaceModel', () => {
           !workspace.deletedAt,
       ) || null,
     ),
+    findOneAndUpdate: jest.fn(async (query, update) => {
+      const index = store.findIndex(
+        (workspace) =>
+          workspace.groupId === query.groupId && !workspace.deletedAt,
+      );
+
+      if (index < 0) {
+        return null;
+      }
+
+      store[index] = {
+        ...store[index],
+        ...update,
+        updatedAt: '2026-01-01T00:00:02.000Z',
+      };
+
+      return store[index];
+    }),
+    updateMany: jest.fn(async (query, update) => {
+      let modifiedCount = 0;
+      store.forEach((workspace, index) => {
+        if (
+          (!query.groupId || workspace.groupId === query.groupId) &&
+          !workspace.deletedAt
+        ) {
+          store[index] = {
+            ...workspace,
+            ...update,
+            updatedAt: '2026-01-01T00:00:02.000Z',
+          };
+          modifiedCount += 1;
+        }
+      });
+      return { modifiedCount };
+    }),
   };
 });
 
@@ -102,6 +137,20 @@ jest.mock('../../models/workspaceMembershipModel', () => {
       }
 
       return membership;
+    }),
+    updateMany: jest.fn(async (query, update) => {
+      let modifiedCount = 0;
+      store.forEach((membership, index) => {
+        if (!query.groupId || membership.groupId === query.groupId) {
+          store[index] = {
+            ...membership,
+            ...update,
+            updatedAt: '2026-01-01T00:00:02.000Z',
+          };
+          modifiedCount += 1;
+        }
+      });
+      return { modifiedCount };
     }),
   };
 });
@@ -158,6 +207,20 @@ jest.mock('../../models/workspaceInvitationModel', () => {
       };
 
       return store[index];
+    }),
+    updateMany: jest.fn(async (query, update) => {
+      let modifiedCount = 0;
+      store.forEach((invitation, index) => {
+        if (!query.groupId || invitation.groupId === query.groupId) {
+          store[index] = {
+            ...invitation,
+            ...update,
+            updatedAt: '2026-01-01T00:00:02.000Z',
+          };
+          modifiedCount += 1;
+        }
+      });
+      return { modifiedCount };
     }),
   };
 });
@@ -250,6 +313,64 @@ describe('workspace routes', () => {
     );
   });
 
+  test('owner can rename workspace', async () => {
+    seedWorkspace({ groupId: 'group_a', ownerUserId: 'owner' });
+
+    const response = await request(app)
+      .patch('/workspaces/group_a')
+      .set(auth('owner'))
+      .send({ name: 'Panaderia Norte' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.workspace).toEqual(
+      expect.objectContaining({
+        groupId: 'group_a',
+        name: 'Panaderia Norte',
+      }),
+    );
+    expect(Workspace.__store[0].name).toBe('Panaderia Norte');
+  });
+
+  test('owner can delete workspace and it is no longer listed', async () => {
+    seedWorkspace({ groupId: 'group_a', ownerUserId: 'owner' });
+    WorkspaceInvitation.__store.push({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      invitationId: 'invitation_1',
+      role: 'member',
+      status: 'invited',
+      workspaceId: 'group_a',
+    });
+
+    const response = await request(app)
+      .delete('/workspaces/group_a')
+      .set(auth('owner'));
+
+    expect(response.status).toBe(200);
+    expect(response.body.workspace).toEqual(
+      expect.objectContaining({
+        deletedAt: expect.any(String),
+        groupId: 'group_a',
+      }),
+    );
+    expect(WorkspaceMembership.__store).toEqual([
+      expect.objectContaining({
+        groupId: 'group_a',
+        status: 'removed',
+        userId: 'owner',
+      }),
+    ]);
+    expect(WorkspaceInvitation.__store).toEqual([
+      expect.objectContaining({
+        groupId: 'group_a',
+        status: 'revoked',
+      }),
+    ]);
+
+    const listResponse = await request(app).get('/workspaces').set(auth('owner'));
+    expect(listResponse.body.workspaces).toEqual([]);
+  });
+
   test('GET /workspaces only returns active memberships for current user', async () => {
     seedWorkspace({ groupId: 'group_a', ownerUserId: 'owner_a' });
     seedWorkspace({ groupId: 'group_b', ownerUserId: 'owner_b' });
@@ -308,6 +429,33 @@ describe('workspace routes', () => {
     expect(memberResponse.body.membership.role).toBe('member');
     expect(deniedResponse.status).toBe(403);
     expect(deniedResponse.body.message).toBe('workspace_admin_required');
+  });
+
+  test('active member can list workspace team members', async () => {
+    seedWorkspace();
+    await request(app)
+      .post('/workspaces/group_a/members')
+      .set(auth('owner'))
+      .send({
+        role: 'member',
+        userId: 'member',
+      });
+
+    const response = await request(app)
+      .get('/workspaces/group_a/members')
+      .set(auth('member'));
+
+    expect(response.status).toBe(200);
+    expect(response.body.members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'owner', userId: 'owner' }),
+        expect.objectContaining({
+          isCurrentUser: true,
+          role: 'member',
+          userId: 'member',
+        }),
+      ]),
+    );
   });
 
   test('removed member cannot get workspace', async () => {
@@ -471,6 +619,52 @@ describe('workspace routes', () => {
     );
     expect(adminResponse.status).toBe(201);
     expect(deniedResponse.status).toBe(403);
+  });
+
+  test('owner/admin can list pending workspace invitations', async () => {
+    seedWorkspace();
+    WorkspaceMembership.__store.push({
+      groupId: 'group_a',
+      role: 'admin',
+      status: 'active',
+      userId: 'admin',
+      workspaceId: 'group_a',
+    });
+
+    const ownerInviteResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'pending@example.test', role: 'member' });
+    const adminInviteResponse = await request(app)
+      .post('/workspaces/group_a/invitations')
+      .set(auth('owner'))
+      .send({ email: 'admin-pending@example.test', role: 'viewer' });
+    const ownerListResponse = await request(app)
+      .get('/workspaces/group_a/invitations')
+      .set(auth('owner'));
+    const adminListResponse = await request(app)
+      .get('/workspaces/group_a/invitations')
+      .set(auth('admin'));
+
+    expect(ownerInviteResponse.status).toBe(201);
+    expect(adminInviteResponse.status).toBe(201);
+    expect(ownerListResponse.status).toBe(200);
+    expect(adminListResponse.status).toBe(200);
+    expect(ownerListResponse.body.invitations).toEqual([
+      expect.objectContaining({
+        email: 'pending@example.test',
+        invitationId: ownerInviteResponse.body.invitation.invitationId,
+        status: 'invited',
+      }),
+      expect.objectContaining({
+        email: 'admin-pending@example.test',
+        invitationId: adminInviteResponse.body.invitation.invitationId,
+        status: 'invited',
+      }),
+    ]);
+    expect(adminListResponse.body.invitations).toEqual(
+      ownerListResponse.body.invitations,
+    );
   });
 
   test('duplicate active invitation is reused safely', async () => {

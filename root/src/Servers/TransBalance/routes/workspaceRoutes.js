@@ -36,7 +36,11 @@ router
   .route('/invitations/by-token/:token/decline')
   .post(workspaceController.declineInvitationByToken);
 
-router.route('/:groupId').get(workspaceController.getWorkspace);
+router
+  .route('/:groupId')
+  .get(workspaceController.getWorkspace)
+  .delete(workspaceController.deleteWorkspace)
+  .patch(workspaceController.updateWorkspace);
 
 router
   .route('/:groupId/members')

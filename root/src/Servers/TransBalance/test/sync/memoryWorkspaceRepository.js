@@ -61,6 +61,28 @@ class MemoryWorkspaceRepository {
     );
   }
 
+  async updateWorkspace(groupId, update) {
+    const index = this.workspaces.findIndex(
+      (workspace) => workspace.groupId === groupId && !workspace.deletedAt,
+    );
+
+    if (index < 0) {
+      return null;
+    }
+
+    this.workspaces[index] = {
+      ...this.workspaces[index],
+      ...update,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return this.workspaces[index];
+  }
+
+  async softDeleteWorkspace(groupId, update) {
+    return this.updateWorkspace(groupId, update);
+  }
+
   async upsertMembership(membership) {
     const index = this.memberships.findIndex(
       (item) => item.groupId === membership.groupId && item.userId === membership.userId,
@@ -113,6 +135,20 @@ class MemoryWorkspaceRepository {
     };
 
     return this.memberships[index];
+  }
+
+  async updateMembershipsByGroupId(groupId, update) {
+    this.memberships = this.memberships.map((membership) =>
+      membership.groupId === groupId
+        ? {
+            ...membership,
+            ...update,
+            updatedAt: new Date().toISOString(),
+          }
+        : membership,
+    );
+
+    return { modifiedCount: this.memberships.length };
   }
 
   async findActiveMembershipsByUserId(userId) {
@@ -186,6 +222,20 @@ class MemoryWorkspaceRepository {
     };
 
     return this.invitations[index];
+  }
+
+  async updateInvitationsByGroupId(groupId, update) {
+    this.invitations = this.invitations.map((invitation) =>
+      invitation.groupId === groupId
+        ? {
+            ...invitation,
+            ...update,
+            updatedAt: new Date().toISOString(),
+          }
+        : invitation,
+    );
+
+    return { modifiedCount: this.invitations.length };
   }
 }
 
