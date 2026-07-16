@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { transactionRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 export const TRANSACTIONS_PAGE_SIZE = 20;
@@ -194,10 +195,11 @@ export default function useTransactionBalanceLocal(
 
   const fetchTransactionsPage = useCallback(
     async (page) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const response = await transactionRepository.getPage({
         limit: TRANSACTIONS_PAGE_SIZE,
         page,
-        groupId,
+        groupId: effectiveGroupId,
         transactionType,
       });
 
@@ -217,9 +219,10 @@ export default function useTransactionBalanceLocal(
     setError(null);
 
     try {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const [transactionsResponse, allTransactions] = await Promise.all([
         fetchTransactionsPage(1),
-        transactionRepository.getAll({ groupId }),
+        transactionRepository.getAll({ groupId: effectiveGroupId }),
       ]);
       const normalizedTransactions = allTransactions.map(normalizeTransaction);
 
@@ -302,9 +305,10 @@ export default function useTransactionBalanceLocal(
 
   const createTransaction = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const transaction = normalizeTransaction(
         await transactionRepository.create(toStorageTransaction(data), {
-          ...(groupId ? { groupId } : {}),
+          groupId: effectiveGroupId,
           ...options,
         }),
       );

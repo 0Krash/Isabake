@@ -33,6 +33,7 @@ import TransactionMenu from '../../components/TransactionBalance/TransactionMenu
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
+import AppIcon from '../../components/icons/AppIcon';
 import {
   MAIN_SCREEN_TOP_PADDING,
   getScreenContentTopPadding,
@@ -49,6 +50,7 @@ import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { calculateRecipeCost } from '../../utils/recipeCost';
 import { idsMatch } from '../../utils/idUtils';
+import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -2087,7 +2089,9 @@ export default function RecipeBookScreen({
               <TextInput
                 ref={newRecipeNameInputRef}
                 onBlur={() => setRecipeNameIsFocused(false)}
-                onChangeText={setRecipeName}
+                onChangeText={(value) =>
+                  setRecipeName(capitalizeUserEntry(value))
+                }
                 onFocus={() => setRecipeNameIsFocused(true)}
                 placeholder="Nombre del producto"
                 placeholderTextColor={colors.textMuted}
@@ -2277,7 +2281,9 @@ export default function RecipeBookScreen({
                       >
                         <TextInput
                           editable={canWrite}
-                          onChangeText={setRecipeNameDraft}
+                          onChangeText={(value) =>
+                            setRecipeNameDraft(capitalizeUserEntry(value))
+                          }
                           onEndEditing={
                             canWrite ? saveRecipeNameEdition : undefined
                           }
@@ -3093,7 +3099,9 @@ export default function RecipeBookScreen({
                           </Text>
                           <TextInput
                             multiline
-                            onChangeText={setStepDescription}
+                            onChangeText={(value) =>
+                              setStepDescription(capitalizeUserEntry(value))
+                            }
                             placeholder="Ej. Batir queso crema con azucar hasta suavizar."
                             placeholderTextColor={colors.textMuted}
                             style={[
@@ -3961,26 +3969,12 @@ const DraggablePreparationStep = ({
         collapsable={false}
         style={[styles.stepDragRail, { borderLeftColor: colors.border }]}
       >
-        <View style={styles.stepGripIcon}>
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-          <View
-            style={[styles.stepGripDot, { backgroundColor: colors.textMuted }]}
-          />
-        </View>
+        <AppIcon
+          accessibilityLabel="Reordenar paso"
+          color={colors.textMuted}
+          name="drag-handle"
+          size={24}
+        />
       </View>
     </Animated.View>
   );
@@ -4695,20 +4689,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     minWidth: 0,
-  },
-  stepGripDot: {
-    borderRadius: 2,
-    height: 2.5,
-    width: 2.5,
-  },
-  stepGripIcon: {
-    alignContent: 'center',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 2,
-    justifyContent: 'center',
-    width: 8,
   },
   stepHelpText: {
     fontSize: typography.sizes.caption,

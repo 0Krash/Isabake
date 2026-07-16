@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   StatusBar,
+  useColorScheme,
   View,
 } from 'react-native';
 
@@ -25,14 +26,17 @@ export default function AppScreen({
   style,
 }) {
   const { colors } = useTransactionBalanceTheme();
+  const colorScheme = useColorScheme();
+  const statusBarStyle = colorScheme === 'dark' ? 'light-content' : 'dark-content';
   const baseStyle = [
     styles.safeArea,
-    { backgroundColor: colors.screenBackground },
+    { backgroundColor: colors.appBackground || colors.screenBackground },
     style,
   ];
   const contentStyle = [
     styles.content,
     {
+      backgroundColor: colors.screenBackground,
       paddingBottom: getScrollContentBottomPadding({ platform: Platform.OS }),
       paddingTop: getScreenContentTopPadding({
         platform: Platform.OS,
@@ -45,6 +49,11 @@ export default function AppScreen({
   if (!scroll) {
     return (
       <SafeAreaView style={baseStyle}>
+        <StatusBar
+          backgroundColor={colors.appBackground || colors.screenBackground}
+          barStyle={statusBarStyle}
+          translucent={false}
+        />
         <View style={contentStyle}>{children}</View>
       </SafeAreaView>
     );
@@ -52,9 +61,18 @@ export default function AppScreen({
 
   return (
     <SafeAreaView style={baseStyle}>
+      <StatusBar
+        backgroundColor={colors.appBackground || colors.screenBackground}
+        barStyle={statusBarStyle}
+        translucent={false}
+      />
       <ScrollView
+        alwaysBounceVertical={Boolean(onRefresh)}
+        bounces={Boolean(onRefresh)}
         contentContainerStyle={contentStyle}
+        contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
+        overScrollMode="never"
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -64,6 +82,7 @@ export default function AppScreen({
             />
           ) : undefined
         }
+        showsVerticalScrollIndicator={false}
       >
         {children}
       </ScrollView>

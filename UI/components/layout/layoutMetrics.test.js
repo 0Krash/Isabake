@@ -4,6 +4,7 @@ import {
   APP_BOTTOM_NAV_HEIGHT_IOS,
   APP_SCREEN_TOP_PADDING,
   MAIN_SCREEN_TOP_PADDING,
+  STATUS_BAR_SAFE_HEIGHT_ANDROID,
   getBottomNavHeight,
   getScrollContentBottomPadding,
   getScreenContentTopPadding,
@@ -30,17 +31,20 @@ describe('layoutMetrics', () => {
     );
     expect(
       getScreenContentTopPadding({ platform: 'android', statusBarHeight: 32 }),
-    ).toBe(APP_SCREEN_TOP_PADDING + 32);
+    ).toBe(APP_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
+    expect(
+      getScreenContentTopPadding({ platform: 'android', statusBarHeight: 52 }),
+    ).toBe(APP_SCREEN_TOP_PADDING + 52);
     expect(
       getScreenContentTopPadding({ platform: 'android', statusBarHeight: null }),
-    ).toBe(APP_SCREEN_TOP_PADDING);
+    ).toBe(APP_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
     expect(
       getScreenContentTopPadding({
         basePadding: 50,
         platform: 'android',
         statusBarHeight: 32,
       }),
-    ).toBe(82);
+    ).toBe(50 + STATUS_BAR_SAFE_HEIGHT_ANDROID);
   });
 
   test('keeps main screen workspace card close to the safe top edge', () => {
@@ -57,6 +61,6 @@ describe('layoutMetrics', () => {
         platform: 'android',
         statusBarHeight: 32,
       }),
-    ).toBe(MAIN_SCREEN_TOP_PADDING + 32);
+    ).toBe(MAIN_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
   });
 });

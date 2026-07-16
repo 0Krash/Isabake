@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { recipeRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 const formatRecipeCost = (cost) => {
@@ -83,7 +84,10 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localRecipes = await recipeRepository.getAll({ groupId });
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const localRecipes = await recipeRepository.getAll({
+        groupId: effectiveGroupId,
+      });
       const normalizedRecipes = sortRecipes(localRecipes.map(normalizeRecipe));
       setRecipes(normalizedRecipes);
       return normalizedRecipes;
@@ -97,9 +101,10 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
 
   const createRecipe = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const recipe = normalizeRecipe(
         await recipeRepository.create(toApiRecipe(data), {
-          ...(groupId ? { groupId } : {}),
+          groupId: effectiveGroupId,
           ...options,
         }),
       );

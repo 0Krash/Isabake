@@ -31,6 +31,7 @@ import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChi
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
+import AppIcon from '../../components/icons/AppIcon';
 import {
   MAIN_SCREEN_TOP_PADDING,
   getScreenContentTopPadding,
@@ -45,6 +46,7 @@ import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { createLocalId } from '../../data/db/localIds';
 import { idsMatch } from '../../utils/idUtils';
+import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const ingredientUnits = [
   { description: 'Gramos', key: 'g' },
@@ -2182,7 +2184,12 @@ const InventoryDetailModal = ({
                       },
                     ]}
                   >
-                    <Edit3Icon color={colors.textSecondary} />
+                    <AppIcon
+                      accessibilityLabel="Editar ingrediente"
+                      color={colors.textSecondary}
+                      name="edit-3"
+                      size={20}
+                    />
                   </TouchableOpacity>
                   ) : null}
                 </View>
@@ -3176,7 +3183,9 @@ const InventoryFormModal = ({
               <FormInput
                 colors={colors}
                 label="Ingrediente"
-                onChangeText={(value) => updateField('name', value)}
+                onChangeText={(value) =>
+                  updateField('name', capitalizeUserEntry(value))
+                }
                 value={form.name}
               />
               <View style={styles.formRow}>
@@ -3191,7 +3200,9 @@ const InventoryFormModal = ({
                 <FormInput
                   colors={colors}
                   label="Almacenamiento"
-                  onChangeText={(value) => updateField('storage', value)}
+                  onChangeText={(value) =>
+                    updateField('storage', capitalizeUserEntry(value))
+                  }
                   value={form.storage}
                 />
               </View>
@@ -3212,7 +3223,9 @@ const InventoryFormModal = ({
                 colors={colors}
                 label="Notas"
                 multiline
-                onChangeText={(value) => updateField('notes', value)}
+                onChangeText={(value) =>
+                  updateField('notes', capitalizeUserEntry(value))
+                }
                 value={form.notes}
               />
             </ScrollView>
@@ -3370,16 +3383,6 @@ const InfoBlock = ({ colors, label, style, value }) => (
     <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
       {value}
     </Text>
-  </View>
-);
-
-const Edit3Icon = ({ color }) => (
-  <View style={styles.edit3Icon}>
-    <View style={[styles.edit3Frame, { borderColor: color }]} />
-    <View style={styles.edit3Pen}>
-      <View style={[styles.edit3PenBody, { backgroundColor: color }]} />
-      <View style={[styles.edit3PenTip, { borderLeftColor: color }]} />
-    </View>
   </View>
 );
 
@@ -3628,43 +3631,6 @@ const styles = StyleSheet.create({
     height: 34,
     justifyContent: 'center',
     width: 34,
-  },
-  edit3Frame: {
-    borderRadius: 3,
-    borderWidth: 1.8,
-    bottom: 2,
-    height: 12,
-    left: 1,
-    position: 'absolute',
-    width: 12,
-  },
-  edit3Icon: {
-    alignItems: 'center',
-    height: 18,
-    justifyContent: 'center',
-    width: 18,
-  },
-  edit3Pen: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 6,
-    position: 'absolute',
-    right: 0,
-    top: 1,
-    transform: [{ rotate: '-35deg' }],
-  },
-  edit3PenBody: {
-    borderRadius: 2,
-    height: 4,
-    width: 13,
-  },
-  edit3PenTip: {
-    borderBottomColor: 'transparent',
-    borderBottomWidth: 3,
-    borderLeftWidth: 5,
-    borderTopColor: 'transparent',
-    borderTopWidth: 3,
-    marginLeft: 1,
   },
   dragHandle: {
     alignSelf: 'center',

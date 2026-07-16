@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { inventoryRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 const normalizeQuality = (quality) => {
@@ -116,7 +117,10 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localInventoryItems = await inventoryRepository.getAll({ groupId });
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const localInventoryItems = await inventoryRepository.getAll({
+        groupId: effectiveGroupId,
+      });
       const normalizedInventoryItems = sortInventoryItems(
         localInventoryItems.map(normalizeInventoryItem),
       );
@@ -132,9 +136,10 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
 
   const createInventoryItem = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const item = normalizeInventoryItem(
         await inventoryRepository.create(toApiInventoryItem(data), {
-          ...(groupId ? { groupId } : {}),
+          groupId: effectiveGroupId,
           ...options,
         }),
       );

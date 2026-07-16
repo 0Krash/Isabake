@@ -4,6 +4,7 @@ import {
   Platform,
   SafeAreaView,
   StyleSheet,
+  StatusBar,
   Text,
   useColorScheme,
   View,
@@ -277,6 +278,11 @@ export default function App() {
             { backgroundColor: theme.colors.appBackground },
           ]}
         >
+          <StatusBar
+            backgroundColor={theme.colors.appBackground}
+            barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+            translucent={false}
+          />
           <Text
             style={[
               styles.dbStateText,
@@ -300,6 +306,11 @@ export default function App() {
           { backgroundColor: theme.colors.appBackground },
         ]}
       >
+        <StatusBar
+          backgroundColor={theme.colors.appBackground}
+          barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+          translucent={false}
+        />
         <AppSecondaryMenu
           devToolsEnabled={devSyncDiagnosticsEnabled}
           onClose={() => setSecondaryMenuVisible(false)}

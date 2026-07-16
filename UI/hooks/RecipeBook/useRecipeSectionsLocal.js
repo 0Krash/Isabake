@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { recipeSectionRepository } from '../../data/repositories';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 export const normalizeRecipeSection = (section = {}) => ({
   id: `${section.recipeSectionId || section.id || section.localId || ''}`,
@@ -22,6 +24,7 @@ const sortRecipeSections = (recipeSections) =>
   );
 
 export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
+  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
   const [recipeSections, setRecipeSections] = useState([]);
   const [isLoadingRecipeSections, setIsLoadingRecipeSections] = useState(false);
   const [error, setError] = useState(null);
@@ -31,7 +34,10 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localRecipeSections = await recipeSectionRepository.getAll();
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const localRecipeSections = await recipeSectionRepository.getAll({
+        groupId: effectiveGroupId,
+      });
       const normalizedSections = sortRecipeSections(
         localRecipeSections.map(normalizeRecipeSection),
       );
@@ -43,17 +49,21 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     } finally {
       setIsLoadingRecipeSections(false);
     }
-  }, []);
+  }, [groupId]);
 
   const createRecipeSection = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const recipeSection = normalizeRecipeSection(
-        await recipeSectionRepository.createIfMissing(data, options),
+        await recipeSectionRepository.createIfMissing(data, {
+          groupId: effectiveGroupId,
+          ...options,
+        }),
       );
       await refreshRecipeSections();
       return recipeSection;
     },
-    [refreshRecipeSections],
+    [groupId, refreshRecipeSections],
   );
 
   const deleteRecipeSection = useCallback(
@@ -89,7 +99,7 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     refreshRecipeSections().catch((requestError) => {
       console.warn('Error al cargar secciones de receta locales:', requestError);
     });
-  }, [autoLoad, refreshRecipeSections]);
+  }, [autoLoad, groupId, refreshRecipeSections]);
 
   return {
     createRecipeSection,
