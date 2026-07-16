@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import typography from '../../constants/TransactionBalance/Typography';
+import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const ManagedOptionPickerModal = ({
   addLabel = 'Agregar',
@@ -146,7 +147,9 @@ const ManagedOptionPickerModal = ({
           {canManage ? (
           <View style={styles.newOptionContainer}>
             <TextInput
-              onChangeText={onChangeNewValue}
+              onChangeText={(value) =>
+                onChangeNewValue(capitalizeUserEntry(value))
+              }
               placeholder={newValuePlaceholder}
               placeholderTextColor={colors.textMuted}
               style={[

@@ -68,6 +68,22 @@ Isabake is a local-first/offline-first Expo React Native app with a Node/Express
 - Legacy backend socket.io must be disabled unless `ENABLE_LEGACY_SOCKET_IO=true`.
 - Legacy mobile socket client must not connect on import and must require `EXPO_PUBLIC_ENABLE_LEGACY_SOCKET_IO=true`.
 
+## Política obligatoria de iconografía
+
+- SVGRepo is the default source for custom icons.
+- If the user provides a SVGRepo link, use exactly that resource.
+- If the user does not provide a SVGRepo link, Codex must search for and select a semantically representative icon from SVGRepo.
+- Icons must be downloaded and stored locally in the repository.
+- The app must not load icons from the internet at runtime.
+- Do not build icons with components, text, borders, CSS, Unicode, emojis, typographic characters, or geometric figures.
+- Do not manually invent an SVG `path`, `polygon`, `circle`, `rect`, or other geometry to approximate an icon.
+- Do not silently replace a requested icon with a different one.
+- If internet access is unavailable or the resource cannot be downloaded, report the blocker and do not improvise an alternative.
+- Icons used on the same screen must keep a consistent visual style.
+- Check each resource license before adding it.
+- Do not use resources with licenses incompatible with this project.
+- If a license requires attribution, preserve the required attribution data.
+
 ## Required Response Format After Every Phase
 
 1. Files modified.

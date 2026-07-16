@@ -135,11 +135,11 @@ export const createAuthStatusDisplay = ({
 
 export const getAuthActionMessage = (action) => {
   if (action === 'login') {
-    return 'Sesion iniciada. El sync compartido queda disponible y sigue siendo manual.';
+    return 'Sesion iniciada. El sync compartido queda disponible.';
   }
 
   if (action === 'register') {
-    return 'Cuenta creada. El sync compartido queda disponible y sigue siendo manual.';
+    return 'Cuenta creada. El sync compartido queda disponible.';
   }
 
   if (action === 'logout') {

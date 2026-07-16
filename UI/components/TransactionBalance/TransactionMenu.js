@@ -12,49 +12,10 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import AppIcon from '../icons/AppIcon';
 
 const MENU_WIDTH = 280;
 const ANIMATION_DURATION = 240;
-
-const MenuIcon = ({ color, isOpen }) => (
-  <View style={styles.icon}>
-    <View
-      style={[
-        styles.iconLine,
-        styles.iconLineTop,
-        {
-          backgroundColor: color,
-          transform: [
-            { translateY: isOpen ? 7 : 0 },
-            { rotate: isOpen ? '45deg' : '0deg' },
-          ],
-        },
-      ]}
-    />
-    <View
-      style={[
-        styles.iconLine,
-        {
-          backgroundColor: color,
-          opacity: isOpen ? 0 : 1,
-        },
-      ]}
-    />
-    <View
-      style={[
-        styles.iconLine,
-        styles.iconLineBottom,
-        {
-          backgroundColor: color,
-          transform: [
-            { translateY: isOpen ? -7 : 0 },
-            { rotate: isOpen ? '-45deg' : '0deg' },
-          ],
-        },
-      ]}
-    />
-  </View>
-);
 
 export const TransactionMenuButton = ({ isOpen, onPress }) => {
   const { colors } = useTransactionBalanceTheme();
@@ -69,7 +30,12 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
       }}
       style={[styles.menuButton, { backgroundColor: colors.surface }]}
     >
-      <MenuIcon color={colors.textPrimary} isOpen={isOpen} />
+      <AppIcon
+        accessibilityLabel={isOpen ? 'Cerrar menu' : 'Abrir menu'}
+        color={colors.textPrimary}
+        name={isOpen ? 'close' : 'menu'}
+        size={28}
+      />
     </TouchableOpacity>
   );
 };
@@ -105,7 +71,7 @@ export default function TransactionMenu({
       value: 'Abrir',
     },
     {
-      description: 'Enviar, recibir y revisar el respaldo manual.',
+      description: 'Estado, respaldo e historial.',
       label: 'Respaldo y sync',
       onPress: onOpenSync,
       value: 'Abrir',
@@ -295,22 +261,6 @@ const styles = StyleSheet.create({
   drawerTitle: {
     fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
-  },
-  icon: {
-    height: 22,
-    justifyContent: 'center',
-    width: 24,
-  },
-  iconLine: {
-    borderRadius: 2,
-    height: 2,
-    width: 24,
-  },
-  iconLineBottom: {
-    marginTop: 5,
-  },
-  iconLineTop: {
-    marginBottom: 5,
   },
   itemsContainer: {
     gap: 12,

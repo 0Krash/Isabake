@@ -16,7 +16,7 @@ export const createSecondaryMenuItems = ({
     label: 'Compartir proyecto',
   },
   {
-    description: 'Enviar o recibir cambios manualmente',
+    description: 'Estado, respaldo e historial',
     key: 'sync',
     label: 'Respaldo y sincronizacion',
   },

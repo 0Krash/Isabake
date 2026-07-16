@@ -13,6 +13,7 @@ import AppScreen from '../../components/layout/AppScreen';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useAuthSession from '../../hooks/auth/useAuthSession';
+import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 import {
   createAuthModeCopy,
   createAuthStatusDisplay,
@@ -92,7 +93,7 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
   return (
     <AppScreen>
       <AppHeader
-        subtitle="El modo local funciona sin iniciar sesion. El sync compartido requiere una cuenta y siempre se ejecuta manualmente."
+        subtitle="El modo local funciona sin iniciar sesion. El sync compartido requiere una cuenta."
         title="Cuenta"
       />
 
@@ -194,7 +195,9 @@ export default function AuthStatusScreen({ onOpenWorkspaces } = {}) {
           </Text>
           {mode === 'register' ? (
             <TextInput
-              onChangeText={setDisplayName}
+              onChangeText={(value) =>
+                setDisplayName(capitalizeUserEntry(value))
+              }
               placeholder="Nombre"
               placeholderTextColor={colors.textMuted}
               style={[

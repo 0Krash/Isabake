@@ -20,6 +20,7 @@ import {
 import typography from '../../../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 import useStoresLocal from '../../../../hooks/Stores/useStoresLocal';
+import { capitalizeUserEntry } from '../../../../utils/textEntryFormat';
 
 const emptyForm = {
   Address: '',
@@ -521,7 +522,9 @@ export default function AddStoreModal({
         colors={colors}
         helperText="Úsalo para identificar la tienda internamente."
         label="Nombre completo"
-        onChangeText={(value) => updateFormValue('Name', value)}
+        onChangeText={(value) =>
+          updateFormValue('Name', capitalizeUserEntry(value))
+        }
         placeholder="Ej. Walmart Express Centro"
         returnKeyType="next"
         value={form.Name}
@@ -540,7 +543,9 @@ export default function AddStoreModal({
         colors={colors}
         helperText="Opcional. Si no la conoces, se guardará como “Sin dirección”."
         label="Dirección o referencia"
-        onChangeText={(value) => updateFormValue('Address', value)}
+        onChangeText={(value) =>
+          updateFormValue('Address', capitalizeUserEntry(value))
+        }
         placeholder="Ej. Av. Centro 123"
         returnKeyType="done"
         value={form.Address}
