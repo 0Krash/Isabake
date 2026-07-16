@@ -560,7 +560,7 @@ describe('WorkspaceService', () => {
     });
   });
 
-  test('owner can delete workspace without last-owner leave restriction', async () => {
+  test('owner can hard delete workspace and related data', async () => {
     const { repository, service } = createService();
     await service.createWorkspace({
       groupId: 'group_a',
@@ -581,19 +581,9 @@ describe('WorkspaceService', () => {
       }),
     ).resolves.toEqual(expect.objectContaining({ deletedAt: expect.any(String) }));
     await expect(service.listWorkspacesForUser('owner')).resolves.toEqual([]);
-    expect(repository.memberships).toEqual([
-      expect.objectContaining({
-        groupId: 'group_a',
-        status: 'removed',
-        userId: 'owner',
-      }),
-    ]);
-    expect(repository.invitations).toEqual([
-      expect.objectContaining({
-        groupId: 'group_a',
-        status: 'revoked',
-      }),
-    ]);
+    expect(repository.workspaces).toEqual([]);
+    expect(repository.memberships).toEqual([]);
+    expect(repository.invitations).toEqual([]);
   });
 
   test('non-owner cannot delete workspace', async () => {

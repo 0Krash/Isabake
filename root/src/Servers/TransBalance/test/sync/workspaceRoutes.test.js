@@ -74,6 +74,18 @@ jest.mock('../../models/workspaceModel', () => {
 
       return store[index];
     }),
+    deleteOne: jest.fn(async (query) => {
+      const index = store.findIndex(
+        (workspace) => workspace.groupId === query.groupId,
+      );
+
+      if (index < 0) {
+        return { deletedCount: 0 };
+      }
+
+      store.splice(index, 1);
+      return { deletedCount: 1 };
+    }),
     updateMany: jest.fn(async (query, update) => {
       let modifiedCount = 0;
       store.forEach((workspace, index) => {
@@ -152,6 +164,17 @@ jest.mock('../../models/workspaceMembershipModel', () => {
       });
       return { modifiedCount };
     }),
+    deleteMany: jest.fn(async (query) => {
+      const initialLength = store.length;
+
+      for (let index = store.length - 1; index >= 0; index -= 1) {
+        if (!query.groupId || store[index].groupId === query.groupId) {
+          store.splice(index, 1);
+        }
+      }
+
+      return { deletedCount: initialLength - store.length };
+    }),
   };
 });
 
@@ -222,6 +245,55 @@ jest.mock('../../models/workspaceInvitationModel', () => {
       });
       return { modifiedCount };
     }),
+    deleteMany: jest.fn(async (query) => {
+      const initialLength = store.length;
+
+      for (let index = store.length - 1; index >= 0; index -= 1) {
+        if (!query.groupId || store[index].groupId === query.groupId) {
+          store.splice(index, 1);
+        }
+      }
+
+      return { deletedCount: initialLength - store.length };
+    }),
+  };
+});
+
+jest.mock('../../models/syncDocumentModel', () => {
+  const store = [];
+
+  return {
+    __store: store,
+    deleteMany: jest.fn(async (query) => {
+      const initialLength = store.length;
+
+      for (let index = store.length - 1; index >= 0; index -= 1) {
+        if (!query.groupId || store[index].groupId === query.groupId) {
+          store.splice(index, 1);
+        }
+      }
+
+      return { deletedCount: initialLength - store.length };
+    }),
+  };
+});
+
+jest.mock('../../models/syncEventModel', () => {
+  const store = [];
+
+  return {
+    __store: store,
+    deleteMany: jest.fn(async (query) => {
+      const initialLength = store.length;
+
+      for (let index = store.length - 1; index >= 0; index -= 1) {
+        if (!query.groupId || store[index].groupId === query.groupId) {
+          store.splice(index, 1);
+        }
+      }
+
+      return { deletedCount: initialLength - store.length };
+    }),
   };
 });
 
@@ -238,6 +310,8 @@ const User = require('../../models/userModel');
 const Workspace = require('../../models/workspaceModel');
 const WorkspaceInvitation = require('../../models/workspaceInvitationModel');
 const WorkspaceMembership = require('../../models/workspaceMembershipModel');
+const SyncDocument = require('../../models/syncDocumentModel');
+const SyncEvent = require('../../models/syncEventModel');
 const app = require('../../app');
 
 const auth = (userId) => ({
@@ -276,6 +350,8 @@ describe('workspace routes', () => {
     Workspace.__store.length = 0;
     WorkspaceInvitation.__store.length = 0;
     WorkspaceMembership.__store.length = 0;
+    SyncDocument.__store.length = 0;
+    SyncEvent.__store.length = 0;
   });
 
   afterEach(() => {
@@ -331,7 +407,7 @@ describe('workspace routes', () => {
     expect(Workspace.__store[0].name).toBe('Panaderia Norte');
   });
 
-  test('owner can delete workspace and it is no longer listed', async () => {
+  test('owner can hard delete workspace and related data', async () => {
     seedWorkspace({ groupId: 'group_a', ownerUserId: 'owner' });
     WorkspaceInvitation.__store.push({
       email: 'invitee@example.test',
@@ -340,6 +416,14 @@ describe('workspace routes', () => {
       role: 'member',
       status: 'invited',
       workspaceId: 'group_a',
+    });
+    SyncDocument.__store.push({
+      groupId: 'group_a',
+      remoteId: 'recipe_1',
+    });
+    SyncEvent.__store.push({
+      eventId: 'event_1',
+      groupId: 'group_a',
     });
 
     const response = await request(app)
@@ -353,19 +437,11 @@ describe('workspace routes', () => {
         groupId: 'group_a',
       }),
     );
-    expect(WorkspaceMembership.__store).toEqual([
-      expect.objectContaining({
-        groupId: 'group_a',
-        status: 'removed',
-        userId: 'owner',
-      }),
-    ]);
-    expect(WorkspaceInvitation.__store).toEqual([
-      expect.objectContaining({
-        groupId: 'group_a',
-        status: 'revoked',
-      }),
-    ]);
+    expect(Workspace.__store).toEqual([]);
+    expect(WorkspaceMembership.__store).toEqual([]);
+    expect(WorkspaceInvitation.__store).toEqual([]);
+    expect(SyncDocument.__store).toEqual([]);
+    expect(SyncEvent.__store).toEqual([]);
 
     const listResponse = await request(app).get('/workspaces').set(auth('owner'));
     expect(listResponse.body.workspaces).toEqual([]);

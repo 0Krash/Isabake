@@ -322,25 +322,15 @@ class WorkspaceService {
     }
 
     const deletedAt = nowIso();
-    const deletedWorkspace = await this.repository.softDeleteWorkspace(groupId, {
+    const deletedWorkspace = await this.repository.hardDeleteWorkspaceData(
+      groupId,
+    );
+
+    return {
+      ...deletedWorkspace,
       deletedAt,
       updatedAt: deletedAt,
-    });
-
-    await Promise.all([
-      this.repository.updateMembershipsByGroupId(groupId, {
-        removedAt: deletedAt,
-        status: 'removed',
-        updatedAt: deletedAt,
-      }),
-      this.repository.updateInvitationsByGroupId(groupId, {
-        revokedAt: deletedAt,
-        status: 'revoked',
-        updatedAt: deletedAt,
-      }),
-    ]);
-
-    return deletedWorkspace;
+    };
   }
 
   async getMembers({ groupId, requesterUserId }) {

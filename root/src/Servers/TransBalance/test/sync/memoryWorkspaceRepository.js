@@ -83,6 +83,29 @@ class MemoryWorkspaceRepository {
     return this.updateWorkspace(groupId, update);
   }
 
+  async hardDeleteWorkspaceData(groupId) {
+    const workspace =
+      this.workspaces.find(
+        (item) => item.groupId === groupId && !item.deletedAt,
+      ) || null;
+
+    if (!workspace) {
+      return null;
+    }
+
+    this.workspaces = this.workspaces.filter(
+      (item) => item.groupId !== groupId,
+    );
+    this.memberships = this.memberships.filter(
+      (membership) => membership.groupId !== groupId,
+    );
+    this.invitations = this.invitations.filter(
+      (invitation) => invitation.groupId !== groupId,
+    );
+
+    return workspace;
+  }
+
   async upsertMembership(membership) {
     const index = this.memberships.findIndex(
       (item) => item.groupId === membership.groupId && item.userId === membership.userId,
