@@ -1,8 +1,4 @@
-import {
-  createSyncDiagnosticsActions,
-  DEV_AUTH_GROUP_ID,
-  isSyncDiagnosticsEnabled,
-} from './syncDiagnosticsModel';
+import { createSyncDiagnosticsActions, isSyncDiagnosticsEnabled } from './syncDiagnosticsModel';
 
 describe('syncDiagnosticsModel', () => {
   test('is disabled outside dev or when the dev tools flag is false', () => {
@@ -29,248 +25,30 @@ describe('syncDiagnosticsModel', () => {
     ).toBe(true);
   });
 
-  test('creating actions does not run diagnostics automatically', () => {
+  test('creates only reset and random sample data actions without running them', () => {
     const runners = {
-      runAuthWorkspaceDevCheck: jest.fn(),
-      runAuthenticatedPushPullDevCheck: jest.fn(),
-      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(),
-      runBackendSyncConnectivityCheck: jest.fn(),
-      runConflictPreferLocalDevCheck: jest.fn(),
-      runConflictResolutionDevCheck: jest.fn(),
-      runConflictSimulationDevCheck: jest.fn(),
-      runConflictSummaryDevCheck: jest.fn(),
-      runListConflictsDevCheck: jest.fn(),
-      runMembershipSyncAccessDevCheck: jest.fn(),
-      runPullOverPendingConflictDevCheck: jest.fn(),
-      runPushPullDevCheck: jest.fn(),
-      runRealAuthSessionDevCheck: jest.fn(),
-      runResolveLatestConflictPreferLocalDevCheck: jest.fn(),
-      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(),
-      runServerSessionRevocationDevCheck: jest.fn(),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(),
+      createDevSampleBusinessData: jest.fn(),
+      runDevBackendDataReset: jest.fn(),
       runDevDataReset: jest.fn(),
-      createDevSampleBusinessData: jest.fn(),
     };
 
     const actions = createSyncDiagnosticsActions({ runners });
 
-    expect(actions).toHaveLength(20);
-    expect(runners.runAuthWorkspaceDevCheck).not.toHaveBeenCalled();
-    expect(runners.runAuthenticatedPushPullDevCheck).not.toHaveBeenCalled();
-    expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runBackendSyncConnectivityCheck).not.toHaveBeenCalled();
-    expect(runners.runConflictPreferLocalDevCheck).not.toHaveBeenCalled();
-    expect(runners.runConflictResolutionDevCheck).not.toHaveBeenCalled();
-    expect(runners.runConflictSimulationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runConflictSummaryDevCheck).not.toHaveBeenCalled();
-    expect(runners.runListConflictsDevCheck).not.toHaveBeenCalled();
-    expect(runners.runMembershipSyncAccessDevCheck).not.toHaveBeenCalled();
-    expect(runners.runPullOverPendingConflictDevCheck).not.toHaveBeenCalled();
-    expect(runners.runResolveLatestConflictPreferLocalDevCheck).not.toHaveBeenCalled();
-    expect(runners.runResolveLatestConflictPreferRemoteDevCheck).not.toHaveBeenCalled();
-    expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
-    expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
-    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
+    expect(actions.map((action) => action.key)).toEqual([
+      'deleteAllLocalData',
+      'deleteBackendData',
+      'createSampleBusinessData',
+    ]);
     expect(runners.runDevDataReset).not.toHaveBeenCalled();
+    expect(runners.runDevBackendDataReset).not.toHaveBeenCalled();
     expect(runners.createDevSampleBusinessData).not.toHaveBeenCalled();
   });
 
-  test('actions call their runners with the dev sync group', async () => {
+  test('delete all local data action is destructive and requires confirmation', async () => {
     const runners = {
-      runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
-      runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
-      runConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictResolutionDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSummaryDevCheck: jest.fn(async () => ({ ok: true })),
-      runListConflictsDevCheck: jest.fn(async () => ({ ok: true })),
-      runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
-      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
-      runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
-      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
-      runDevDataReset: jest.fn(async () => ({ success: true })),
-      createDevSampleBusinessData: jest.fn(async () => ({ ok: true })),
-    };
-    const actions = createSyncDiagnosticsActions({ runners });
-
-    await actions.find((action) => action.key === 'deleteAllLocalData').run();
-    await actions.find((action) => action.key === 'createSampleBusinessData').run();
-    await actions.find((action) => action.key === 'authWorkspace').run();
-    await actions.find((action) => action.key === 'membershipAccess').run();
-    await actions.find((action) => action.key === 'connectivity').run();
-    await actions.find((action) => action.key === 'authenticatedPushPull').run();
-    await actions.find((action) => action.key === 'authenticatedIsolation').run();
-    await actions.find((action) => action.key === 'conflictSimulation').run();
-    await actions.find((action) => action.key === 'pullOverPendingConflict').run();
-    await actions.find((action) => action.key === 'listConflicts').run();
-    await actions.find((action) => action.key === 'conflictSummary').run();
-    await actions.find((action) => action.key === 'resolveLatestPreferLocal').run();
-    await actions.find((action) => action.key === 'resolveLatestPreferRemote').run();
-    await actions.find((action) => action.key === 'conflictResolutionEndToEnd').run();
-    await actions.find((action) => action.key === 'conflictPreferLocal').run();
-    await actions.find((action) => action.key === 'realAuthSession').run();
-    await actions.find((action) => action.key === 'serverSessionRevocation').run();
-    await actions.find((action) => action.key === 'legacyPushPull').run();
-    await actions.find((action) => action.key === 'legacyIsolation').run();
-
-    expect(runners.runAuthWorkspaceDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runMembershipSyncAccessDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runBackendSyncConnectivityCheck).toHaveBeenCalledWith({
-      authSession: expect.objectContaining({
-        userId: 'phase_14_auth_dev_owner',
-      }),
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runAuthenticatedPushPullDevCheck).toHaveBeenCalledWith({
-      authSession: expect.objectContaining({
-        userId: 'phase_14_auth_dev_owner',
-      }),
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runAuthenticatedWorkspaceIsolationDevCheck).toHaveBeenCalledWith();
-    expect(runners.runConflictSimulationDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runPullOverPendingConflictDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runListConflictsDevCheck).toHaveBeenCalledWith();
-    expect(runners.runConflictSummaryDevCheck).toHaveBeenCalledWith();
-    expect(runners.runResolveLatestConflictPreferLocalDevCheck).toHaveBeenCalledWith();
-    expect(runners.runResolveLatestConflictPreferRemoteDevCheck).toHaveBeenCalledWith();
-    expect(runners.runConflictResolutionDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runConflictPreferLocalDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-    });
-    expect(runners.runRealAuthSessionDevCheck).toHaveBeenCalledWith();
-    expect(runners.runServerSessionRevocationDevCheck).toHaveBeenCalledWith();
-    expect(runners.runPushPullDevCheck).toHaveBeenCalledWith({
-      groupId: DEV_AUTH_GROUP_ID,
-      legacy: true,
-    });
-    expect(runners.runTwoWorkspaceIsolationDevCheck).toHaveBeenCalledWith({
-      legacy: true,
-    });
-    expect(runners.runDevDataReset).toHaveBeenCalledWith({
-      confirm: true,
-      scope: 'full_local_dev_reset',
-    });
-    expect(runners.createDevSampleBusinessData).toHaveBeenCalledWith();
-  });
-
-  test('all action uses authenticated diagnostics and skips legacy runners', async () => {
-    const runners = {
-      runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({
-        ok: false,
-      })),
-      runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
-      runConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictResolutionDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSummaryDevCheck: jest.fn(async () => ({ ok: true })),
-      runListConflictsDevCheck: jest.fn(async () => ({ ok: true })),
-      runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
-      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
-      runPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
-      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: true })),
-      runDevDataReset: jest.fn(async () => ({ success: true })),
-      createDevSampleBusinessData: jest.fn(async () => ({ ok: true })),
-    };
-    const actions = createSyncDiagnosticsActions({ runners });
-    const result = await actions.find((action) => action.key === 'all').run();
-
-    expect(result.ok).toBe(false);
-    expect(result.authWorkspace.ok).toBe(true);
-    expect(result.connectivity.ok).toBe(true);
-    expect(result.membershipAccess.ok).toBe(true);
-    expect(result.authenticatedPushPull.ok).toBe(true);
-    expect(result.authenticatedIsolation.ok).toBe(false);
-    expect(result.conflictSimulation.ok).toBe(true);
-    expect(result.pullOverPendingConflict.ok).toBe(true);
-    expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
-    expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
-    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
-    expect(runners.createDevSampleBusinessData).not.toHaveBeenCalled();
-  });
-
-  test('all action passes when authenticated conflict diagnostics pass', async () => {
-    const runners = {
-      runAuthWorkspaceDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedPushPullDevCheck: jest.fn(async () => ({ ok: true })),
-      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(async () => ({
-        ok: true,
-      })),
-      runBackendSyncConnectivityCheck: jest.fn(async () => ({ ok: true })),
-      runConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictResolutionDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSimulationDevCheck: jest.fn(async () => ({ ok: true })),
-      runConflictSummaryDevCheck: jest.fn(async () => ({ ok: true })),
-      runListConflictsDevCheck: jest.fn(async () => ({ ok: true })),
-      runMembershipSyncAccessDevCheck: jest.fn(async () => ({ ok: true })),
-      runPullOverPendingConflictDevCheck: jest.fn(async () => ({ ok: true })),
-      runPushPullDevCheck: jest.fn(async () => ({ ok: false })),
-      runRealAuthSessionDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferLocalDevCheck: jest.fn(async () => ({ ok: true })),
-      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(async () => ({ ok: true })),
-      runServerSessionRevocationDevCheck: jest.fn(async () => ({ ok: true })),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(async () => ({ ok: false })),
-      runDevDataReset: jest.fn(async () => ({ success: true })),
-      createDevSampleBusinessData: jest.fn(async () => ({ ok: true })),
-    };
-    const actions = createSyncDiagnosticsActions({ runners });
-    const result = await actions.find((action) => action.key === 'all').run();
-
-    expect(result.ok).toBe(true);
-    expect(result.pullOverPendingConflict.ok).toBe(true);
-    expect(runners.runPushPullDevCheck).not.toHaveBeenCalled();
-    expect(runners.runRealAuthSessionDevCheck).not.toHaveBeenCalled();
-    expect(runners.runServerSessionRevocationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runTwoWorkspaceIsolationDevCheck).not.toHaveBeenCalled();
-    expect(runners.runDevDataReset).not.toHaveBeenCalled();
-    expect(runners.createDevSampleBusinessData).not.toHaveBeenCalled();
-  });
-
-  test('delete all local data action is marked destructive and requires confirmation', async () => {
-    const runners = {
-      runAuthWorkspaceDevCheck: jest.fn(),
-      runAuthenticatedPushPullDevCheck: jest.fn(),
-      runAuthenticatedWorkspaceIsolationDevCheck: jest.fn(),
-      runBackendSyncConnectivityCheck: jest.fn(),
-      runConflictPreferLocalDevCheck: jest.fn(),
-      runConflictResolutionDevCheck: jest.fn(),
-      runConflictSimulationDevCheck: jest.fn(),
-      runConflictSummaryDevCheck: jest.fn(),
-      runListConflictsDevCheck: jest.fn(),
-      runMembershipSyncAccessDevCheck: jest.fn(),
-      runPullOverPendingConflictDevCheck: jest.fn(),
-      runPushPullDevCheck: jest.fn(),
-      runRealAuthSessionDevCheck: jest.fn(),
-      runResolveLatestConflictPreferLocalDevCheck: jest.fn(),
-      runResolveLatestConflictPreferRemoteDevCheck: jest.fn(),
-      runServerSessionRevocationDevCheck: jest.fn(),
-      runTwoWorkspaceIsolationDevCheck: jest.fn(),
-      runDevDataReset: jest.fn(async () => ({ success: true })),
       createDevSampleBusinessData: jest.fn(),
+      runDevBackendDataReset: jest.fn(),
+      runDevDataReset: jest.fn(async () => ({ success: true })),
     };
     const actions = createSyncDiagnosticsActions({ runners });
     const resetAction = actions.find(
@@ -280,7 +58,7 @@ describe('syncDiagnosticsModel', () => {
     expect(resetAction).toEqual(
       expect.objectContaining({
         destructive: true,
-        label: 'Delete all local SQLite data',
+        label: 'Borrar datos locales de SQLite',
         requiresConfirmation: true,
       }),
     );
@@ -291,5 +69,43 @@ describe('syncDiagnosticsModel', () => {
       confirm: true,
       scope: 'full_local_dev_reset',
     });
+  });
+
+  test('backend data reset action is destructive and separate from local reset', async () => {
+    const runners = {
+      createDevSampleBusinessData: jest.fn(),
+      runDevBackendDataReset: jest.fn(async () => ({ ok: true })),
+      runDevDataReset: jest.fn(),
+    };
+    const actions = createSyncDiagnosticsActions({ runners });
+    const backendResetAction = actions.find(
+      (action) => action.key === 'deleteBackendData',
+    );
+
+    expect(backendResetAction).toEqual(
+      expect.objectContaining({
+        destructive: true,
+        label: 'Borrar base de datos del backend',
+        requiresConfirmation: true,
+      }),
+    );
+
+    await backendResetAction.run();
+
+    expect(runners.runDevBackendDataReset).toHaveBeenCalledWith();
+    expect(runners.runDevDataReset).not.toHaveBeenCalled();
+  });
+
+  test('sample data action delegates random data creation', async () => {
+    const runners = {
+      createDevSampleBusinessData: jest.fn(async () => ({ ok: true })),
+      runDevBackendDataReset: jest.fn(),
+      runDevDataReset: jest.fn(),
+    };
+    const actions = createSyncDiagnosticsActions({ runners });
+
+    await actions.find((action) => action.key === 'createSampleBusinessData').run();
+
+    expect(runners.createDevSampleBusinessData).toHaveBeenCalledWith();
   });
 });

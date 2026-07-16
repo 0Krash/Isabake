@@ -49,18 +49,37 @@ export default function SyncDiagnosticsScreen() {
       return;
     }
 
+    if (action.key === 'deleteBackendData') {
+      Alert.alert(
+        'Borrar backend',
+        'Esto borra la base de datos del servidor configurado para desarrollo. Afecta a todos los dispositivos conectados a esa DB. No borra SQLite local.',
+        [
+          {
+            style: 'cancel',
+            text: 'Cancelar',
+          },
+          {
+            onPress: () => runAction(action),
+            style: 'destructive',
+            text: 'Borrar backend',
+          },
+        ],
+      );
+      return;
+    }
+
     Alert.alert(
-      'Delete local data?',
-      'This deletes local SQLite documents, outbox, sync history, and sync state on this dev device. It does not delete backend data.',
+      'Borrar datos locales',
+      'Esto borra la base SQLite local de este dispositivo para empezar desde cero. No borra datos del servidor.',
       [
         {
           style: 'cancel',
-          text: 'Cancel',
+          text: 'Cancelar',
         },
         {
           onPress: () => runAction(action),
           style: 'destructive',
-          text: 'Delete local data',
+          text: 'Borrar datos',
         },
       ],
     );
@@ -75,7 +94,7 @@ export default function SyncDiagnosticsScreen() {
         ]}
       >
         <Text style={[styles.title, { color: colors.primaryText }]}>
-          Dev tools disabled
+          Herramientas dev desactivadas
         </Text>
       </View>
     );
@@ -89,10 +108,10 @@ export default function SyncDiagnosticsScreen() {
       ]}
     >
       <Text style={[styles.title, { color: colors.primaryText }]}>
-        Sync Diagnostics
+        Herramientas dev
       </Text>
       <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-        Group: {DEV_SYNC_GROUP_ID}
+        Grupo dev: {DEV_SYNC_GROUP_ID}
       </Text>
 
       <View style={styles.actions}>
@@ -116,7 +135,7 @@ export default function SyncDiagnosticsScreen() {
               ]}
             >
               <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-                {loading ? 'Running...' : action.label}
+                {loading ? 'Ejecutando...' : action.label}
               </Text>
             </Pressable>
           );
@@ -134,7 +153,7 @@ export default function SyncDiagnosticsScreen() {
         ]}
       >
         <Text style={[styles.resultText, { color: colors.primaryText }]}>
-          {result ? JSON.stringify(result, null, 2) : 'No result yet.'}
+          {result ? JSON.stringify(result, null, 2) : 'Sin resultado.'}
         </Text>
       </View>
     </ScrollView>

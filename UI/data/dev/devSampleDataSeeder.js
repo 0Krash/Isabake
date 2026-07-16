@@ -27,6 +27,29 @@ const getDefaultRepositories = () => {
   };
 };
 
+const MAX_SAMPLE_ITEMS_PER_COLLECTION = 10;
+
+const clampSampleCount = (value) =>
+  Math.min(
+    MAX_SAMPLE_ITEMS_PER_COLLECTION,
+    Math.max(1, Number.isFinite(value) ? Math.floor(value) : 1),
+  );
+
+const getRandomCount = (random) =>
+  clampSampleCount(Math.floor(random() * MAX_SAMPLE_ITEMS_PER_COLLECTION) + 1);
+
+const pickFrom = (items, index) => items[index % items.length];
+
+const withIndexedName = (payload, index) => ({
+  ...payload,
+  name: `${payload.name} ${index + 1}`,
+});
+
+const withIndexedDescription = (payload, index) => ({
+  ...payload,
+  description: `${payload.description} ${index + 1}`,
+});
+
 const createInventoryPayloads = ({ createId, label }) => [
   {
     category: 'Harinas',
@@ -217,6 +240,7 @@ const createTransactionPayloads = ({ createdAt, label }) => [
 export const createDevSampleBusinessData = async ({
   createId,
   now = () => new Date(),
+  random = Math.random,
   repositories,
 } = {}) => {
   const resolvedCreateId = createId || getDefaultCreateId();
@@ -233,27 +257,39 @@ export const createDevSampleBusinessData = async ({
   };
 
   const inventory = [];
+  const inventoryCount = getRandomCount(random);
 
-  for (const payload of createInventoryPayloads({
-    createId: resolvedCreateId,
-    label,
-  })) {
+  for (let index = 0; index < inventoryCount; index += 1) {
+    const inventoryTemplates = createInventoryPayloads({
+      createId: resolvedCreateId,
+      label,
+    });
+    const payload = withIndexedName(pickFrom(inventoryTemplates, index), index);
     inventory.push(await resolvedRepositories.inventory.create(payload));
   }
 
   const recipes = [];
+  const recipeCount = getRandomCount(random);
 
-  for (const payload of createRecipePayloads({
-    createId: resolvedCreateId,
-    inventory,
-    label,
-  })) {
+  for (let index = 0; index < recipeCount; index += 1) {
+    const recipeTemplates = createRecipePayloads({
+      createId: resolvedCreateId,
+      inventory,
+      label,
+    });
+    const payload = withIndexedName(pickFrom(recipeTemplates, index), index);
     recipes.push(await resolvedRepositories.recipes.create(payload));
   }
 
   const transactions = [];
+  const transactionCount = getRandomCount(random);
 
-  for (const payload of createTransactionPayloads({ createdAt, label })) {
+  for (let index = 0; index < transactionCount; index += 1) {
+    const transactionTemplates = createTransactionPayloads({ createdAt, label });
+    const payload = withIndexedDescription(
+      pickFrom(transactionTemplates, index),
+      index,
+    );
     transactions.push(await resolvedRepositories.transactions.create(payload));
   }
 
