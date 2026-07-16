@@ -14,9 +14,11 @@ import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import { refreshNetworkStatus } from '../../data/network/networkStatusService';
 import {
+  getInvitationAttentionKey,
   isInvitationAttentionSeen,
   markInvitationAttentionSeen,
 } from '../../data/workspace/invitationAttentionState';
+import useAuthSession from '../../hooks/auth/useAuthSession';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
   BusinessContextCard,
@@ -39,16 +41,25 @@ const adminRoles = new Set(['owner', 'admin']);
 
 export { getWorkspaceListKey, getWorkspaceModeLabel };
 
-export default function WorkspaceScreen({ onBack }) {
+export default function WorkspaceScreen({ onBack, onOpenAccount }) {
   const { colors } = useTransactionBalanceTheme();
-  const workspaceState = useWorkspaces();
-  const [activeTab, setActiveTab] = useState('team');
+  const auth = useAuthSession();
+  const workspaceState = useWorkspaces({
+    autoLoad: !auth.loading,
+    autoLoadRemote: false,
+    includeRemoteWithoutSession: false,
+    session: auth.session,
+  });
+  const [activeTab, setActiveTab] = useState('workspaces');
   const [message, setMessage] = useState(null);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [newWorkspaceType, setNewWorkspaceType] = useState('private');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
   const [workspaceMenuKey, setWorkspaceMenuKey] = useState(null);
+  const [visitedInvitationAttentionKey, setVisitedInvitationAttentionKey] =
+    useState('');
   const [refreshing, setRefreshing] = useState(false);
   const currentWorkspace = workspaceState.currentWorkspace;
   const currentRole = currentWorkspace?.workspaceRole || 'local';
@@ -59,9 +70,68 @@ export default function WorkspaceScreen({ onBack }) {
     currentWorkspace,
   );
   const showInvitationAttention =
-    activeTab !== 'invitations' &&
     workspaceState.myInvitations.length > 0 &&
     !isInvitationAttentionSeen(workspaceState.myInvitations);
+  const invitationAttentionKey = getInvitationAttentionKey(
+    workspaceState.myInvitations,
+  );
+  const authRequiredMessage = formatWorkspaceError('auth_required');
+  const workspaceErrorMessage = workspaceState.error
+    ? formatWorkspaceError(workspaceState.error)
+    : null;
+  const visibleWorkspaceError =
+    !auth.session ||
+    workspaceState.authRequired && workspaceErrorMessage === authRequiredMessage
+      ? null
+      : workspaceErrorMessage;
+  const visibleMessage =
+    message &&
+    message !== visibleWorkspaceError &&
+    !(workspaceState.authRequired && message === authRequiredMessage)
+      ? message
+      : null;
+
+  useEffect(() => {
+    setWorkspaceNameDraft(currentWorkspace?.name || '');
+  }, [currentWorkspace?.groupId, currentWorkspace?.name]);
+
+  useEffect(() => {
+    if (auth.loading || !auth.session) {
+      return;
+    }
+
+    workspaceState.refreshMyInvitations().catch(() => {});
+  }, [auth.loading, auth.session, workspaceState.refreshMyInvitations]);
+
+  useEffect(() => {
+    if (activeTab === 'invitations' && showInvitationAttention) {
+      setVisitedInvitationAttentionKey(invitationAttentionKey);
+      return;
+    }
+
+    if (
+      activeTab !== 'invitations' &&
+      visitedInvitationAttentionKey &&
+      invitationAttentionKey === visitedInvitationAttentionKey
+    ) {
+      markInvitationAttentionSeen(workspaceState.myInvitations);
+      setVisitedInvitationAttentionKey('');
+      return;
+    }
+
+    if (
+      visitedInvitationAttentionKey &&
+      invitationAttentionKey !== visitedInvitationAttentionKey
+    ) {
+      setVisitedInvitationAttentionKey('');
+    }
+  }, [
+    activeTab,
+    invitationAttentionKey,
+    showInvitationAttention,
+    visitedInvitationAttentionKey,
+    workspaceState.myInvitations,
+  ]);
 
   useEffect(() => {
     if (!currentWorkspace?.isRemote || !currentWorkspace.groupId) {
@@ -81,17 +151,13 @@ export default function WorkspaceScreen({ onBack }) {
         workspaceState.refreshInvitations(currentWorkspace).catch(() => {});
       }
     }
-  }, [activeTab, canAdminWorkspace, currentWorkspace?.groupId]);
-
-  useEffect(() => {
-    setWorkspaceNameDraft(currentWorkspace?.name || '');
-  }, [currentWorkspace?.groupId, currentWorkspace?.name]);
-
-  useEffect(() => {
-    if (activeTab === 'invitations' && workspaceState.myInvitations.length) {
-      markInvitationAttentionSeen(workspaceState.myInvitations);
-    }
-  }, [activeTab, workspaceState.myInvitations]);
+  }, [
+    activeTab,
+    canAdminWorkspace,
+    currentWorkspace?.groupId,
+    currentWorkspace?.isRemote,
+    currentWorkspace?.workspaceRole,
+  ]);
 
   useEffect(() => {
     if (activeTab !== 'workspaces') {
@@ -123,8 +189,9 @@ export default function WorkspaceScreen({ onBack }) {
       setMessage(successMessage);
       return { ok: true, result };
     } catch (error) {
-      setMessage(formatWorkspaceError(error));
-      return { error, ok: false };
+      const nextMessage = formatWorkspaceError(error);
+      setMessage(nextMessage);
+      return { error, message: nextMessage, ok: false };
     }
   };
 
@@ -162,13 +229,27 @@ export default function WorkspaceScreen({ onBack }) {
     });
 
     if (!formState.canSubmit) {
-      setMessage(formState.error || 'Agrega un nombre para el proyecto.');
-      return null;
+      const nextMessage =
+        formState.error || 'Agrega un nombre para el proyecto.';
+      setMessage(nextMessage);
+      return { message: nextMessage, ok: false };
+    }
+
+    if (newWorkspaceType === 'shared' && !auth.session) {
+      const nextMessage =
+        'Inicia sesion para crear proyectos compartidos. Puedes crear proyectos privados sin cuenta.';
+      return { message: nextMessage, reason: 'account_required', ok: false };
     }
 
     const result = await runAction(
-      () => workspaceState.createWorkspace({ name: formState.normalizedName }),
-      'Proyecto compartido creado y seleccionado. Sync sigue manual.',
+      () =>
+        workspaceState.createWorkspace({
+          name: formState.normalizedName,
+          type: newWorkspaceType,
+        }),
+      newWorkspaceType === 'private'
+        ? 'Proyecto privado creado y seleccionado.'
+        : 'Proyecto compartido creado y seleccionado.',
     );
 
     if (result.ok) {
@@ -187,8 +268,10 @@ export default function WorkspaceScreen({ onBack }) {
     });
 
     if (!formState.canSubmit) {
-      setMessage(formState.error || 'Agrega un nombre para el proyecto.');
-      return null;
+      const nextMessage =
+        formState.error || 'Agrega un nombre para el proyecto.';
+      setMessage(nextMessage);
+      return { message: nextMessage, ok: false };
     }
 
     const result = await runAction(
@@ -261,44 +344,28 @@ export default function WorkspaceScreen({ onBack }) {
           leaveRemote: true,
           workspace,
         }),
-      'Saliste del proyecto compartido. Los datos locales permanecen.',
+      'Saliste del proyecto compartido. Ya no aparecera en tu lista.',
     );
 
   const deleteCurrentWorkspace = (workspace = currentWorkspace) =>
     runAction(
       () => workspaceState.deleteWorkspace(workspace),
-      'Proyecto eliminado. Volviste al workspace local.',
+      'Proyecto eliminado.',
     );
 
-  const confirmRemoveMember = (member) => {
+  const removeMember = (member) => {
     const userId = member?.userId || member;
-    const isCurrentUser = Boolean(member?.isCurrentUser);
-    const isOwner = member?.roleKey === 'owner';
 
-    Alert.alert(
-      isCurrentUser ? 'Salir del proyecto compartido' : 'Remover colaborador',
-      isCurrentUser && isOwner
-        ? 'Perderas acceso a este proyecto compartido. Si eres el unico propietario, antes debes asignar un nuevo propietario.'
-        : isCurrentUser
-          ? 'Perderas acceso a este proyecto compartido y dejara de aparecer en tu lista de proyectos.'
-          : 'Esta persona perdera acceso a este proyecto compartido.',
-      [
-        { style: 'cancel', text: 'Cancelar' },
-        {
-          onPress: () =>
-            runAction(
-              () =>
-                isCurrentUser
-                  ? workspaceState.leaveWorkspace({ leaveRemote: true })
-                  : workspaceState.removeMember(userId),
-              isCurrentUser
-                ? 'Saliste del proyecto compartido.'
-                : 'Colaborador removido.',
-            ),
-          style: 'destructive',
-          text: isCurrentUser ? 'Salir' : 'Remover',
-        },
-      ],
+    return runAction(
+      () => workspaceState.removeMember(userId),
+      'Colaborador removido.',
+    );
+  };
+
+  const selectWorkspace = async (workspace) => {
+    return runAction(
+      () => workspaceState.selectWorkspace(workspace),
+      'Proyecto seleccionado.',
     );
   };
 
@@ -317,27 +384,14 @@ export default function WorkspaceScreen({ onBack }) {
       ) : null}
       <AppHeader
         subtitle="Usuarios, invitaciones y espacios de trabajo."
-        title="Compartir proyecto"
+        title="Compartir proyectos"
       />
 
       <BusinessContextCard
         colors={colors}
-        onChangeWorkspace={() => setActiveTab('workspaces')}
         role={currentRole}
         workspace={currentWorkspace}
       />
-
-      {workspaceState.authRequired ? (
-        <View style={[styles.notice, { borderColor: colors.border }]}>
-          <Text style={[styles.body, { color: colors.textPrimary }]}>
-            Cuenta requerida
-          </Text>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Inicia sesion para crear o administrar proyectos compartidos. El
-            modo local sigue disponible.
-          </Text>
-        </View>
-      ) : null}
 
       <BusinessShareTabs
         activeTab={activeTab}
@@ -348,13 +402,17 @@ export default function WorkspaceScreen({ onBack }) {
 
       {activeTab === 'team' ? (
         <TeamTab
-          canAdminWorkspace={Boolean(currentWorkspace?.isRemote && canAdminWorkspace)}
+          canAdminWorkspace={Boolean(
+            currentWorkspace?.isRemote && canAdminWorkspace,
+          )}
           colors={colors}
+          currentWorkspace={currentWorkspace}
           isLocalWorkspace={!currentWorkspace?.isRemote}
           loading={workspaceState.loading}
           members={visibleMembers}
           onInviteUser={() => setActiveTab('invitations')}
-          onRemove={confirmRemoveMember}
+          onLeaveWorkspace={leaveCurrentWorkspace}
+          onRemove={removeMember}
           onUpdateRole={(userId, nextRole) =>
             runAction(
               () =>
@@ -371,7 +429,9 @@ export default function WorkspaceScreen({ onBack }) {
 
       {activeTab === 'invitations' ? (
         <InvitationsTab
-          canAdminWorkspace={Boolean(currentWorkspace?.isRemote && canAdminWorkspace)}
+          canAdminWorkspace={Boolean(
+            currentWorkspace?.isRemote && canAdminWorkspace,
+          )}
           colors={colors}
           inviteEmail={inviteEmail}
           inviteRole={inviteRole}
@@ -381,7 +441,7 @@ export default function WorkspaceScreen({ onBack }) {
           onAccept={(invitationId) =>
             runAction(
               () => workspaceState.acceptInvitation(invitationId),
-              'Invitacion aceptada. Sync sigue manual.',
+              'Invitacion aceptada.',
             )
           }
           onCreateInvitation={createInvitation}
@@ -406,23 +466,22 @@ export default function WorkspaceScreen({ onBack }) {
 
       {activeTab === 'workspaces' ? (
         <WorkspacesTab
+          authRequired={workspaceState.authRequired}
+          hasAccountSession={Boolean(auth.session)}
           colors={colors}
           currentWorkspace={currentWorkspace}
           loading={workspaceState.loading}
           members={visibleMembers}
           newWorkspaceName={newWorkspaceName}
+          newWorkspaceType={newWorkspaceType}
           onCreateWorkspace={createWorkspace}
           onDeleteWorkspace={deleteCurrentWorkspace}
           onLeave={leaveCurrentWorkspace}
-          onRefreshMembers={workspaceState.refreshMembers}
+          onOpenAccount={onOpenAccount}
           onRenameWorkspace={updateWorkspaceName}
-          onSelectWorkspace={(workspace) =>
-            runAction(
-              () => workspaceState.selectWorkspace(workspace),
-              'Proyecto seleccionado. Sync sigue manual.',
-            )
-          }
+          onSelectWorkspace={selectWorkspace}
           onSetNewWorkspaceName={setNewWorkspaceName}
+          onSetNewWorkspaceType={setNewWorkspaceType}
           onSetWorkspaceMenuKey={setWorkspaceMenuKey}
           onSetWorkspaceNameDraft={setWorkspaceNameDraft}
           workspaceMenuKey={workspaceMenuKey}
@@ -431,14 +490,14 @@ export default function WorkspaceScreen({ onBack }) {
         />
       ) : null}
 
-      {workspaceState.error ? (
+      {visibleWorkspaceError ? (
         <Text style={[styles.error, { color: colors.danger }]}>
-          {formatWorkspaceError(workspaceState.error)}
+          {visibleWorkspaceError}
         </Text>
       ) : null}
-      {message ? (
+      {visibleMessage ? (
         <Text style={[styles.message, { color: colors.primaryText }]}>
-          {message}
+          {visibleMessage}
         </Text>
       ) : null}
     </AppScreen>
@@ -459,12 +518,6 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: typography.sizes.label,
     marginTop: 4,
-  },
-  notice: {
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 6,
-    padding: 12,
   },
   screenContent: {
     paddingBottom: 88,

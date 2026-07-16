@@ -95,7 +95,7 @@ export default function InvitationAcceptScreen({
       });
       await refreshWorkspaceState({ client, session });
       return result;
-    }, 'Invitacion aceptada. Sync sigue manual.');
+    }, 'Invitacion aceptada.');
 
   const declineInvitation = () =>
     runAuthenticatedAction(

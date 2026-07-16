@@ -14,11 +14,13 @@ import {
   getMemberActionState,
   getMemberDisplayName,
   getInvitationActionState,
+  getShareAccountRequiredModalState,
   getWorkspaceRowState,
   getVisibleMembersForDisplay,
   getWorkspaceOwnershipLabel,
   getWorkspaceListKey,
   getWorkspaceEmptyState,
+  getWorkspaceLeaveActionState,
   getWorkspaceModeLabel,
   getWorkspaceNameFormState,
   getWorkspaceTabState,
@@ -26,31 +28,66 @@ import {
   isValidInvitationEmail,
   sanitizeInvitationForDisplay,
   sanitizeMemberForDisplay,
+  shareAccountRequiredModalCopy,
   workspaceTabs,
 } from './workspaceUiModel';
+import fs from 'fs';
+import path from 'path';
 
 describe('WorkspaceScreen model helpers', () => {
+  test('builds safe share-account-required modal copy and actions', () => {
+    const onClose = jest.fn();
+    const onOpenAccount = jest.fn();
+    const sync = jest.fn();
+    const state = getShareAccountRequiredModalState({
+      onClose,
+      onOpenAccount,
+    });
+
+    expect(state.copy.title).toBe(
+      'Necesitas una cuenta\npara compartir este negocio',
+    );
+    expect(state.copy.description).toBe(
+      'Inicia sesión para compartir este negocio con tu equipo y respaldar tu información en la nube.',
+    );
+    expect(state.copy.privacyNote).toBe(
+      'Si no inicias sesión, este negocio seguirá siendo privado en este dispositivo.',
+    );
+    expect(state.copy.cancelLabel).toBe('Cancelar');
+    expect(state.copy.loginLabel).toBe('Iniciar sesión');
+    expect(JSON.stringify(shareAccountRequiredModalCopy)).not.toMatch(
+      /token|hash|password|jwt/i,
+    );
+
+    state.actions.cancel();
+    state.actions.openAccount();
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenAccount).toHaveBeenCalledTimes(1);
+    expect(sync).not.toHaveBeenCalled();
+  });
+
   test('defines tab state without side effects', () => {
     expect(workspaceTabs.map((tab) => tab.label)).toEqual([
+      'Proyectos',
       'Equipo',
       'Invitaciones',
-      'Proyectos',
     ]);
     expect(getWorkspaceTabState('invitations')).toEqual([
+      { active: false, key: 'workspaces', label: 'Proyectos' },
       { active: false, key: 'team', label: 'Equipo' },
       { active: true, key: 'invitations', label: 'Invitaciones' },
-      { active: false, key: 'workspaces', label: 'Proyectos' },
     ]);
   });
 
   test('labels local-only and shared workspace modes', () => {
     expect(getWorkspaceModeLabel({ isRemote: false })).toBe(
-      'Trabajando localmente',
+      'Proyecto personal',
     );
     expect(getWorkspaceModeLabel({ isRemote: true })).toBe('Compartido');
-    expect(getWorkspaceModeLabel(null)).toBe('Trabajando localmente');
+    expect(getWorkspaceModeLabel(null)).toBe('Proyecto personal');
     expect(getWorkspaceOwnershipLabel({ isRemote: false })).toBe(
-      'Este proyecto esta en este dispositivo',
+      'Solo tu puedes ver este proyecto',
     );
     expect(
       getWorkspaceOwnershipLabel({ isRemote: true, workspaceRole: 'owner' }),
@@ -62,7 +99,7 @@ describe('WorkspaceScreen model helpers', () => {
       }),
     ).toBe('Proyecto compartido');
     expect(formatWorkspaceName({ isRemote: false, name: 'local_1' })).toBe(
-      'Solo en este dispositivo',
+      'Proyecto personal',
     );
     expect(
       formatWorkspaceName({ isRemote: true, name: 'Panaderia Norte' }),
@@ -135,7 +172,66 @@ describe('WorkspaceScreen model helpers', () => {
         ],
         { groupId: 'group_2', isRemote: true, name: 'Panaderia' },
       ),
-    ).toEqual([expect.objectContaining({ groupId: 'group_2' })]);
+    ).toEqual([
+      expect.objectContaining({ groupId: 'group_1' }),
+      expect.objectContaining({ groupId: 'group_2' }),
+    ]);
+    expect(
+      dedupeWorkspaceDisplayList(
+        [
+          { groupId: 'group_user_1', isRemote: true, name: 'S1' },
+          { groupId: 'group_user_2', isRemote: true, name: 's1' },
+        ],
+        { groupId: 'group_user_1', isRemote: true, name: 'S1' },
+      ).map((workspace) => workspace.groupId),
+    ).toEqual(['group_user_1', 'group_user_2']);
+
+    const sameNameRows = dedupeWorkspaceDisplayList(
+      [
+        {
+          groupId: 'group_user_1',
+          isRemote: true,
+          name: 'S1',
+          workspaceRole: 'owner',
+        },
+        {
+          groupId: 'group_user_2',
+          isRemote: true,
+          name: 's1',
+          workspaceRole: 'member',
+        },
+      ],
+      { groupId: 'group_user_2', isRemote: true, name: 's1' },
+    ).map((workspace) =>
+      getWorkspaceRowState(workspace, {
+        groupId: 'group_user_2',
+        isRemote: true,
+        name: 's1',
+      }),
+    );
+
+    expect(sameNameRows).toEqual([
+      expect.objectContaining({
+        currentLabel: null,
+        key: 'remote:group_user_1',
+        typeLabel: 'Propietario',
+      }),
+      expect.objectContaining({
+        currentLabel: 'En uso',
+        key: 'remote:group_user_2',
+        typeLabel: 'Miembro',
+      }),
+    ]);
+    expect(
+      dedupeWorkspaceDisplayList(
+        [
+          { groupId: 'group_1', isRemote: true, name: 'Panaderia Norte' },
+          { groupId: 'local_1', isRemote: false, name: 'ZZ Proyecto personal' },
+          { groupId: 'group_2', isRemote: true, name: 'Panaderia Sur' },
+        ],
+        { groupId: 'group_2', isRemote: true, name: 'Panaderia Sur' },
+      ).map((workspace) => workspace.groupId),
+    ).toEqual(['local_1', 'group_1', 'group_2']);
     expect(
       dedupeWorkspaceDisplayList(
         [
@@ -145,7 +241,7 @@ describe('WorkspaceScreen model helpers', () => {
         ],
         { groupId: 'group_3', isRemote: true, name: 'Panaderia Centro' },
       ).map((workspace) => workspace.groupId),
-    ).toEqual(['group_1', 'group_2', 'group_3']);
+    ).toEqual(['group_3', 'group_1', 'group_2']);
   });
 
   test('builds safe current workspace and workspace row display state', () => {
@@ -164,7 +260,7 @@ describe('WorkspaceScreen model helpers', () => {
 
     expect(getDisplayInitials('Panaderia Norte')).toBe('PN');
     expect(getCurrentWorkspaceCardState(currentWorkspace, 'owner')).toEqual({
-      detailLabel: 'Compartido · Propietario',
+      detailLabel: 'Propietario',
       initials: 'PN',
       name: 'Panaderia Norte',
       roleLabel: 'Propietario',
@@ -379,7 +475,7 @@ describe('WorkspaceScreen model helpers', () => {
       'No hay miembros para mostrar.',
     );
     expect(getWorkspaceEmptyState({ authRequired: true })).toBe(
-      'Inicia sesion para ver proyectos compartidos. El modo local sigue disponible.',
+      'Inicia sesion para ver proyectos compartidos.',
     );
     expect(
       getInvitationActionState({
@@ -496,6 +592,22 @@ describe('WorkspaceScreen model helpers', () => {
     });
     expect(
       getMemberActionState({
+        member: {
+          isCurrentUser: true,
+          lastActiveOwner: false,
+          roleKey: 'owner',
+          statusKey: 'active',
+        },
+        role: 'owner',
+      }),
+    ).toEqual({
+      actionLabel: 'Salir',
+      canRemove: true,
+      disabledReason: null,
+      showAction: true,
+    });
+    expect(
+      getMemberActionState({
         member: { roleKey: 'member', statusKey: 'active' },
         role: 'viewer',
       }).canRemove,
@@ -557,5 +669,101 @@ describe('WorkspaceScreen model helpers', () => {
         workspace,
       }),
     ).toBeNull();
+  });
+
+  test('shows leave action only when workspace can be left', () => {
+    const workspace = { groupId: 'group_1', isRemote: true };
+
+    expect(
+      getWorkspaceLeaveActionState({
+        members: [],
+        workspace: { ...workspace, workspaceRole: 'member' },
+      }),
+    ).toEqual({
+      blockedReason: null,
+      canLeave: true,
+      showAction: true,
+    });
+
+    expect(
+      getWorkspaceLeaveActionState({
+        members: [],
+        workspace: { ...workspace, workspaceRole: 'owner' },
+      }),
+    ).toEqual({
+      blockedReason: null,
+      canLeave: false,
+      showAction: false,
+    });
+
+    expect(
+      getWorkspaceLeaveActionState({
+        members: [
+          {
+            isCurrentUser: true,
+            roleKey: 'owner',
+            statusKey: 'active',
+          },
+        ],
+        workspace: { ...workspace, workspaceRole: 'owner' },
+      }),
+    ).toEqual({
+      blockedReason:
+        'Eres la unica persona en este proyecto. Antes de salir, agrega a otra persona o elimina el proyecto si ya no lo necesitas.',
+      canLeave: false,
+      showAction: false,
+    });
+
+    expect(
+      getWorkspaceLeaveActionState({
+        members: [
+          {
+            isCurrentUser: true,
+            roleKey: 'owner',
+            statusKey: 'active',
+          },
+          {
+            isCurrentUser: false,
+            roleKey: 'owner',
+            statusKey: 'active',
+          },
+        ],
+        workspace: { ...workspace, workspaceRole: 'owner' },
+      }),
+    ).toEqual({
+      blockedReason: null,
+      canLeave: true,
+      showAction: true,
+    });
+  });
+
+  test('workspace screen refreshes received invitations and uses icon attention', () => {
+    const workspaceScreenSource = fs.readFileSync(
+      path.join(__dirname, 'WorkspaceScreen.js'),
+      'utf8',
+    );
+    const workspacePartsSource = fs.readFileSync(
+      path.join(__dirname, 'WorkspaceScreenParts.js'),
+      'utf8',
+    );
+
+    expect(workspaceScreenSource).toContain(
+      'workspaceState.refreshMyInvitations().catch',
+    );
+    expect(workspacePartsSource).toContain('name="notification-attention"');
+  });
+
+  test('account-required modal is not nested inside project modal', () => {
+    const workspacePartsSource = fs.readFileSync(
+      path.join(__dirname, 'WorkspaceScreenParts.js'),
+      'utf8',
+    );
+    const createWorkspaceSource = workspacePartsSource.slice(
+      workspacePartsSource.indexOf('function CreateWorkspaceDialog'),
+      workspacePartsSource.indexOf('export function WorkspacesTab'),
+    );
+
+    expect(createWorkspaceSource).toContain('AccountRequiredOverlay');
+    expect(createWorkspaceSource).not.toContain('AccountRequiredDialog');
   });
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   Dimensions,
   InteractionManager,
   Keyboard,
@@ -15,25 +16,26 @@ import {
 } from 'react-native';
 
 import typography from '../../constants/TransactionBalance/Typography';
+import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 import {
   formatWorkspaceRole,
   formatWorkspaceRoleDescription,
   formatWorkspaceDate,
+  getShareAccountRequiredModalState,
   getCurrentWorkspaceCardState,
   getInvitationActionState,
   getInvitationFormState,
-  getLeaveWorkspaceBlockedReason,
   getMemberActionState,
   getWorkspaceEmptyState,
+  getWorkspaceLeaveActionState,
   getWorkspaceRowState,
   getWorkspaceTabState,
-  getVisibleMembersForDisplay,
   sanitizeInvitationForDisplay,
 } from './workspaceUiModel';
+import AppIcon from '../../components/icons/AppIcon';
 
 const invitationRoleOptions = ['admin', 'member', 'viewer'];
 const memberRoleOptions = ['owner', 'admin', 'member', 'viewer'];
-
 function getToneColor(colors, tone) {
   if (tone === 'danger') {
     return colors.danger;
@@ -69,6 +71,26 @@ function Avatar({ colors, label }) {
   );
 }
 
+function WorkspaceTypeIcon({ colors, workspace }) {
+  const isRemote = Boolean(workspace?.isRemote);
+
+  return (
+    <View
+      style={[
+        styles.avatar,
+        styles.workspaceTypeIcon,
+        { backgroundColor: colors.primaryMuted, borderColor: colors.border },
+      ]}
+    >
+      <AppIcon
+        color={colors.primaryText}
+        name={isRemote ? 'project-shared' : 'project-private'}
+        size={24}
+      />
+    </View>
+  );
+}
+
 function StatusBadge({ colors, label, tone = 'neutral' }) {
   const color = getToneColor(colors, tone);
 
@@ -94,12 +116,7 @@ function EmptyState({ colors, children }) {
   );
 }
 
-export function BusinessContextCard({
-  colors,
-  onChangeWorkspace,
-  role,
-  workspace,
-}) {
+export function BusinessContextCard({ colors, role, workspace }) {
   const card = getCurrentWorkspaceCardState(workspace, role);
 
   return (
@@ -121,10 +138,10 @@ export function BusinessContextCard({
       />
       <View style={styles.activeBusinessTop}>
         <View style={styles.contextRow}>
-          <Avatar colors={colors} label={card.initials} />
+          <WorkspaceTypeIcon colors={colors} workspace={workspace} />
           <View style={styles.rowText}>
             <Text style={[styles.meta, { color: colors.primaryText }]}>
-              Actualmente trabajando con el proyecto:
+              Actualmente trabajando con:
             </Text>
             <Text
               numberOfLines={1}
@@ -145,17 +162,6 @@ export function BusinessContextCard({
           </View>
         </View>
       </View>
-      <Pressable
-        onPress={onChangeWorkspace}
-        style={[
-          styles.changeWorkspaceButton,
-          { backgroundColor: colors.primary },
-        ]}
-      >
-        <Text style={[styles.secondaryText, { color: colors.textInverse }]}>
-          Cambiar proyecto
-        </Text>
-      </Pressable>
     </View>
   );
 }
@@ -196,11 +202,12 @@ export function BusinessShareTabs({
               <View
                 style={[styles.tabAttention, { borderColor: colors.primary }]}
               >
-                <Text
-                  style={[styles.tabAttentionText, { color: colors.primary }]}
-                >
-                  !
-                </Text>
+                <AppIcon
+                  color={colors.primary}
+                  decorative
+                  name="notification-attention"
+                  size={12}
+                />
               </View>
             ) : null}
           </View>
@@ -292,15 +299,32 @@ function MemberDetailPanel({
   onClose,
   onUpdateRole,
 }) {
+  const [ownerConfirmationOpen, setOwnerConfirmationOpen] = useState(false);
+
   if (!member) {
     return null;
   }
 
   const canEditRole =
     canAdminWorkspace && !member.isCurrentUser && member.roleKey !== 'owner';
+  const requestRoleChange = (nextRole) => {
+    if (nextRole === 'owner') {
+      setOwnerConfirmationOpen(true);
+      return;
+    }
+
+    onUpdateRole(member.userId, nextRole);
+  };
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+    <Modal
+      animationType="fade"
+      onRequestClose={
+        ownerConfirmationOpen ? () => setOwnerConfirmationOpen(false) : onClose
+      }
+      transparent
+      visible
+    >
       <View style={styles.modalRoot}>
         <Pressable
           onPress={onClose}
@@ -387,7 +411,7 @@ function MemberDetailPanel({
                     <Pressable
                       disabled={loading || selected}
                       key={option}
-                      onPress={() => onUpdateRole(member.userId, option)}
+                      onPress={() => requestRoleChange(option)}
                       style={[
                         styles.roleOptionCard,
                         {
@@ -423,22 +447,108 @@ function MemberDetailPanel({
             </View>
           ) : null}
         </View>
+        {ownerConfirmationOpen ? (
+          <PromoteOwnerPanel
+            colors={colors}
+            loading={loading}
+            member={member}
+            onClose={() => setOwnerConfirmationOpen(false)}
+            onConfirm={async () => {
+              const result = await onUpdateRole(member.userId, 'owner');
+
+              if (result?.ok) {
+                setOwnerConfirmationOpen(false);
+              }
+            }}
+          />
+        ) : null}
       </View>
     </Modal>
+  );
+}
+
+function PromoteOwnerPanel({ colors, loading, member, onClose, onConfirm }) {
+  return (
+    <View style={styles.confirmationLayer}>
+      <Pressable
+        disabled={loading}
+        onPress={onClose}
+        style={[styles.modalBackdrop, { backgroundColor: colors.backdrop }]}
+      />
+      <View
+        style={[
+          styles.modalCard,
+          {
+            backgroundColor: colors.screenBackground || colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+          Hacer propietario a {member?.displayName || 'Usuario del proyecto'}
+        </Text>
+        <Text style={[styles.note, { color: colors.textMuted }]}>
+          Esta persona tendra control total del proyecto. Podra crear, eliminar
+          y editar cualquier cosa.
+        </Text>
+        <Text style={[styles.note, { color: colors.textMuted }]}>
+          Una vez aprovado no podras cambiar su rol en este proyecto.
+        </Text>
+        <View style={styles.modalActions}>
+          <Pressable
+            disabled={loading}
+            onPress={onClose}
+            style={[
+              styles.secondaryButton,
+              styles.modalButton,
+              { borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+              Cancelar
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={loading}
+            onPress={onConfirm}
+            style={[
+              styles.primaryButton,
+              styles.modalButton,
+              {
+                backgroundColor: loading ? colors.surfaceMuted : colors.danger,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.buttonText,
+                { color: loading ? colors.inactiveText : colors.textInverse },
+              ]}
+            >
+              {loading ? 'Actualizando...' : 'Hacer propietario'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }
 
 export function TeamTab({
   canAdminWorkspace,
   colors,
+  currentWorkspace,
   isLocalWorkspace = false,
   loading,
   members,
   onInviteUser,
+  onLeaveWorkspace,
   onRemove,
   onUpdateRole,
   role,
 }) {
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [removeMemberTarget, setRemoveMemberTarget] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const selectedMember = members.find(
     (member) => member.userId === selectedMemberId,
@@ -446,6 +556,16 @@ export function TeamTab({
   const activeOwnerCount = members.filter(
     (member) => member.roleKey === 'owner',
   ).length;
+  const handleMemberAction = (member) => {
+    if (member?.isCurrentUser) {
+      setSelectedMemberId(null);
+      setLeaveOpen(true);
+      return;
+    }
+
+    setSelectedMemberId(null);
+    setRemoveMemberTarget(member);
+  };
 
   return (
     <View style={[styles.panel, { backgroundColor: colors.surface }]}>
@@ -456,8 +576,8 @@ export function TeamTab({
           </Text>
           {isLocalWorkspace ? (
             <Text style={[styles.meta, { color: colors.textMuted }]}>
-              Este proyecto esta solo en este dispositivo. Para invitar
-              personas, crea o selecciona un proyecto compartido.
+              Este es tu proyecto personal. Para invitar personas, crea o
+              selecciona un proyecto compartido.
             </Text>
           ) : null}
         </View>
@@ -478,7 +598,7 @@ export function TeamTab({
       {isLocalWorkspace ? (
         <View style={[styles.localNotice, { borderColor: colors.border }]}>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            No se pueden invitar usuarios en modo local.
+            No se pueden invitar a otros a un proyecto privado.
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             El equipo aparece cuando trabajas con un proyecto compartido.
@@ -499,7 +619,7 @@ export function TeamTab({
                   isSelected={member.userId === selectedMemberId}
                   loading={loading}
                   member={member}
-                  onRemove={onRemove}
+                  onRemove={handleMemberAction}
                   onSelect={(nextMember) =>
                     setSelectedMemberId(nextMember.userId)
                   }
@@ -528,6 +648,36 @@ export function TeamTab({
           Debe quedar al menos un propietario activo.
         </Text>
       ) : null} */}
+      {leaveOpen ? (
+        <LeaveWorkspaceDialog
+          colors={colors}
+          loading={loading}
+          onClose={() => setLeaveOpen(false)}
+          onConfirm={async () => {
+            const result = await onLeaveWorkspace?.(currentWorkspace);
+
+            if (result?.ok) {
+              setLeaveOpen(false);
+            }
+          }}
+          workspace={currentWorkspace}
+        />
+      ) : null}
+      {removeMemberTarget ? (
+        <RemoveMemberDialog
+          colors={colors}
+          loading={loading}
+          member={removeMemberTarget}
+          onClose={() => setRemoveMemberTarget(null)}
+          onConfirm={async () => {
+            const result = await onRemove(removeMemberTarget);
+
+            if (result?.ok) {
+              setRemoveMemberTarget(null);
+            }
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -852,6 +1002,7 @@ export function InvitationsTab({
 
 function WorkspaceRow({
   canDelete,
+  canLeave,
   canRename,
   colors,
   currentWorkspace,
@@ -866,7 +1017,6 @@ function WorkspaceRow({
   workspace,
 }) {
   const row = getWorkspaceRowState(workspace, currentWorkspace);
-  const canLeave = Boolean(workspace?.isRemote);
   const showMenu = canRename || canDelete || canLeave;
 
   return (
@@ -891,7 +1041,7 @@ function WorkspaceRow({
           { borderColor: row.isCurrent ? colors.primary : colors.border },
         ]}
       >
-        <Avatar colors={colors} label={row.initials} />
+        <WorkspaceTypeIcon colors={colors} workspace={workspace} />
         <View style={styles.rowText}>
           <View style={styles.titleLine}>
             <Text
@@ -914,11 +1064,12 @@ function WorkspaceRow({
             onPress={menuOpen ? onCloseMenu : onOpenMenu}
             style={styles.overflowButton}
           >
-            <Text
-              style={[styles.overflowButtonText, { color: colors.textPrimary }]}
-            >
-              ⋮
-            </Text>
+            <AppIcon
+              accessibilityLabel="Acciones del proyecto"
+              color={colors.textPrimary}
+              name="dots-vertical"
+              size={20}
+            />
           </Pressable>
         ) : null}
       </Pressable>
@@ -974,6 +1125,7 @@ function DeleteWorkspaceDialog({
   workspace,
 }) {
   const [confirmationText, setConfirmationText] = useState('');
+  const isPrivateProject = !workspace?.isRemote;
   const targetName = workspace?.name || 'Proyecto compartido';
   const nameMatches =
     normalizeDeleteName(confirmationText) === normalizeDeleteName(targetName);
@@ -1002,13 +1154,14 @@ function DeleteWorkspaceDialog({
             Eliminar proyecto
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            Esta accion elimina el proyecto para todos. Nadie podra seguir
-            entrando a este proyecto compartido.
+            {isPrivateProject
+              ? 'Esta accion elimina este proyecto privado.'
+              : 'Esta accion elimina el proyecto para todos. Nadie podra seguir entrando a este proyecto compartido.'}
           </Text>
           <Text style={[styles.note, { color: colors.danger }]}>
-            Se perdera lo trabajado dentro de este proyecto compartido:
-            transacciones, recetas, ingredientes, inventario, invitaciones y
-            colaboradores asociados.
+            {isPrivateProject
+              ? 'Se perdera todo lo trabajado dentro de este proyecto: transacciones, recetas, ingredientes e inventario.'
+              : 'Se perdera lo trabajado dentro de este proyecto compartido: transacciones, recetas, ingredientes, inventario, invitaciones y colaboradores asociados.'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             Escribe exactamente: {targetName}
@@ -1081,6 +1234,187 @@ function DeleteWorkspaceDialog({
   );
 }
 
+function AccountRequiredContent({ colors, loading, onClose, onOpenAccount }) {
+  const modalState = getShareAccountRequiredModalState({
+    onClose,
+    onOpenAccount,
+  });
+  const { copy } = modalState;
+
+  return (
+    <>
+      <Pressable
+        disabled={loading}
+        onPress={onClose}
+        style={[styles.modalBackdrop, { backgroundColor: colors.backdrop }]}
+      />
+      <View
+        style={[
+          styles.modalCard,
+          styles.accountRequiredCard,
+          {
+            backgroundColor: colors.screenBackground || colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.accountRequiredHeader}>
+          <View
+            style={[
+              styles.accountRequiredIcon,
+              {
+                backgroundColor: colors.primaryMuted,
+                borderColor: colors.primary,
+              },
+            ]}
+          >
+            <AppIcon
+              color={colors.primaryText}
+              name="project-shared"
+              size={26}
+            />
+          </View>
+          <View style={styles.rowText}>
+            <Text
+              style={[
+                styles.accountRequiredTitle,
+                { color: colors.textPrimary },
+              ]}
+            >
+              {copy.title}
+            </Text>
+          </View>
+        </View>
+        <View
+          style={[
+            styles.accountRequiredDivider,
+            { backgroundColor: colors.border },
+          ]}
+        />
+        <Text
+          style={[
+            styles.accountRequiredDescription,
+            { color: colors.textSecondary },
+          ]}
+        >
+          {copy.description}
+        </Text>
+        <View
+          style={[
+            styles.accountRequiredInfo,
+            {
+              backgroundColor: colors.primaryMuted,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.accountRequiredPrivacyIcon,
+              {
+                backgroundColor: colors.surfaceMuted,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <AppIcon
+              color={colors.primaryText}
+              name="project-private"
+              size={18}
+            />
+          </View>
+          <Text
+            style={[
+              styles.accountRequiredPrivacyText,
+              { color: colors.textSecondary },
+            ]}
+          >
+            {copy.privacyNote}
+          </Text>
+        </View>
+        <View style={styles.modalActions}>
+          <Pressable
+            disabled={loading}
+            onPress={modalState.actions.cancel}
+            style={[
+              styles.secondaryButton,
+              styles.modalButton,
+              { borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+              {copy.cancelLabel}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={loading || !onOpenAccount}
+            onPress={modalState.actions.openAccount}
+            style={[
+              styles.primaryButton,
+              styles.modalButton,
+              {
+                backgroundColor:
+                  loading || !onOpenAccount ? colors.surfaceMuted : colors.primary,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.buttonText,
+                {
+                  color:
+                    loading || !onOpenAccount
+                      ? colors.inactiveText
+                      : colors.textInverse,
+                },
+              ]}
+            >
+              {copy.loginLabel}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </>
+  );
+}
+
+function AccountRequiredDialog({ colors, loading, onClose, onOpenAccount }) {
+  return (
+    <Modal
+      animationType="fade"
+      hardwareAccelerated
+      navigationBarTranslucent
+      onRequestClose={onClose}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      transparent
+      visible
+    >
+      <View style={styles.modalRoot}>
+        <AccountRequiredContent
+          colors={colors}
+          loading={loading}
+          onClose={onClose}
+          onOpenAccount={onOpenAccount}
+        />
+      </View>
+    </Modal>
+  );
+}
+
+function AccountRequiredOverlay({ colors, loading, onClose, onOpenAccount }) {
+  return (
+    <View style={styles.confirmationLayer}>
+      <AccountRequiredContent
+        colors={colors}
+        loading={loading}
+        onClose={onClose}
+        onOpenAccount={onOpenAccount}
+      />
+    </View>
+  );
+}
+
 function LeaveWorkspaceDialog({
   colors,
   loading,
@@ -1113,7 +1447,8 @@ function LeaveWorkspaceDialog({
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             Perderas acceso a este proyecto compartido y dejara de aparecer en
-            tu lista de proyectos.
+            tu lista de proyectos. La informacion de este proyecto dejara de
+            estar disponible para tu cuenta.
           </Text>
           <View style={styles.modalActions}>
             <Pressable
@@ -1160,11 +1495,12 @@ function LeaveWorkspaceDialog({
   );
 }
 
-function CannotLeaveWorkspaceDialog({ colors, onClose, reason, workspace }) {
+function RemoveMemberDialog({ colors, loading, member, onClose, onConfirm }) {
   return (
     <Modal animationType="fade" onRequestClose={onClose} transparent visible>
       <View style={styles.modalRoot}>
         <Pressable
+          disabled={loading}
           onPress={onClose}
           style={[styles.modalBackdrop, { backgroundColor: colors.backdrop }]}
         />
@@ -1178,22 +1514,55 @@ function CannotLeaveWorkspaceDialog({ colors, onClose, reason, workspace }) {
           ]}
         >
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            No puedes salir todavía
+            Remover colaborador
           </Text>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            {workspace?.name || 'Proyecto compartido'}
+            {member?.displayName || 'Usuario del proyecto'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            {reason}
+            Esta persona perdera acceso al proyecto y dejara de verlo en su
+            lista. La informacion de este proyecto dejara de estar disponible
+            para su cuenta.
           </Text>
-          <Pressable
-            onPress={onClose}
-            style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          >
-            <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-              Entendido
-            </Text>
-          </Pressable>
+          <View style={styles.modalActions}>
+            <Pressable
+              disabled={loading}
+              onPress={onClose}
+              style={[
+                styles.secondaryButton,
+                styles.modalButton,
+                { borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[styles.secondaryText, { color: colors.textPrimary }]}
+              >
+                Cancelar
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={loading}
+              onPress={onConfirm}
+              style={[
+                styles.primaryButton,
+                styles.modalButton,
+                {
+                  backgroundColor: loading
+                    ? colors.surfaceMuted
+                    : colors.danger,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: loading ? colors.inactiveText : colors.textInverse },
+                ]}
+              >
+                {loading ? 'Removiendo...' : 'Remover'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -1201,15 +1570,22 @@ function CannotLeaveWorkspaceDialog({ colors, onClose, reason, workspace }) {
 }
 
 function CreateWorkspaceDialog({
+  accountRequiredOpen = false,
   confirmLabel = 'Crear',
   colors,
+  error = null,
   loading,
   name,
   onChangeName,
   onClose,
+  onCloseAccountRequired,
   onConfirm,
+  onOpenAccountRequired,
+  onSetWorkspaceType,
   placeholder = 'Nombre del nuevo proyecto',
+  showWorkspaceTypePicker = false,
   title = 'Crear proyecto',
+  workspaceType = 'private',
 }) {
   const inputRef = useRef(null);
   const focusTimersRef = useRef([]);
@@ -1217,8 +1593,15 @@ function CreateWorkspaceDialog({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const disabled = loading || !String(name || '').trim();
   const showNameMissing = hasEditedName && !String(name || '').trim();
-  const modalBottom =
-    Platform.OS === 'ios' && keyboardHeight > 0 ? keyboardHeight + 10 : 24;
+  const hasKeyboard = keyboardHeight > 0;
+  const showInlineAccountRequired =
+    Platform.OS === 'ios' && accountRequiredOpen;
+  const modalPositionStyle = hasKeyboard
+    ? {
+        bottom: Platform.OS === 'ios' ? keyboardHeight + 10 : 24,
+        position: 'absolute',
+      }
+    : null;
 
   const focusNameInput = () => {
     const input = inputRef.current;
@@ -1253,6 +1636,10 @@ function CreateWorkspaceDialog({
         InteractionManager.runAfterInteractions(focusNameInput);
       }, delay),
     );
+  };
+
+  const closeAccountRequired = () => {
+    onCloseAccountRequired?.();
   };
 
   useEffect(() => {
@@ -1296,7 +1683,7 @@ function CreateWorkspaceDialog({
   return (
     <Modal
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={showInlineAccountRequired ? closeAccountRequired : onClose}
       onShow={scheduleFocus}
       transparent
       visible
@@ -1310,11 +1697,10 @@ function CreateWorkspaceDialog({
         <View
           style={[
             styles.modalCard,
-            styles.projectNameModalCard,
+            modalPositionStyle,
             {
               backgroundColor: colors.screenBackground || colors.surface,
               borderColor: colors.border,
-              bottom: modalBottom,
             },
           ]}
         >
@@ -1325,7 +1711,7 @@ function CreateWorkspaceDialog({
             autoFocus={Platform.OS !== 'android'}
             onChangeText={(value) => {
               setHasEditedName(true);
-              onChangeName(value);
+              onChangeName(capitalizeUserEntry(value));
             }}
             onFocus={handleNameInputFocus}
             placeholder={placeholder}
@@ -1346,6 +1732,71 @@ function CreateWorkspaceDialog({
             <Text style={[styles.error, { color: colors.danger }]}>
               Agrega un nombre para el proyecto.
             </Text>
+          ) : null}
+          {error && !showNameMissing ? (
+            <Text style={[styles.error, { color: colors.danger }]}>
+              {error}
+            </Text>
+          ) : null}
+          {showWorkspaceTypePicker ? (
+            <View style={styles.workspaceTypePicker}>
+              {[
+                {
+                  description: 'Solo en este dispositivo',
+                  icon: 'project-private',
+                  label: 'Privado',
+                  value: 'private',
+                },
+                {
+                  description: 'Con equipo y respaldo en la nube',
+                  icon: 'project-shared',
+                  label: 'Compartido',
+                  value: 'shared',
+                },
+              ].map((option) => {
+                const active = workspaceType === option.value;
+
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => {
+                      onSetWorkspaceType?.(option.value);
+                    }}
+                    style={[
+                      styles.workspaceTypeOption,
+                      {
+                        backgroundColor: active
+                          ? colors.primaryMuted
+                          : colors.surface,
+                        borderColor: active ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <AppIcon
+                      color={active ? colors.primaryText : colors.textMuted}
+                      name={option.icon}
+                      size={22}
+                    />
+                    <View style={styles.rowText}>
+                      <Text
+                        style={[
+                          styles.secondaryText,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.meta, { color: colors.textMuted }]}
+                      >
+                        {option.description}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : null}
           <View style={styles.modalActions}>
             <Pressable
@@ -1380,100 +1831,193 @@ function CreateWorkspaceDialog({
             </Pressable>
           </View>
         </View>
+        {showInlineAccountRequired ? (
+          <AccountRequiredOverlay
+            colors={colors}
+            loading={loading}
+            onClose={closeAccountRequired}
+            onOpenAccount={onOpenAccountRequired}
+          />
+        ) : null}
       </View>
     </Modal>
   );
 }
 
 export function WorkspacesTab({
+  authRequired = false,
   colors,
   currentWorkspace,
+  hasAccountSession = false,
   loading,
   members = [],
   newWorkspaceName,
+  newWorkspaceType = 'private',
   onCreateWorkspace,
   onDeleteWorkspace,
   onLeave,
-  onRefreshMembers,
   onRenameWorkspace,
+  onOpenAccount,
   onSelectWorkspace,
   onSetNewWorkspaceName,
+  onSetNewWorkspaceType,
   onSetWorkspaceNameDraft,
   onSetWorkspaceMenuKey,
   workspaceNameDraft,
   workspaceMenuKey,
   workspaces,
 }) {
+  const accountRequiredUsesInlineOverlay = Platform.OS === 'ios';
+  const [accountRequiredOpen, setAccountRequiredOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState(null);
-  const [leaveBlockedReason, setLeaveBlockedReason] = useState(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaveWorkspaceTarget, setLeaveWorkspaceTarget] = useState(null);
+  const [createError, setCreateError] = useState(null);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [renameError, setRenameError] = useState(null);
   const [renameWorkspaceTarget, setRenameWorkspaceTarget] = useState(null);
   const setMenuWorkspaceKey = onSetWorkspaceMenuKey || (() => {});
   const menuWorkspaceKey = workspaceMenuKey || null;
   const canRenameWorkspace = (workspace) =>
-    Boolean(workspace?.isRemote) &&
+    !workspace?.isRemote ||
     ['owner', 'admin'].includes(workspace?.workspaceRole);
   const canDeleteWorkspace = (workspace) =>
-    workspace?.workspaceRole === 'owner';
-  const requestLeaveWorkspace = async (workspace) => {
+    !workspace?.isRemote || workspace?.workspaceRole === 'owner';
+  const sharedProjectRequiresAccount = authRequired || !hasAccountSession;
+  const closeCreateWorkspace = () => {
+    setCreateOpen(false);
+    setCreateError(null);
+    setAccountRequiredOpen(false);
+    onSetNewWorkspaceName('');
+    onSetNewWorkspaceType?.('private');
+  };
+  const closeAccountRequired = () => {
+    setAccountRequiredOpen(false);
+
+    if (sharedProjectRequiresAccount && newWorkspaceType === 'shared') {
+      onSetNewWorkspaceType?.('private');
+    }
+  };
+  const openAccountFromRequirement = () => {
+    closeAccountRequired();
+    onOpenAccount?.();
+  };
+  const closeRenameWorkspace = () => {
+    setRenameOpen(false);
+    setRenameError(null);
+    setRenameWorkspaceTarget(null);
+  };
+  const closeDeleteWorkspace = () => {
+    setDeleteOpen(false);
+    setDeleteWorkspaceTarget(null);
+  };
+  const closeLeaveWorkspace = () => {
+    setLeaveOpen(false);
+    setLeaveWorkspaceTarget(null);
+  };
+  const requestLeaveWorkspace = (workspace) => {
     setMenuWorkspaceKey(null);
-
-    let membersForValidation = members;
-
-    if (workspace?.workspaceRole === 'owner' && onRefreshMembers) {
-      try {
-        membersForValidation = getVisibleMembersForDisplay(
-          await onRefreshMembers(workspace),
-        );
-      } catch (error) {
-        setLeaveWorkspaceTarget(workspace);
-        setLeaveBlockedReason(
-          'No pudimos confirmar si hay otro propietario activo. Actualiza el proyecto e intenta salir de nuevo.',
-        );
-        return;
-      }
-    }
-
-    const blockedReason = getLeaveWorkspaceBlockedReason({
-      members: membersForValidation,
-      workspace,
-    });
-
-    if (blockedReason) {
-      setLeaveWorkspaceTarget(workspace);
-      setLeaveBlockedReason(blockedReason);
-      return;
-    }
-
     setLeaveWorkspaceTarget(workspace);
     setLeaveOpen(true);
   };
   const handleCreateWorkspace = async () => {
+    setCreateError(null);
     const result = await onCreateWorkspace();
 
     if (result?.ok) {
       onSetNewWorkspaceName('');
       setCreateOpen(false);
+    } else if (result?.reason === 'account_required') {
+      onSetNewWorkspaceType?.('private');
+      setAccountRequiredOpen(true);
+    } else {
+      setCreateError(result?.message || 'No se pudo crear el proyecto.');
     }
 
     return result;
   };
+  const handleSetCreateWorkspaceType = (nextType) => {
+    setCreateError(null);
+
+    if (nextType === 'shared' && sharedProjectRequiresAccount) {
+      onSetNewWorkspaceType?.('private');
+      setAccountRequiredOpen(true);
+      return;
+    }
+
+    onSetNewWorkspaceType?.(nextType);
+    setAccountRequiredOpen(false);
+  };
   const handleRenameWorkspace = async () => {
-    const result = await onRenameWorkspace(
-      renameWorkspaceTarget || currentWorkspace,
-    );
+    setRenameError(null);
+    const targetWorkspace = renameWorkspaceTarget;
+
+    if (!targetWorkspace) {
+      const message = 'Selecciona el proyecto que quieres editar.';
+      setRenameError(message);
+      return { message, ok: false };
+    }
+
+    const result = await onRenameWorkspace(targetWorkspace);
 
     if (result?.ok) {
       setRenameOpen(false);
       setRenameWorkspaceTarget(null);
+    } else {
+      setRenameError(result?.message || 'No se pudo guardar el proyecto.');
     }
 
     return result;
   };
+
+  useEffect(() => {
+    const hasOpenModal =
+      accountRequiredOpen ||
+      createOpen ||
+      deleteOpen ||
+      leaveOpen ||
+      renameOpen;
+
+    if (!hasOpenModal) {
+      return undefined;
+    }
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (accountRequiredOpen) {
+          closeAccountRequired();
+          return true;
+        }
+
+        if (createOpen) {
+          closeCreateWorkspace();
+          return true;
+        }
+
+        if (renameOpen) {
+          closeRenameWorkspace();
+          return true;
+        }
+
+        if (deleteOpen) {
+          closeDeleteWorkspace();
+          return true;
+        }
+
+        if (leaveOpen) {
+          closeLeaveWorkspace();
+          return true;
+        }
+
+        return false;
+      },
+    );
+
+    return () => subscription.remove();
+  }, [accountRequiredOpen, createOpen, deleteOpen, leaveOpen, renameOpen]);
 
   return (
     <View
@@ -1490,7 +2034,7 @@ export function WorkspacesTab({
             Proyectos
           </Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Administra tus proyectos.
+            Administra todos tus proyectos.
           </Text>
         </View>
         <Pressable
@@ -1499,6 +2043,9 @@ export function WorkspacesTab({
             setRenameWorkspaceTarget(null);
             setRenameOpen(false);
             onSetNewWorkspaceName('');
+            onSetNewWorkspaceType?.('private');
+            setCreateError(null);
+            setAccountRequiredOpen(false);
             setCreateOpen(true);
           }}
           style={[styles.compactButton, { borderColor: colors.border }]}
@@ -1516,43 +2063,46 @@ export function WorkspacesTab({
           Cambiar proyecto
         </Text>
         {workspaces.length ? (
-          workspaces.map((workspace) => (
-            <WorkspaceRow
-              canDelete={canDeleteWorkspace(workspace)}
-              canRename={canRenameWorkspace(workspace)}
-              colors={colors}
-              currentWorkspace={currentWorkspace}
-              key={getWorkspaceRowState(workspace, currentWorkspace).key}
-              loading={loading}
-              menuOpen={
-                menuWorkspaceKey ===
-                getWorkspaceRowState(workspace, currentWorkspace).key
-              }
-              onCloseMenu={() => setMenuWorkspaceKey(null)}
-              onDelete={() => {
-                setMenuWorkspaceKey(null);
-                setDeleteWorkspaceTarget(workspace);
-                setDeleteOpen(true);
-              }}
-              onLeave={() => {
-                requestLeaveWorkspace(workspace);
-              }}
-              onOpenMenu={() =>
-                setMenuWorkspaceKey(
-                  getWorkspaceRowState(workspace, currentWorkspace).key,
-                )
-              }
-              onRename={() => {
-                setMenuWorkspaceKey(null);
-                setRenameWorkspaceTarget(workspace);
-                onSetWorkspaceNameDraft(workspace?.name || '');
-                setCreateOpen(false);
-                setRenameOpen(true);
-              }}
-              onSelect={onSelectWorkspace}
-              workspace={workspace}
-            />
-          ))
+          workspaces.map((workspace) => {
+            const row = getWorkspaceRowState(workspace, currentWorkspace);
+            const leaveAction = getWorkspaceLeaveActionState({
+              members: row.isCurrent ? members : [],
+              workspace,
+            });
+
+            return (
+              <WorkspaceRow
+                canDelete={canDeleteWorkspace(workspace)}
+                canLeave={leaveAction.canLeave}
+                canRename={canRenameWorkspace(workspace)}
+                colors={colors}
+                currentWorkspace={currentWorkspace}
+                key={row.key}
+                loading={loading}
+                menuOpen={menuWorkspaceKey === row.key}
+                onCloseMenu={() => setMenuWorkspaceKey(null)}
+                onDelete={() => {
+                  setMenuWorkspaceKey(null);
+                  setDeleteWorkspaceTarget(workspace);
+                  setDeleteOpen(true);
+                }}
+                onLeave={() => {
+                  requestLeaveWorkspace(workspace);
+                }}
+                onOpenMenu={() => setMenuWorkspaceKey(row.key)}
+                onRename={() => {
+                  setMenuWorkspaceKey(null);
+                  setRenameWorkspaceTarget(workspace);
+                  onSetWorkspaceNameDraft(workspace?.name || '');
+                  setRenameError(null);
+                  setCreateOpen(false);
+                  setRenameOpen(true);
+                }}
+                onSelect={onSelectWorkspace}
+                workspace={workspace}
+              />
+            );
+          })
         ) : (
           <EmptyState colors={colors}>
             {getWorkspaceEmptyState({
@@ -1569,30 +2119,51 @@ export function WorkspacesTab({
           <CreateWorkspaceDialog
             confirmLabel="Guardar"
             colors={colors}
+            error={renameError}
             loading={loading}
             name={workspaceNameDraft}
-            onChangeName={onSetWorkspaceNameDraft}
+            onChangeName={(value) => {
+              setRenameError(null);
+              onSetWorkspaceNameDraft(value);
+            }}
             onClose={() => {
-              setRenameOpen(false);
-              setRenameWorkspaceTarget(null);
+              closeRenameWorkspace();
             }}
             onConfirm={handleRenameWorkspace}
             placeholder="Nombre del proyecto"
             title="Editar proyecto"
           />
         ) : null}
-
         {createOpen ? (
           <CreateWorkspaceDialog
+            accountRequiredOpen={
+              accountRequiredUsesInlineOverlay && accountRequiredOpen
+            }
             colors={colors}
+            error={createError}
             loading={loading}
             name={newWorkspaceName}
-            onChangeName={onSetNewWorkspaceName}
-            onClose={() => {
-              setCreateOpen(false);
-              onSetNewWorkspaceName('');
+            onChangeName={(value) => {
+              setCreateError(null);
+              onSetNewWorkspaceName(value);
             }}
+            onClose={() => {
+              closeCreateWorkspace();
+            }}
+            onCloseAccountRequired={closeAccountRequired}
             onConfirm={handleCreateWorkspace}
+            onOpenAccountRequired={openAccountFromRequirement}
+            onSetWorkspaceType={handleSetCreateWorkspaceType}
+            showWorkspaceTypePicker
+            workspaceType={newWorkspaceType}
+          />
+        ) : null}
+        {!accountRequiredUsesInlineOverlay && accountRequiredOpen ? (
+          <AccountRequiredDialog
+            colors={colors}
+            loading={loading}
+            onClose={closeAccountRequired}
+            onOpenAccount={openAccountFromRequirement}
           />
         ) : null}
       </View>
@@ -1602,8 +2173,7 @@ export function WorkspacesTab({
           colors={colors}
           loading={loading}
           onClose={() => {
-            setDeleteOpen(false);
-            setDeleteWorkspaceTarget(null);
+            closeDeleteWorkspace();
           }}
           onConfirm={async () => {
             const result = await onDeleteWorkspace(
@@ -1623,8 +2193,7 @@ export function WorkspacesTab({
           colors={colors}
           loading={loading}
           onClose={() => {
-            setLeaveOpen(false);
-            setLeaveWorkspaceTarget(null);
+            closeLeaveWorkspace();
           }}
           onConfirm={async () => {
             const result = await onLeave(
@@ -1639,17 +2208,6 @@ export function WorkspacesTab({
           workspace={leaveWorkspaceTarget || currentWorkspace}
         />
       ) : null}
-      {leaveBlockedReason ? (
-        <CannotLeaveWorkspaceDialog
-          colors={colors}
-          onClose={() => {
-            setLeaveBlockedReason(null);
-            setLeaveWorkspaceTarget(null);
-          }}
-          reason={leaveBlockedReason}
-          workspace={leaveWorkspaceTarget || currentWorkspace}
-        />
-      ) : null}
     </View>
   );
 }
@@ -1658,29 +2216,83 @@ const styles = StyleSheet.create({
   actionColumn: {
     gap: 8,
   },
+  accountRequiredCard: {
+    gap: 18,
+    marginHorizontal: 20,
+    padding: 18,
+    width: '90%',
+  },
+  accountRequiredDescription: {
+    fontSize: typography.sizes.body,
+    lineHeight: 23,
+  },
+  accountRequiredDivider: {
+    height: 1,
+    opacity: 0.8,
+    width: '100%',
+  },
+  accountRequiredHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  accountRequiredIcon: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  accountRequiredInfo: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 12,
+  },
+  accountRequiredPrivacyIcon: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  accountRequiredPrivacyText: {
+    flex: 1,
+    fontSize: typography.sizes.label,
+    lineHeight: 19,
+  },
+  accountRequiredTitle: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.bold,
+    lineHeight: 22,
+  },
   activeBusinessPanel: {
     borderRadius: 8,
     borderWidth: 1,
-    gap: 12,
-    minHeight: 150,
+    gap: 8,
+    minHeight: 104,
     overflow: 'hidden',
-    padding: 14,
+    padding: 12,
   },
   activeBusinessMeta: {
     minHeight: 18,
   },
   activeBusinessName: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: typography.weights.bold,
-    marginTop: 4,
+    marginTop: 2,
   },
   activeBusinessGlow: {
     borderRadius: 90,
-    height: 110,
+    height: 96,
     position: 'absolute',
     right: -28,
     top: -42,
-    width: 160,
+    width: 148,
   },
   activeBusinessTop: {
     alignItems: 'flex-start',
@@ -1697,6 +2309,9 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.bold,
+  },
+  workspaceTypeIcon: {
+    flexShrink: 0,
   },
   badge: {
     borderRadius: 8,
@@ -1716,13 +2331,6 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.bodySmall,
     fontWeight: typography.weights.semibold,
   },
-  changeWorkspaceButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-  },
   compactButton: {
     alignItems: 'center',
     borderRadius: 8,
@@ -1734,6 +2342,13 @@ const styles = StyleSheet.create({
   compactButtonText: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
+  },
+  confirmationLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    elevation: 20,
+    justifyContent: 'center',
+    zIndex: 20,
   },
   contextRow: {
     alignItems: 'center',
@@ -1868,11 +2483,6 @@ const styles = StyleSheet.create({
     marginRight: -6,
     width: 26,
   },
-  overflowButtonText: {
-    fontSize: 20,
-    fontWeight: typography.weights.bold,
-    lineHeight: 20,
-  },
   panel: {
     borderRadius: 8,
     gap: 12,
@@ -1885,12 +2495,23 @@ const styles = StyleSheet.create({
     minHeight: 42,
     paddingHorizontal: 12,
   },
-  projectNameModalCard: {
-    position: 'absolute',
-  },
   projectNameModalRoot: {
     alignItems: 'center',
     flex: 1,
+    justifyContent: 'center',
+  },
+  workspaceTypeOption: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    minHeight: 58,
+    padding: 10,
+    width: '100%',
+  },
+  workspaceTypePicker: {
+    gap: 8,
   },
   rowText: {
     flex: 1,
@@ -1950,10 +2571,6 @@ const styles = StyleSheet.create({
     height: 18,
     justifyContent: 'center',
     width: 18,
-  },
-  tabAttentionText: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.bold,
   },
   tabLabelRow: {
     alignItems: 'center',

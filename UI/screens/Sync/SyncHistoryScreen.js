@@ -52,7 +52,7 @@ export default function SyncHistoryScreen({ onBack } = {}) {
       <AppHeader
         actionLabel={onBack ? 'Volver' : null}
         onAction={onBack}
-        subtitle="Registro local y seguro de intentos manuales de sincronizacion."
+        subtitle="Registro local y seguro de sincronizacion."
         title="Historial de sync"
       />
 
@@ -84,8 +84,8 @@ export default function SyncHistoryScreen({ onBack } = {}) {
             Sin actividad
           </Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Los intentos manuales de sync apareceran aqui. Abrir esta pantalla
-            no ejecuta sincronizacion.
+            La actividad de sync aparecera aqui. Abrir esta pantalla no
+            ejecuta sincronizacion.
           </Text>
         </AppCard>
       ) : null}
@@ -116,7 +116,7 @@ export default function SyncHistoryScreen({ onBack } = {}) {
                 {formatSyncHistoryStatus(record.status)}
               </Text>
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                {record.workspaceName || 'Workspace local'} ·{' '}
+                {record.workspaceName || 'Proyecto personal'} ·{' '}
                 {record.startedAt || '-'}
               </Text>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>

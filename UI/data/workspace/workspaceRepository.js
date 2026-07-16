@@ -1,6 +1,7 @@
 import {
   getCollection,
   getDocument,
+  hardDeleteDocument,
   saveDocument,
 } from '../db/documentStore';
 import { createLocalId, getLocalDeviceId } from '../db/localIds';
@@ -11,11 +12,22 @@ const CURRENT_WORKSPACE_DOCUMENT_ID = 'currentWorkspace';
 const currentWorkspaceListeners = new Set();
 
 const nowIso = () => new Date().toISOString();
+const PERSONAL_WORKSPACE_NAME = 'Proyecto personal';
+
+const getWorkspaceGroupId = (workspace = {}) =>
+  workspace.groupId || workspace.remoteGroupId || workspace.workspaceId;
+
+const getWorkspaceDocumentId = (workspace = {}) => {
+  const groupId = getWorkspaceGroupId(workspace);
+
+  return workspace.isRemote ? groupId : workspace.workspaceId || groupId;
+};
 
 const documentToWorkspace = (document) =>
   document
     ? {
         ...document.data,
+        accountUserId: document.data?.accountUserId || null,
         createdAt: document.createdAt,
         groupId: document.groupId || document.data?.groupId,
         isRemote: Boolean(document.data?.isRemote),
@@ -75,6 +87,29 @@ export const getLocalWorkspaces = async (options = {}) => {
     includeDeleted: true,
     order: 'ASC',
   });
+  const personalWorkspaces = workspaces.filter((document) => {
+    const data = document?.data || {};
+    const name = String(data.name || '').trim();
+
+    return !data.isRemote && name === PERSONAL_WORKSPACE_NAME;
+  });
+
+  if (personalWorkspaces.length > 1) {
+    const [, ...duplicates] = personalWorkspaces;
+    await Promise.all(
+      duplicates.map((document) =>
+        hardDeleteDocument(WORKSPACE_COLLECTION, document.id, options),
+      ),
+    );
+
+    return workspaces
+      .filter(
+        (document) =>
+          !duplicates.some((duplicate) => duplicate.id === document.id),
+      )
+      .map(documentToWorkspace)
+      .filter(Boolean);
+  }
 
   return workspaces.map(documentToWorkspace).filter(Boolean);
 };
@@ -89,13 +124,14 @@ export const getFirstLocalOnlyWorkspace = async (options = {}) => {
   );
 };
 
-export const setCurrentWorkspace = async (workspace, options = {}) => {
-  if (!workspace?.workspaceId && !workspace?.groupId) {
+const saveWorkspaceMetadata = async (workspace, options = {}) => {
+  const groupId = getWorkspaceGroupId(workspace);
+  const workspaceId = getWorkspaceDocumentId(workspace);
+
+  if (!workspaceId || !groupId) {
     throw new Error('workspaceId o groupId requerido');
   }
 
-  const workspaceId = workspace.workspaceId || workspace.groupId;
-  const groupId = workspace.groupId || workspaceId;
   const timestamp = workspace.updatedAt || nowIso();
   const ownerDeviceId =
     workspace.ownerDeviceId || (await getLocalDeviceId({ db: options.db }));
@@ -105,11 +141,12 @@ export const setCurrentWorkspace = async (workspace, options = {}) => {
     workspaceId,
     {
       groupId,
+      accountUserId: workspace.accountUserId || null,
       isRemote: Boolean(workspace.isRemote),
-      name: workspace.name || 'Workspace local',
+      name: workspace.name || 'Proyecto personal',
       ownerDeviceId,
       ownerUserId: workspace.ownerUserId || null,
-      remoteGroupId: workspace.remoteGroupId || null,
+      remoteGroupId: workspace.isRemote ? groupId : workspace.remoteGroupId || null,
       workspaceId,
       workspaceRole: workspace.workspaceRole || null,
     },
@@ -125,6 +162,35 @@ export const setCurrentWorkspace = async (workspace, options = {}) => {
       updatedAt: timestamp,
     },
   );
+
+  return getDocument(WORKSPACE_COLLECTION, workspaceId, {
+    db: options.db,
+    includeDeleted: true,
+  });
+};
+
+export const saveWorkspace = async (workspace, options = {}) => {
+  const workspaceDocument = await saveWorkspaceMetadata(workspace, options);
+  return documentToWorkspace(workspaceDocument);
+};
+
+export const deleteWorkspaceMetadata = async (workspace = {}, options = {}) => {
+  const workspaceId = getWorkspaceDocumentId(workspace);
+
+  if (!workspaceId) {
+    return;
+  }
+
+  await hardDeleteDocument(WORKSPACE_COLLECTION, workspaceId, options);
+};
+
+export const setCurrentWorkspace = async (workspace, options = {}) => {
+  await saveWorkspaceMetadata(workspace, options);
+
+  const groupId = getWorkspaceGroupId(workspace);
+  const workspaceId = getWorkspaceDocumentId(workspace);
+  const ownerDeviceId =
+    workspace.ownerDeviceId || (await getLocalDeviceId({ db: options.db }));
 
   await saveDocument(
     LOCAL_META_COLLECTION,
@@ -148,23 +214,27 @@ export const setCurrentWorkspace = async (workspace, options = {}) => {
 };
 
 export const createLocalWorkspace = async ({ name } = {}, options = {}) => {
-  const existingLocalWorkspace = await getFirstLocalOnlyWorkspace(options);
-
-  if (existingLocalWorkspace) {
-    return setCurrentWorkspace(existingLocalWorkspace, options);
-  }
-
   const workspaceId = createLocalId('workspace');
 
   return setCurrentWorkspace(
     {
       groupId: workspaceId,
-      name: name || 'Workspace local',
+      name: name || 'Proyecto personal',
       syncStatus: 'local',
       workspaceId,
     },
     options,
   );
+};
+
+export const getOrCreatePersonalWorkspace = async (options = {}) => {
+  const firstWorkspace = await getFirstLocalOnlyWorkspace(options);
+
+  if (firstWorkspace) {
+    return firstWorkspace;
+  }
+
+  return createLocalWorkspace({ name: 'Proyecto personal' }, options);
 };
 
 export const getOrCreateDefaultLocalWorkspace = async (options = {}) => {
@@ -174,13 +244,10 @@ export const getOrCreateDefaultLocalWorkspace = async (options = {}) => {
     return currentWorkspace;
   }
 
-  const firstWorkspace = await getFirstLocalOnlyWorkspace(options);
-
-  if (firstWorkspace) {
-    return setCurrentWorkspace(firstWorkspace, options);
-  }
-
-  return createLocalWorkspace({ name: 'Workspace local' }, options);
+  return setCurrentWorkspace(
+    await getOrCreatePersonalWorkspace(options),
+    options,
+  );
 };
 
 export const clearCurrentWorkspace = async (options = {}) => {
@@ -203,10 +270,13 @@ export const clearCurrentWorkspace = async (options = {}) => {
 export default {
   clearCurrentWorkspace,
   createLocalWorkspace,
+  deleteWorkspaceMetadata,
   getCurrentWorkspace,
   getFirstLocalOnlyWorkspace,
   getLocalWorkspaces,
   getOrCreateDefaultLocalWorkspace,
+  getOrCreatePersonalWorkspace,
+  saveWorkspace,
   setCurrentWorkspace,
   subscribeToCurrentWorkspaceChanges,
 };

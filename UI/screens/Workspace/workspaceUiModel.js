@@ -7,19 +7,40 @@ import {
 export { dedupeWorkspaces, getWorkspaceListKey, normalizeWorkspaceId };
 
 export const workspaceTabs = [
+  { key: 'workspaces', label: 'Proyectos' },
   { key: 'team', label: 'Equipo' },
   { key: 'invitations', label: 'Invitaciones' },
-  { key: 'workspaces', label: 'Proyectos' },
 ];
 
-export const getWorkspaceTabState = (activeTab = 'team') =>
+export const shareAccountRequiredModalCopy = {
+  cancelLabel: 'Cancelar',
+  description:
+    'Inicia sesión para compartir este negocio con tu equipo y respaldar tu información en la nube.',
+  loginLabel: 'Iniciar sesión',
+  privacyNote:
+    'Si no inicias sesión, este negocio seguirá siendo privado en este dispositivo.',
+  title: 'Necesitas una cuenta\npara compartir este negocio',
+};
+
+export const getShareAccountRequiredModalState = ({
+  onClose,
+  onOpenAccount,
+} = {}) => ({
+  actions: {
+    cancel: () => onClose?.(),
+    openAccount: () => onOpenAccount?.(),
+  },
+  copy: shareAccountRequiredModalCopy,
+});
+
+export const getWorkspaceTabState = (activeTab = 'workspaces') =>
   workspaceTabs.map((tab) => ({
     ...tab,
     active: tab.key === activeTab,
   }));
 
 export const getWorkspaceModeLabel = (workspace) =>
-  workspace?.isRemote ? 'Compartido' : 'Trabajando localmente';
+  workspace?.isRemote ? 'Compartido' : 'Proyecto personal';
 
 export const isTechnicalWorkspaceName = (name = '') =>
   /^(phase_|ws_|workspace_|group_|local_)/i.test(String(name || '').trim()) ||
@@ -29,9 +50,7 @@ export const formatWorkspaceName = (workspace = {}) => {
   const name = String(workspace?.name || '').trim();
 
   if (!name || isTechnicalWorkspaceName(name)) {
-    return workspace?.isRemote
-      ? 'Proyecto compartido'
-      : 'Solo en este dispositivo';
+    return workspace?.isRemote ? 'Proyecto compartido' : 'Proyecto personal';
   }
 
   return name;
@@ -39,7 +58,7 @@ export const formatWorkspaceName = (workspace = {}) => {
 
 export const getWorkspaceOwnershipLabel = (workspace = {}) => {
   if (!workspace?.isRemote) {
-    return 'Este proyecto esta en este dispositivo';
+    return 'Solo tu puedes ver este proyecto';
   }
 
   return formatWorkspaceRole(workspace.workspaceRole || 'member');
@@ -48,7 +67,7 @@ export const getWorkspaceOwnershipLabel = (workspace = {}) => {
 export const formatWorkspaceRole = (role = 'local') => {
   const labels = {
     admin: 'Administrador',
-    local: 'Local',
+    local: 'Personal',
     member: 'Miembro',
     owner: 'Propietario',
     viewer: 'Solo lectura',
@@ -150,7 +169,7 @@ export const formatWorkspaceError = (error) => {
   }
 
   if (message.includes('auth_required')) {
-    return 'Inicia sesion para administrar proyectos compartidos. El modo local sigue disponible.';
+    return 'Inicia sesion para administrar proyectos compartidos.';
   }
 
   if (message.includes('workspace_admin_required')) {
@@ -215,7 +234,7 @@ export const getWorkspaceEmptyState = ({
   }
 
   if (authRequired) {
-    return 'Inicia sesion para ver proyectos compartidos. El modo local sigue disponible.';
+    return 'Inicia sesion para ver proyectos compartidos.';
   }
 
   if (type === 'members') {
@@ -231,7 +250,7 @@ export const getWorkspaceEmptyState = ({
   }
 
   if (!currentWorkspace) {
-    return 'No hay proyecto seleccionado. Puedes seguir trabajando localmente.';
+    return 'No hay proyecto seleccionado. Puedes seguir trabajando en tu proyecto personal.';
   }
 
   return 'No hay proyectos compartidos disponibles.';
@@ -333,6 +352,23 @@ export const getLeaveWorkspaceBlockedReason = ({
   return null;
 };
 
+export const getWorkspaceLeaveActionState = ({
+  members = [],
+  workspace = {},
+} = {}) => {
+  const isRemote = Boolean(workspace?.isRemote);
+  const isOwner = workspace?.workspaceRole === 'owner';
+  const hasMemberContext = Array.isArray(members) && members.length > 0;
+  const blockedReason = getLeaveWorkspaceBlockedReason({ members, workspace });
+  const canLeave = isRemote && !blockedReason && (!isOwner || hasMemberContext);
+
+  return {
+    blockedReason,
+    canLeave,
+    showAction: canLeave,
+  };
+};
+
 export const getMemberActionState = ({
   loading = false,
   member = {},
@@ -345,7 +381,7 @@ export const getMemberActionState = ({
   const isOwner = member.roleKey === 'owner';
   const isLastOwner =
     member.roleKey === 'owner' && member.lastActiveOwner === true;
-  const showAction = (isCurrentUser && !isOwner) || (canAdmin && !isOwner);
+  const showAction = isCurrentUser ? !isLastOwner : canAdmin && !isOwner;
   const canRemove =
     !loading &&
     showAction &&
@@ -452,23 +488,16 @@ export const dedupeWorkspaceDisplayList = (
 ) => {
   const currentKey = getWorkspaceListKey(currentWorkspace || {});
   const seen = new Set();
-  const seenIndexByKey = new Map();
+  const seenIndexByIdentity = new Map();
   const result = [];
 
-  workspaces.forEach((workspace) => {
+  workspaces.forEach((workspace, index) => {
+    const id = normalizeWorkspaceId(workspace);
     const key = getWorkspaceListKey(workspace);
-    const nameKey = [
-      workspace?.isRemote ? 'remote' : 'local',
-      String(workspace?.name || '')
-        .trim()
-        .toLowerCase(),
-    ].join(':');
-    const identityKey = key || nameKey;
-    const duplicateKey = seen.has(identityKey) || seen.has(nameKey);
+    const identityKey = id ? key : `workspace:${index}`;
 
-    if (duplicateKey) {
-      const previousIndex =
-        seenIndexByKey.get(identityKey) ?? seenIndexByKey.get(nameKey);
+    if (seen.has(identityKey)) {
+      const previousIndex = seenIndexByIdentity.get(identityKey);
 
       if (key === currentKey && previousIndex !== undefined) {
         result[previousIndex] = workspace;
@@ -478,13 +507,21 @@ export const dedupeWorkspaceDisplayList = (
     }
 
     seen.add(identityKey);
-    seen.add(nameKey);
-    seenIndexByKey.set(identityKey, result.length);
-    seenIndexByKey.set(nameKey, result.length);
+    seenIndexByIdentity.set(identityKey, result.length);
     result.push(workspace);
   });
 
-  return result;
+  return [...result].sort((left, right) => {
+    if (Boolean(left?.isRemote) !== Boolean(right?.isRemote)) {
+      return left?.isRemote ? 1 : -1;
+    }
+
+    return formatWorkspaceName(left).localeCompare(
+      formatWorkspaceName(right),
+      'es',
+      { sensitivity: 'base' },
+    );
+  });
 };
 
 export const sanitizeInvitationForDisplay = (
@@ -543,7 +580,7 @@ export const getWorkspaceTypeLabel = (workspace = {}) => {
 };
 
 export const getWorkspaceStatusLabel = (workspace = {}) =>
-  workspace?.isRemote ? 'Compartido' : 'Trabajando localmente';
+  workspace?.isRemote ? 'Compartido' : 'Proyecto personal';
 
 export const getWorkspaceRowState = (workspace = {}, currentWorkspace = {}) => {
   const workspaceKey = getWorkspaceListKey(workspace);
@@ -565,11 +602,11 @@ export const getCurrentWorkspaceCardState = (
   role = 'local',
 ) => ({
   detailLabel: workspace?.isRemote
-    ? `Compartido · ${formatWorkspaceRole(role)}`
+    ? formatWorkspaceRole(role)
     : 'Solo tu puedes ver la información',
   initials: getDisplayInitials(formatWorkspaceName(workspace)),
   name: formatWorkspaceName(workspace),
   roleLabel: formatWorkspaceRole(role),
   statusLabel: getWorkspaceStatusLabel(workspace),
-  typeLabel: workspace?.isRemote ? 'Compartido' : 'Local',
+  typeLabel: workspace?.isRemote ? 'Compartido' : 'Personal',
 });

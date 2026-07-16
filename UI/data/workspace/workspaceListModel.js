@@ -53,32 +53,6 @@ const mergeWorkspace = (existing, next, currentWorkspace) => {
   return merged;
 };
 
-const mergeLocalWorkspace = (existing, next, currentWorkspace) => {
-  if (!existing) {
-    return next;
-  }
-
-  if (isSameWorkspaceIdentity(existing, next)) {
-    return mergeWorkspace(existing, next, currentWorkspace);
-  }
-
-  if (currentWorkspace && isSameWorkspaceIdentity(next, currentWorkspace)) {
-    return {
-      ...existing,
-      ...next,
-    };
-  }
-
-  if (currentWorkspace && isSameWorkspaceIdentity(existing, currentWorkspace)) {
-    return {
-      ...next,
-      ...existing,
-    };
-  }
-
-  return existing;
-};
-
 const applyCurrentWorkspaceMetadata = (workspace, currentWorkspace) => {
   if (!currentWorkspace || !isSameWorkspaceIdentity(workspace, currentWorkspace)) {
     return workspace;
@@ -94,52 +68,58 @@ const applyCurrentWorkspaceMetadata = (workspace, currentWorkspace) => {
 };
 
 export const dedupeWorkspaces = (workspaces = [], { currentWorkspace } = {}) => {
-  const byIdentity = new Map();
-  const orderedIds = [];
-  let localWorkspace = null;
+  const localByIdentity = new Map();
+  const localOrderedIds = [];
+  const remoteByIdentity = new Map();
+  const remoteOrderedIds = [];
 
   workspaces.forEach((workspace) => {
-    if (!workspace?.isRemote) {
-      localWorkspace = mergeLocalWorkspace(
-        localWorkspace,
-        workspace,
-        currentWorkspace,
-      );
-      return;
-    }
-
     const id = normalizeWorkspaceId(workspace);
 
     if (!id) {
       return;
     }
 
-    if (!byIdentity.has(id)) {
-      byIdentity.set(id, workspace);
-      orderedIds.push(id);
+    if (!workspace?.isRemote) {
+      if (!localByIdentity.has(id)) {
+        localByIdentity.set(id, workspace);
+        localOrderedIds.push(id);
+        return;
+      }
+
+      localByIdentity.set(
+        id,
+        mergeWorkspace(localByIdentity.get(id), workspace, currentWorkspace),
+      );
       return;
     }
 
-    byIdentity.set(
+    if (!remoteByIdentity.has(id)) {
+      remoteByIdentity.set(id, workspace);
+      remoteOrderedIds.push(id);
+      return;
+    }
+
+    remoteByIdentity.set(
       id,
-      mergeWorkspace(byIdentity.get(id), workspace, currentWorkspace),
+      mergeWorkspace(remoteByIdentity.get(id), workspace, currentWorkspace),
     );
   });
 
-  const remoteWorkspaces = orderedIds.map((id) =>
-    applyCurrentWorkspaceMetadata(byIdentity.get(id), currentWorkspace),
+  const localWorkspaces = localOrderedIds.map((id) =>
+    applyCurrentWorkspaceMetadata(localByIdentity.get(id), currentWorkspace),
+  );
+  const remoteWorkspaces = remoteOrderedIds.map((id) =>
+    applyCurrentWorkspaceMetadata(remoteByIdentity.get(id), currentWorkspace),
+  );
+  const visibleLocalWorkspaces = localWorkspaces.filter(
+    (localWorkspace) =>
+      !remoteWorkspaces.some((workspace) =>
+        isSameWorkspaceIdentity(workspace, localWorkspace),
+      ),
   );
 
-  if (
-    localWorkspace &&
-    !remoteWorkspaces.some((workspace) =>
-      isSameWorkspaceIdentity(workspace, localWorkspace),
-    )
-  ) {
-    return [localWorkspace, ...remoteWorkspaces];
-  }
-
-  return remoteWorkspaces;
+  return [...visibleLocalWorkspaces, ...remoteWorkspaces];
 };
 
 export default {

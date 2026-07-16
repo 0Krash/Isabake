@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import AppIcon from '../icons/AppIcon';
 import { TransactionMenuButton } from '../TransactionBalance/TransactionMenu';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
@@ -99,9 +100,12 @@ export default function WorkspaceContextIndicator({
                   },
                 ]}
               >
-                <Text style={[styles.attentionText, { color: colors.primary }]}>
-                  !
-                </Text>
+                <AppIcon
+                  color={colors.primary}
+                  decorative
+                  name="notification-attention"
+                  size={14}
+                />
               </View>
             ) : null}
           </View>
@@ -166,10 +170,6 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     width: 20,
-  },
-  attentionText: {
-    fontSize: typography.sizes.label,
-    fontWeight: typography.weights.bold,
   },
   container: {
     borderRadius: 8,
