@@ -36,9 +36,16 @@ export const loadSyncCenterStatus = async ({
 } = {}) => {
   const currentWorkspace =
     (await getWorkspace()) || (await getOrCreateDefaultLocalWorkspace());
-  const [session, readiness, lastSyncState] = await Promise.all([
-    getSession().catch(() => null),
-    runReadiness(),
+  const session = await getSession().catch(() => null);
+  const canUseSharedWorkspace =
+    currentWorkspace?.isRemote &&
+    (!currentWorkspace.accountUserId ||
+      currentWorkspace.accountUserId === session?.userId);
+  const syncGroupId = canUseSharedWorkspace
+    ? currentWorkspace.groupId
+    : null;
+  const [readiness, lastSyncState] = await Promise.all([
+    runReadiness({ groupId: syncGroupId }),
     currentWorkspace?.groupId
       ? getState(currentWorkspace.groupId).catch(() => null)
       : Promise.resolve(null),
@@ -78,6 +85,13 @@ const requireSharedSyncReady = ({ currentWorkspace, session } = {}) => {
 
   if (session.sessionState === 'expired') {
     throw new Error('session_expired');
+  }
+
+  if (
+    currentWorkspace.accountUserId &&
+    currentWorkspace.accountUserId !== session.userId
+  ) {
+    throw new Error('workspace_account_mismatch');
   }
 
   return currentWorkspace.groupId;

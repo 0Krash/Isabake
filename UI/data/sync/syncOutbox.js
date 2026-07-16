@@ -17,6 +17,80 @@ const parseOutboxEvent = (event) => {
   };
 };
 
+const hasGroupScope = (options = {}) =>
+  Object.prototype.hasOwnProperty.call(options, 'groupId');
+
+const getOutboxEventsByStatus = async (status, options = {}) => {
+  const db = options.db || (await initDatabase());
+
+  if (hasGroupScope(options) && !options.groupId) {
+    return [];
+  }
+
+  const groupJoin = hasGroupScope(options)
+    ? `
+      INNER JOIN documents
+        ON documents.collection = sync_outbox.collection
+       AND documents.id = sync_outbox.documentId
+       AND documents.groupId = ?
+    `
+    : '';
+  const params = hasGroupScope(options)
+    ? [options.groupId, status]
+    : [status];
+  const events = await db.getAllAsync(
+    `
+      SELECT sync_outbox.*
+      FROM sync_outbox
+      ${groupJoin}
+      WHERE sync_outbox.status = ?
+      ORDER BY sync_outbox.createdAt ASC;
+    `,
+    params,
+  );
+
+  return events.map(parseOutboxEvent);
+};
+
+const getOutboxCountsByStatus = async (status, options = {}) => {
+  const db = options.db || (await initDatabase());
+
+  if (hasGroupScope(options) && !options.groupId) {
+    return {};
+  }
+
+  const groupJoin = hasGroupScope(options)
+    ? `
+      INNER JOIN documents
+        ON documents.collection = sync_outbox.collection
+       AND documents.id = sync_outbox.documentId
+       AND documents.groupId = ?
+    `
+    : '';
+  const params = hasGroupScope(options)
+    ? [options.groupId, status]
+    : [status];
+  const rows = await db.getAllAsync(
+    `
+      SELECT sync_outbox.collection, COUNT(*) AS count
+      FROM sync_outbox
+      ${groupJoin}
+      WHERE sync_outbox.status = ?
+      GROUP BY sync_outbox.collection
+      ORDER BY sync_outbox.collection ASC;
+    `,
+    params,
+  );
+
+  return rows.reduce(
+    (summary, row) => ({
+      ...summary,
+      [row.collection || 'unknown']: Number(row.count || 0),
+    }),
+    {},
+  );
+};
+
 const notifyAutoSyncAfterOutboxWrite = (options = {}) => {
   if (options.notifyAutoSyncNeeded) {
     options.notifyAutoSyncNeeded('local_change');
@@ -60,17 +134,7 @@ export const addOutboxEvent = async (
 };
 
 export const getPendingOutboxEvents = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const events = await db.getAllAsync(
-    `
-      SELECT *
-      FROM sync_outbox
-      WHERE status = 'pending'
-      ORDER BY createdAt ASC;
-    `,
-  );
-
-  return events.map(parseOutboxEvent);
+  return getOutboxEventsByStatus('pending', options);
 };
 
 export const getPendingOutboxEventsForDocument = async (
@@ -109,94 +173,23 @@ export const getOutboxEventById = async (id, options = {}) => {
 };
 
 export const getPendingOutboxCountsByCollection = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const rows = await db.getAllAsync(
-    `
-      SELECT collection, COUNT(*) AS count
-      FROM sync_outbox
-      WHERE status = 'pending'
-      GROUP BY collection
-      ORDER BY collection ASC;
-    `,
-  );
-
-  return rows.reduce(
-    (summary, row) => ({
-      ...summary,
-      [row.collection || 'unknown']: Number(row.count || 0),
-    }),
-    {},
-  );
+  return getOutboxCountsByStatus('pending', options);
 };
 
 export const getFailedOutboxEvents = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const events = await db.getAllAsync(
-    `
-      SELECT *
-      FROM sync_outbox
-      WHERE status = 'failed'
-      ORDER BY createdAt ASC;
-    `,
-  );
-
-  return events.map(parseOutboxEvent);
+  return getOutboxEventsByStatus('failed', options);
 };
 
 export const getFailedOutboxCountsByCollection = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const rows = await db.getAllAsync(
-    `
-      SELECT collection, COUNT(*) AS count
-      FROM sync_outbox
-      WHERE status = 'failed'
-      GROUP BY collection
-      ORDER BY collection ASC;
-    `,
-  );
-
-  return rows.reduce(
-    (summary, row) => ({
-      ...summary,
-      [row.collection || 'unknown']: Number(row.count || 0),
-    }),
-    {},
-  );
+  return getOutboxCountsByStatus('failed', options);
 };
 
 export const getConflictOutboxEvents = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const events = await db.getAllAsync(
-    `
-      SELECT *
-      FROM sync_outbox
-      WHERE status = 'conflict'
-      ORDER BY createdAt ASC;
-    `,
-  );
-
-  return events.map(parseOutboxEvent);
+  return getOutboxEventsByStatus('conflict', options);
 };
 
 export const getConflictOutboxCountsByCollection = async (options = {}) => {
-  const db = options.db || (await initDatabase());
-  const rows = await db.getAllAsync(
-    `
-      SELECT collection, COUNT(*) AS count
-      FROM sync_outbox
-      WHERE status = 'conflict'
-      GROUP BY collection
-      ORDER BY collection ASC;
-    `,
-  );
-
-  return rows.reduce(
-    (summary, row) => ({
-      ...summary,
-      [row.collection || 'unknown']: Number(row.count || 0),
-    }),
-    {},
-  );
+  return getOutboxCountsByStatus('conflict', options);
 };
 
 export const markOutboxEventAsDone = async (id, options = {}) => {
@@ -243,6 +236,29 @@ export const requeueOutboxEvent = async (id, options = {}) => {
     `,
     [id],
   );
+};
+
+export const deleteOutboxEventsByGroupId = async (groupId, options = {}) => {
+  if (!groupId) {
+    return 0;
+  }
+
+  const db = options.db || (await initDatabase());
+  const result = await db.runAsync(
+    `
+      DELETE FROM sync_outbox
+      WHERE EXISTS (
+        SELECT 1
+        FROM documents
+        WHERE documents.collection = sync_outbox.collection
+          AND documents.id = sync_outbox.documentId
+          AND documents.groupId = ?
+      );
+    `,
+    [groupId],
+  );
+
+  return Number(result?.changes || 0);
 };
 
 export const markOutboxEventConflict = async (id, conflict, options = {}) => {

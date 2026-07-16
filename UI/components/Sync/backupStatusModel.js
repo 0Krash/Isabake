@@ -386,7 +386,7 @@ export const getBackupStatus = ({
     return {
       description:
         autoSyncState?.autoSyncEnabled === false
-          ? 'Puedes sincronizar manualmente cuando quieras.'
+          ? 'Puedes sincronizar cuando quieras.'
           : 'Se respaldarán automáticamente.',
       primaryActionLabel: null,
       secondaryActionLabel: null,

@@ -140,6 +140,8 @@ describe('BackupStatusIndicator integration', () => {
     const workspaceSource = read('screens/Workspace/WorkspaceScreen.js');
 
     expect(appScreenSource).toContain('RefreshControl');
+    expect(appScreenSource).toContain('alwaysBounceVertical={Boolean(onRefresh)}');
+    expect(appScreenSource).toContain('bounces={Boolean(onRefresh)}');
     expect(workspaceSource).toContain('handlePullToSync');
     expect(workspaceSource).toContain('onRefresh={handlePullToSync}');
     expect(workspaceSource).toContain('refreshNetworkStatus');

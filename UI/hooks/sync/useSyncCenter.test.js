@@ -31,7 +31,7 @@ jest.mock('../../data/sync/syncHistoryService', () => ({
     status.session ? 'authenticated' : 'auth_required',
   ),
   getSyncHistoryWorkspaceName: jest.fn(
-    (workspace = {}) => workspace.name || 'Workspace local',
+    (workspace = {}) => workspace.name || 'Proyecto personal',
   ),
   recordSkippedSyncRun: jest.fn(),
   safelyRecordSyncHistory: jest.fn((operation) => operation()),
@@ -90,6 +90,7 @@ describe('useSyncCenter helpers', () => {
   });
 
   test('status refresh reports pending failed and conflict counts', async () => {
+    const runReadiness = jest.fn(async () => readiness);
     const result = await loadSyncCenterStatus({
       getSession: jest.fn(async () => session),
       getState: jest.fn(async () => ({
@@ -98,9 +99,10 @@ describe('useSyncCenter helpers', () => {
         lastSyncedAt: '2026-01-01T00:00:00.000Z',
       })),
       getWorkspace: jest.fn(async () => sharedWorkspace),
-      runReadiness: jest.fn(async () => readiness),
+      runReadiness,
     });
 
+    expect(runReadiness).toHaveBeenCalledWith({ groupId: 'group_1' });
     expect(result).toEqual(
       expect.objectContaining({
         authStatus: 'authenticated',
@@ -110,6 +112,69 @@ describe('useSyncCenter helpers', () => {
       }),
     );
     expect(result.lastSyncState.lastSyncCursor).toBe('cursor_1');
+  });
+
+  test('local personal project status ignores private pending sync work', async () => {
+    const runReadiness = jest.fn(async (options = {}) =>
+      options.groupId
+        ? readiness
+        : {
+            conflictDocumentCount: 0,
+            conflictOutboxCount: 0,
+            failedOutboxCount: 0,
+            ok: true,
+            pendingOutboxCount: 0,
+            readyToSyncCount: 0,
+          },
+    );
+    const result = await loadSyncCenterStatus({
+      getSession: jest.fn(async () => session),
+      getState: jest.fn(async () => null),
+      getWorkspace: jest.fn(async () => localWorkspace),
+      runReadiness,
+    });
+
+    expect(runReadiness).toHaveBeenCalledWith({ groupId: null });
+    expect(result).toEqual(
+      expect.objectContaining({
+        conflictCount: 0,
+        currentWorkspace: localWorkspace,
+        failedCount: 0,
+        pendingCount: 0,
+      }),
+    );
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        isSharedWorkspace: false,
+        pendingCount: 0,
+      }),
+    );
+  });
+
+  test('status does not scope readiness to a shared workspace from another account', async () => {
+    const runReadiness = jest.fn(async (options = {}) =>
+      options.groupId
+        ? readiness
+        : {
+            conflictDocumentCount: 0,
+            conflictOutboxCount: 0,
+            failedOutboxCount: 0,
+            ok: true,
+            pendingOutboxCount: 0,
+          },
+    );
+    const result = await loadSyncCenterStatus({
+      getSession: jest.fn(async () => session),
+      getState: jest.fn(async () => null),
+      getWorkspace: jest.fn(async () => ({
+        ...sharedWorkspace,
+        accountUserId: 'user_2',
+      })),
+      runReadiness,
+    });
+
+    expect(runReadiness).toHaveBeenCalledWith({ groupId: null });
+    expect(result.pendingCount).toBe(0);
   });
 
   test('unauthenticated shared sync fails with auth_required', async () => {
@@ -130,6 +195,25 @@ describe('useSyncCenter helpers', () => {
         triggerSource: 'manual',
       }),
     );
+  });
+
+  test('pull rejects a shared workspace from another account', async () => {
+    const pull = jest.fn();
+
+    await expect(
+      runManualSyncAction({
+        action: 'pull',
+        loadStatus: jest.fn(async () => ({
+          currentWorkspace: {
+            ...sharedWorkspace,
+            accountUserId: 'user_2',
+          },
+          session,
+        })),
+        pull,
+      }),
+    ).rejects.toThrow('workspace_account_mismatch');
+    expect(pull).not.toHaveBeenCalled();
   });
 
   test('local-only sync fails clearly and does not call push', async () => {

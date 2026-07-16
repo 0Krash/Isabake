@@ -30,8 +30,10 @@ const summarizeByCollection = (documents = []) =>
     return summary;
   }, {});
 
-export const runSyncReadinessCheck = async () => {
+export const runSyncReadinessCheck = async (options = {}) => {
   const checkedAt = new Date().toISOString();
+  const hasGroupScope = Object.prototype.hasOwnProperty.call(options, 'groupId');
+  const scopeOptions = hasGroupScope ? { groupId: options.groupId } : {};
   const [
     blockedMissingGroupIdDocuments,
     conflictOutboxByCollection,
@@ -45,16 +47,16 @@ export const runSyncReadinessCheck = async () => {
     syncProblemDocuments,
     syncStates,
   ] = await Promise.all([
-    getDocumentsMissingGroupId(),
-    getConflictOutboxCountsByCollection(),
-    getConflictOutboxEvents(),
-    getFailedOutboxCountsByCollection(),
-    getFailedOutboxEvents(),
+    getDocumentsMissingGroupId(scopeOptions),
+    getConflictOutboxCountsByCollection(scopeOptions),
+    getConflictOutboxEvents(scopeOptions),
+    getFailedOutboxCountsByCollection(scopeOptions),
+    getFailedOutboxEvents(scopeOptions),
     getLocalPrivateDocuments(),
-    getPendingOutboxCountsByCollection(),
-    getPendingOutboxEvents(),
-    getDocumentsReadyToSync(),
-    getDocumentsBySyncStatuses(['pending', 'failed', 'conflict']),
+    getPendingOutboxCountsByCollection(scopeOptions),
+    getPendingOutboxEvents(scopeOptions),
+    getDocumentsReadyToSync(scopeOptions),
+    getDocumentsBySyncStatuses(['pending', 'failed', 'conflict'], scopeOptions),
     getAllSyncStates(),
   ]);
   const documentsBySyncStatus = syncProblemDocuments.reduce(

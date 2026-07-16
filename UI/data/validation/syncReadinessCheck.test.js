@@ -80,8 +80,22 @@ jest.mock('../sync/syncStateRepository', () => ({
 }));
 
 import { runSyncReadinessCheck } from './syncReadinessCheck';
+import {
+  getDocumentsBySyncStatuses,
+  getDocumentsMissingGroupId,
+  getDocumentsReadyToSync,
+} from '../db/documentStore';
+import {
+  getConflictOutboxEvents,
+  getPendingOutboxCountsByCollection,
+  getPendingOutboxEvents,
+} from '../sync/syncOutbox';
 
 describe('syncReadinessCheck', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   test('separates ready, private, and blocked shared records', async () => {
     const result = await runSyncReadinessCheck();
 
@@ -114,5 +128,29 @@ describe('syncReadinessCheck', () => {
         }),
       ]),
     );
+  });
+
+  test('scopes syncable documents and outbox to the active shared project', async () => {
+    await runSyncReadinessCheck({ groupId: 'group_2' });
+
+    expect(getDocumentsMissingGroupId).toHaveBeenCalledWith({
+      groupId: 'group_2',
+    });
+    expect(getDocumentsReadyToSync).toHaveBeenCalledWith({
+      groupId: 'group_2',
+    });
+    expect(getDocumentsBySyncStatuses).toHaveBeenCalledWith(
+      ['pending', 'failed', 'conflict'],
+      { groupId: 'group_2' },
+    );
+    expect(getPendingOutboxCountsByCollection).toHaveBeenCalledWith({
+      groupId: 'group_2',
+    });
+    expect(getPendingOutboxEvents).toHaveBeenCalledWith({
+      groupId: 'group_2',
+    });
+    expect(getConflictOutboxEvents).toHaveBeenCalledWith({
+      groupId: 'group_2',
+    });
   });
 });
