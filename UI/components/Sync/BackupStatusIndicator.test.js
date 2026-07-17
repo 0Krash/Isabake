@@ -135,6 +135,30 @@ describe('BackupStatusIndicator integration', () => {
     );
   });
 
+  test('recipes and inventory lazy-load visible list items', () => {
+    const recipesSource = read('screens/RecipeBook/RecipeBookScreen.js');
+    const recipeHookSource = read('hooks/RecipeBook/useRecipeBookLocal.js');
+    const inventorySource = read('screens/Inventory/InventoryScreen.js');
+    const inventoryHookSource = read('hooks/Inventory/useInventoryLocal.js');
+
+    expect(recipeHookSource).toContain('RECIPES_PAGE_SIZE');
+    expect(recipeHookSource).toContain('loadMoreRecipes');
+    expect(recipeHookSource).toContain('hasMoreRecipes: pagination.hasMore');
+    expect(recipesSource).toContain('onEndReached={hasMoreRecipes ? loadMoreRecipes : null}');
+    expect(recipesSource).toContain('isLoadingMoreRecipes');
+    expect(recipesSource).toContain('useInventoryData({ paginated: false })');
+
+    expect(inventoryHookSource).toContain('INVENTORY_PAGE_SIZE');
+    expect(inventoryHookSource).toContain('loadMoreInventory');
+    expect(inventoryHookSource).toContain(
+      'hasMoreInventory: pagination.hasMore',
+    );
+    expect(inventorySource).toContain(
+      'onEndReached={hasMoreInventory ? loadMoreInventory : null}',
+    );
+    expect(inventorySource).toContain('isLoadingMoreInventory');
+  });
+
   test('workspace sharing screen supports manual pull-to-sync', () => {
     const appScreenSource = read('components/layout/AppScreen.js');
     const workspaceSource = read('screens/Workspace/WorkspaceScreen.js');

@@ -66,10 +66,32 @@ const getAll = async (options = {}) => {
   );
 };
 
+const getPage = async ({ groupId, limit = 20, page = 1 } = {}) => {
+  const allInventoryItems = await getAll({ groupId });
+  const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const normalizedPage = Math.max(Number(page) || 1, 1);
+  const start = (normalizedPage - 1) * normalizedLimit;
+  const data = allInventoryItems.slice(start, start + normalizedLimit);
+
+  return {
+    data,
+    pagination: {
+      hasMore: start + data.length < allInventoryItems.length,
+      limit: normalizedLimit,
+      page: normalizedPage,
+      total: allInventoryItems.length,
+      totalPages: Math.ceil(allInventoryItems.length / normalizedLimit),
+    },
+    result: data.length,
+    status: 'success',
+  };
+};
+
 const getByInventoryId = repository.getById;
 
 export default {
   ...repository,
   getAll,
   getByInventoryId,
+  getPage,
 };

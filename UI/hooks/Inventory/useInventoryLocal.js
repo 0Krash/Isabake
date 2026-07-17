@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { inventoryRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
+
+export const INVENTORY_PAGE_SIZE = 20;
+const inventoryCache = new Map();
+
+const getInventoryCacheKey = (groupId, paginated) =>
+  `${groupId || 'default'}:${paginated ? 'paged' : 'all'}`;
 
 const normalizeQuality = (quality) => {
   const qualityMap = {
@@ -106,11 +112,57 @@ const sortInventoryItems = (items) =>
     }),
   );
 
-export default function useInventoryLocal({ autoLoad = true } = {}) {
-  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+const getInventoryIdentity = (item) =>
+  item.inventoryId || item.id || item.localId || item.name;
+
+export default function useInventoryLocal({
+  autoLoad = true,
+  paginated = true,
+} = {}) {
+  const { groupId, loading: workspaceLoading } = useCurrentWorkspaceScope({
+    autoLoad,
+  });
+  const waitingForWorkspace = Boolean(autoLoad && workspaceLoading && !groupId);
+  const inventoryCacheKey = getInventoryCacheKey(groupId, paginated);
+  const cachedInventoryState = inventoryCache.get(inventoryCacheKey);
+  const [inventoryItems, setInventoryItems] = useState(
+    () => cachedInventoryState?.inventoryItems || [],
+  );
+  const [pagination, setPagination] = useState(
+    () =>
+      cachedInventoryState?.pagination || {
+        hasMore: false,
+        page: 0,
+      },
+  );
+  const [isLoadingInventory, setIsLoadingInventory] = useState(
+    () => Boolean(autoLoad) && !cachedInventoryState,
+  );
+  const [isLoadingMoreInventory, setIsLoadingMoreInventory] = useState(false);
   const [error, setError] = useState(null);
+  const isLoadingMoreInventoryRef = useRef(false);
+
+  const fetchInventoryPage = useCallback(
+    async (page) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const response = await inventoryRepository.getPage({
+        groupId: effectiveGroupId,
+        limit: INVENTORY_PAGE_SIZE,
+        page,
+      });
+
+      return {
+        data: sortInventoryItems(
+          (response.data || []).map(normalizeInventoryItem),
+        ),
+        pagination: response.pagination || {
+          hasMore: false,
+          page,
+        },
+      };
+    },
+    [groupId],
+  );
 
   const refreshInventory = useCallback(async () => {
     setIsLoadingInventory(true);
@@ -118,21 +170,100 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
 
     try {
       const effectiveGroupId = groupId || (await getCurrentGroupId());
-      const localInventoryItems = await inventoryRepository.getAll({
-        groupId: effectiveGroupId,
-      });
-      const normalizedInventoryItems = sortInventoryItems(
-        localInventoryItems.map(normalizeInventoryItem),
+      const inventoryResponse = paginated
+        ? await fetchInventoryPage(1)
+        : {
+            data: sortInventoryItems(
+              (
+                await inventoryRepository.getAll({
+                  groupId: effectiveGroupId,
+                })
+              ).map(normalizeInventoryItem),
+            ),
+            pagination: {
+              hasMore: false,
+              page: 1,
+            },
+          };
+      const nextState = {
+        inventoryItems: inventoryResponse.data,
+        pagination: inventoryResponse.pagination,
+      };
+
+      inventoryCache.set(
+        getInventoryCacheKey(effectiveGroupId, paginated),
+        nextState,
       );
-      setInventoryItems(normalizedInventoryItems);
-      return normalizedInventoryItems;
+      setInventoryItems(nextState.inventoryItems);
+      setPagination(nextState.pagination);
+      return nextState.inventoryItems;
     } catch (requestError) {
       setError(requestError);
       throw requestError;
     } finally {
       setIsLoadingInventory(false);
+      isLoadingMoreInventoryRef.current = false;
     }
-  }, [groupId]);
+  }, [fetchInventoryPage, groupId, paginated]);
+
+  const loadMoreInventory = useCallback(async () => {
+    if (
+      !paginated ||
+      isLoadingInventory ||
+      isLoadingMoreInventoryRef.current ||
+      !pagination.hasMore
+    ) {
+      return;
+    }
+
+    isLoadingMoreInventoryRef.current = true;
+    setIsLoadingMoreInventory(true);
+    setError(null);
+
+    try {
+      const nextPage = (pagination.page || 1) + 1;
+      const inventoryResponse = await fetchInventoryPage(nextPage);
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+
+      setInventoryItems((currentInventoryItems) => {
+        const loadedInventoryIds = new Set(
+          currentInventoryItems.map(getInventoryIdentity),
+        );
+        const nextInventoryItems = inventoryResponse.data.filter((item) => {
+          const inventoryId = getInventoryIdentity(item);
+
+          if (loadedInventoryIds.has(inventoryId)) {
+            return false;
+          }
+
+          loadedInventoryIds.add(inventoryId);
+          return true;
+        });
+        const updatedInventoryItems = [
+          ...currentInventoryItems,
+          ...nextInventoryItems,
+        ];
+
+        inventoryCache.set(getInventoryCacheKey(effectiveGroupId, paginated), {
+          inventoryItems: updatedInventoryItems,
+          pagination: inventoryResponse.pagination,
+        });
+
+        return updatedInventoryItems;
+      });
+      setPagination(inventoryResponse.pagination);
+    } finally {
+      isLoadingMoreInventoryRef.current = false;
+      setIsLoadingMoreInventory(false);
+    }
+  }, [
+    fetchInventoryPage,
+    groupId,
+    isLoadingInventory,
+    pagination.hasMore,
+    pagination.page,
+    paginated,
+  ]);
 
   const createInventoryItem = useCallback(
     async (data, options = {}) => {
@@ -186,22 +317,40 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
   );
 
   useEffect(() => {
-    if (!autoLoad) {
+    if (!autoLoad || waitingForWorkspace) {
       return;
+    }
+
+    if (inventoryCache.has(inventoryCacheKey)) {
+      const cached = inventoryCache.get(inventoryCacheKey);
+      setInventoryItems(cached.inventoryItems);
+      setPagination(cached.pagination);
+    } else {
+      setInventoryItems([]);
+      setPagination({ hasMore: false, page: 0 });
     }
 
     refreshInventory().catch((requestError) => {
       console.warn('Error al cargar inventario local:', requestError);
     });
-  }, [autoLoad, groupId, refreshInventory]);
+  }, [
+    autoLoad,
+    groupId,
+    inventoryCacheKey,
+    refreshInventory,
+    waitingForWorkspace,
+  ]);
 
   return {
     createInventoryItem,
     deleteInventoryItem,
     error,
+    hasMoreInventory: pagination.hasMore,
     inventory: inventoryItems,
     inventoryItems,
     isLoadingInventory,
+    isLoadingMoreInventory,
+    loadMoreInventory,
     loading: isLoadingInventory,
     refreshInventory,
     setInventory: setInventoryItems,

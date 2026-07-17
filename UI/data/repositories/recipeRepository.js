@@ -46,10 +46,32 @@ const getAll = async (options = {}) => {
   );
 };
 
+const getPage = async ({ groupId, limit = 20, page = 1 } = {}) => {
+  const allRecipes = await getAll({ groupId });
+  const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const normalizedPage = Math.max(Number(page) || 1, 1);
+  const start = (normalizedPage - 1) * normalizedLimit;
+  const data = allRecipes.slice(start, start + normalizedLimit);
+
+  return {
+    data,
+    pagination: {
+      hasMore: start + data.length < allRecipes.length,
+      limit: normalizedLimit,
+      page: normalizedPage,
+      total: allRecipes.length,
+      totalPages: Math.ceil(allRecipes.length / normalizedLimit),
+    },
+    result: data.length,
+    status: 'success',
+  };
+};
+
 const getByRecipeId = repository.getById;
 
 export default {
   ...repository,
   getAll,
   getByRecipeId,
+  getPage,
 };

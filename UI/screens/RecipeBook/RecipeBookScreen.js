@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   BackHandler,
@@ -69,12 +70,64 @@ const LIST_INITIAL_RENDER_COUNT = 8;
 const LIST_RENDER_BATCH_SIZE = 6;
 const LIST_UPDATE_BATCHING_PERIOD = 50;
 const LIST_WINDOW_SIZE = 7;
+const recipeCostCache = new Map();
 
 const money = (value) =>
   new Intl.NumberFormat('es-MX', {
     currency: 'MXN',
     style: 'currency',
   }).format(value);
+
+const getRecipeCostCacheKey = (groupId, recipe = {}) =>
+  `${groupId || 'default'}:${recipe.id || recipe.recipeId || recipe.name || ''}`;
+
+const getInventoryCostSignature = (item = {}) =>
+  (item.lots || [])
+    .map((lot) =>
+      [
+        lot.id,
+        lot.lotId,
+        lot.cost,
+        lot.quantity,
+        lot.taxApplies,
+        lot.taxRate,
+        lot.unit,
+      ].join(':'),
+    )
+    .join(',');
+
+const getInventoryCostIndex = (inventoryItems = []) => {
+  const index = new Map();
+
+  inventoryItems.forEach((item) => {
+    const signature = getInventoryCostSignature(item);
+
+    [item.inventoryId, item.id].filter(Boolean).forEach((id) => {
+      index.set(String(id), signature);
+    });
+  });
+
+  return index;
+};
+
+const getRecipeCostSignature = (recipe = {}, inventoryCostIndex) =>
+  [
+    recipe.id,
+    recipe.name,
+    recipe.type,
+    recipe.servings,
+    (recipe.ingredients || [])
+      .map((ingredient) =>
+        [
+          ingredient.id,
+          ingredient.inventoryId,
+          ingredient.quantity,
+          ingredient.unit,
+          inventoryCostIndex.get(String(ingredient.inventoryId || '')) || '',
+        ].join(':'),
+      )
+      .join(','),
+  ].join('|');
 
 const parseRecipeQuantity = (quantity) =>
   Number(String(quantity ?? '').replace(',', '.'));
@@ -249,21 +302,24 @@ export default function RecipeBookScreen({
   onOpenRecipeSale,
 }) {
   const { colors } = useTransactionBalanceTheme();
-  const { canWrite } = useCurrentWorkspaceScope();
+  const { canWrite, groupId } = useCurrentWorkspaceScope();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const {
     createRecipe: createRecipeLocal,
     deleteRecipe: deleteRecipeLocal,
+    hasMoreRecipes,
     isLoadingRecipes,
+    isLoadingMoreRecipes,
+    loadMoreRecipes,
     recipes,
     refreshRecipes,
     setRecipes,
     updateRecipe: updateRecipeLocal,
   } = useRecipeBookData();
   const { inventoryItems, isLoadingInventory, refreshInventory } =
-    useInventoryData();
+    useInventoryData({ paginated: false });
   const {
     createRecipeSection,
     deleteRecipeSection: deleteRecipeSectionLocal,
@@ -635,18 +691,31 @@ export default function RecipeBookScreen({
     selectedRecipe?.ingredients,
   ]);
 
-  const recipesWithCost = useMemo(
-    () =>
-      recipes.map((recipe) => {
-        const recipeCost = calculateRecipeCost(recipe, inventoryItems);
+  const recipesWithCost = useMemo(() => {
+    const inventoryCostIndex = getInventoryCostIndex(inventoryItems);
 
-        return {
-          ...recipe,
-          recipeCost,
-        };
-      }),
-    [inventoryItems, recipes],
-  );
+    return recipes.map((recipe) => {
+      const cacheKey = getRecipeCostCacheKey(groupId, recipe);
+      const signature = getRecipeCostSignature(recipe, inventoryCostIndex);
+      const cached = recipeCostCache.get(cacheKey);
+
+      if (cached?.signature === signature) {
+        return cached.recipeWithCost;
+      }
+
+      const recipeWithCost = {
+        ...recipe,
+        recipeCost: calculateRecipeCost(recipe, inventoryItems),
+      };
+
+      recipeCostCache.set(cacheKey, {
+        recipeWithCost,
+        signature,
+      });
+
+      return recipeWithCost;
+    });
+  }, [groupId, inventoryItems, recipes]);
 
   const recipesMatchingSearch = useMemo(() => {
     const normalizedSearch = recipeSearchQuery.toLowerCase();
@@ -1835,6 +1904,8 @@ export default function RecipeBookScreen({
           keyExtractor={(item) => String(item.id)}
           keyboardShouldPersistTaps="handled"
           maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+          onEndReached={hasMoreRecipes ? loadMoreRecipes : null}
+          onEndReachedThreshold={0.35}
           numColumns={recipeGridColumns}
           onRefresh={handleRefresh}
           removeClippedSubviews={Platform.OS === 'android'}
@@ -1938,6 +2009,16 @@ export default function RecipeBookScreen({
             </View>
           </View>
         )}
+        ListFooterComponent={
+          isLoadingMoreRecipes ? (
+            <View style={styles.listFooter}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.listFooterText, { color: colors.textMuted }]}>
+                Cargando más recetas
+              </Text>
+            </View>
+          ) : null
+        }
         showsVerticalScrollIndicator={false}
         updateCellsBatchingPeriod={LIST_UPDATE_BATCHING_PERIOD}
         windowSize={LIST_WINDOW_SIZE}
@@ -4064,6 +4145,15 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+  },
+  listFooter: {
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    paddingTop: 18,
+  },
+  listFooterText: {
+    fontSize: typography.sizes.caption,
   },
   detailContent: {
     paddingBottom: 20,

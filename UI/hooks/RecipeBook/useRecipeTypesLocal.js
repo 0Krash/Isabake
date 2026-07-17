@@ -4,6 +4,8 @@ import { recipeTypeRepository } from '../../data/repositories';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
+const recipeTypeCache = new Map();
+
 export const normalizeRecipeType = (type = {}) => ({
   id: `${type.recipeTypeId || type.id || type.localId || ''}`,
   name: type.name || '',
@@ -19,9 +21,17 @@ const sortRecipeTypes = (recipeTypes) =>
   );
 
 export default function useRecipeTypesLocal({ autoLoad = true } = {}) {
-  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
-  const [recipeTypes, setRecipeTypes] = useState([]);
-  const [isLoadingRecipeTypes, setIsLoadingRecipeTypes] = useState(false);
+  const { groupId, loading: workspaceLoading } = useCurrentWorkspaceScope({
+    autoLoad,
+  });
+  const waitingForWorkspace = Boolean(autoLoad && workspaceLoading && !groupId);
+  const cachedRecipeTypes = recipeTypeCache.get(groupId);
+  const [recipeTypes, setRecipeTypes] = useState(
+    () => cachedRecipeTypes || [],
+  );
+  const [isLoadingRecipeTypes, setIsLoadingRecipeTypes] = useState(
+    () => Boolean(autoLoad) && !cachedRecipeTypes,
+  );
   const [error, setError] = useState(null);
 
   const refreshRecipeTypes = useCallback(async () => {
@@ -36,6 +46,7 @@ export default function useRecipeTypesLocal({ autoLoad = true } = {}) {
       const normalizedTypes = sortRecipeTypes(
         localRecipeTypes.map(normalizeRecipeType),
       );
+      recipeTypeCache.set(effectiveGroupId, normalizedTypes);
       setRecipeTypes(normalizedTypes);
       return normalizedTypes;
     } catch (requestError) {
@@ -87,14 +98,20 @@ export default function useRecipeTypesLocal({ autoLoad = true } = {}) {
   );
 
   useEffect(() => {
-    if (!autoLoad) {
+    if (!autoLoad || waitingForWorkspace) {
       return;
+    }
+
+    if (recipeTypeCache.has(groupId)) {
+      setRecipeTypes(recipeTypeCache.get(groupId));
+    } else {
+      setRecipeTypes([]);
     }
 
     refreshRecipeTypes().catch((requestError) => {
       console.warn('Error al cargar tipos de receta locales:', requestError);
     });
-  }, [autoLoad, groupId, refreshRecipeTypes]);
+  }, [autoLoad, groupId, refreshRecipeTypes, waitingForWorkspace]);
 
   return {
     createRecipeType,

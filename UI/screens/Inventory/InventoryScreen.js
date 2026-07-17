@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   BackHandler,
@@ -511,8 +512,11 @@ export default function InventoryScreen({
   const {
     createInventoryItem: createInventoryItemLocal,
     deleteInventoryItem: deleteInventoryItemLocal,
+    hasMoreInventory,
     inventoryItems,
     isLoadingInventory,
+    isLoadingMoreInventory,
+    loadMoreInventory,
     refreshInventory,
     setInventoryItems,
     updateInventoryItem: updateInventoryItemLocal,
@@ -1146,6 +1150,8 @@ export default function InventoryScreen({
           keyExtractor={(item) => String(item.id)}
           keyboardShouldPersistTaps="handled"
           maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
+          onEndReached={hasMoreInventory ? loadMoreInventory : null}
+          onEndReachedThreshold={0.35}
           onRefresh={handleRefresh}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshing={refreshing}
@@ -1222,6 +1228,16 @@ export default function InventoryScreen({
             </TouchableOpacity>
           );
         }}
+        ListFooterComponent={
+          isLoadingMoreInventory ? (
+            <View style={styles.listFooter}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.listFooterText, { color: colors.textMuted }]}>
+                Cargando más ingredientes
+              </Text>
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
@@ -3891,6 +3907,15 @@ const styles = StyleSheet.create({
   inventoryList: {
     paddingBottom: 92,
     paddingHorizontal: 15,
+  },
+  listFooter: {
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    paddingTop: 18,
+  },
+  listFooterText: {
+    fontSize: typography.sizes.caption,
   },
   inventoryFormContent: {
     paddingBottom: 4,
