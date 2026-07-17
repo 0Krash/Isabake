@@ -4,9 +4,9 @@ describe('AppSecondaryMenu model', () => {
   test('secondary menu exposes friendly non-primary destinations', () => {
     expect(createSecondaryMenuItems()).toEqual([
       {
-        description: 'Colaboradores e invitaciones',
+        description: 'Equipo, accesos e invitaciones',
         key: 'workspace',
-        label: 'Compartir proyecto',
+        label: 'Administrar negocios',
       },
       {
         description: 'Estado, respaldo e historial',

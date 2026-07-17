@@ -8,7 +8,7 @@ const options = [
   { label: 'Materia prima (ingredientes básicos)', value: '1' },
   { label: 'Insumos (materiales para elavoración)', value: '2' },
   { label: 'Formación (desarrollo de habilidades)', value: '3' },
-  { label: 'Operativo (gastos del proyecto)', value: '4' },
+  { label: 'Operativo (gastos del negocio)', value: '4' },
 ];
 
 export default function CategoryInputComponent({ category, setCategory }) {

@@ -93,7 +93,7 @@ describe('currentWorkspace', () => {
   });
 
   test('creates another personal project when requested', async () => {
-    await createLocalWorkspace({ name: 'Proyecto personal' });
+    await createLocalWorkspace({ name: 'Negocio personal' });
     mockSavedDocuments.length = 0;
 
     const workspace = await createLocalWorkspace({ name: 'Otro local' });
@@ -119,7 +119,7 @@ describe('currentWorkspace', () => {
   });
 
   test('reuses the first personal project for default fallbacks', async () => {
-    await createLocalWorkspace({ name: 'Proyecto personal' });
+    await createLocalWorkspace({ name: 'Negocio personal' });
     mockSavedDocuments.length = 0;
 
     const workspace = await getOrCreatePersonalWorkspace();
@@ -127,7 +127,7 @@ describe('currentWorkspace', () => {
     expect(workspace).toEqual(
       expect.objectContaining({
         groupId: 'workspace_local_1',
-        name: 'Proyecto personal',
+        name: 'Negocio personal',
       }),
     );
     expect(
@@ -138,14 +138,14 @@ describe('currentWorkspace', () => {
   });
 
   test('removes duplicated default personal projects from local metadata', async () => {
-    await createLocalWorkspace({ name: 'Proyecto personal' });
-    await createLocalWorkspace({ name: 'Proyecto personal' });
+    await createLocalWorkspace({ name: 'Negocio personal' });
+    await createLocalWorkspace({ name: 'Negocio personal' });
     await createLocalWorkspace({ name: 'Privado especial' });
 
     const workspaces = await getLocalWorkspaces();
 
     expect(
-      workspaces.filter((workspace) => workspace.name === 'Proyecto personal'),
+      workspaces.filter((workspace) => workspace.name === 'Negocio personal'),
     ).toHaveLength(1);
     expect(
       workspaces.filter((workspace) => workspace.name === 'Privado especial'),
@@ -226,14 +226,14 @@ describe('currentWorkspace', () => {
 
     await setCurrentWorkspace({
       groupId: 'workspace_a',
-      name: 'Proyecto A',
+      name: 'Negocio A',
       workspaceId: 'workspace_a',
     });
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
         groupId: 'workspace_a',
-        name: 'Proyecto A',
+        name: 'Negocio A',
       }),
     );
 
@@ -242,7 +242,7 @@ describe('currentWorkspace', () => {
 
     await setCurrentWorkspace({
       groupId: 'workspace_b',
-      name: 'Proyecto B',
+      name: 'Negocio B',
       workspaceId: 'workspace_b',
     });
 

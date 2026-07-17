@@ -116,7 +116,7 @@ export default function SyncHistoryScreen({ onBack } = {}) {
                 {formatSyncHistoryStatus(record.status)}
               </Text>
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                {record.workspaceName || 'Proyecto personal'} ·{' '}
+                {record.workspaceName || 'Negocio personal'} ·{' '}
                 {record.startedAt || '-'}
               </Text>
               <Text style={[styles.meta, { color: colors.textSecondary }]}>

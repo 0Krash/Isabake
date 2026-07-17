@@ -31,7 +31,7 @@ jest.mock('../../data/sync/syncHistoryService', () => ({
     status.session ? 'authenticated' : 'auth_required',
   ),
   getSyncHistoryWorkspaceName: jest.fn(
-    (workspace = {}) => workspace.name || 'Proyecto personal',
+    (workspace = {}) => workspace.name || 'Negocio personal',
   ),
   recordSkippedSyncRun: jest.fn(),
   safelyRecordSyncHistory: jest.fn((operation) => operation()),

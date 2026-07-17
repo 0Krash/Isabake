@@ -143,7 +143,7 @@ export const getBackupStatus = ({
         secondaryActionLabel: null,
         showInMainScreens: true,
         statusKey: 'needs_workspace',
-        title: 'Selecciona un proyecto compartido',
+        title: 'Selecciona un negocio compartido',
         tone: 'warning',
       };
     }
@@ -330,7 +330,7 @@ export const getBackupStatus = ({
         secondaryActionLabel: null,
         showInMainScreens: true,
         statusKey: 'needs_workspace',
-        title: 'Selecciona un proyecto compartido',
+        title: 'Selecciona un negocio compartido',
         tone: 'warning',
       };
     }

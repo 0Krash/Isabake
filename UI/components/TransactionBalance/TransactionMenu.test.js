@@ -9,7 +9,7 @@ describe('TransactionMenu configuration options', () => {
 
   test('shows actionable configuration destinations instead of static settings', () => {
     expect(source.indexOf("label: 'Cuenta'")).toBeLessThan(
-      source.indexOf("label: 'Compartir proyecto'"),
+      source.indexOf("label: 'Administrar negocios'"),
     );
     expect(source).toContain("label: 'Respaldo y sync'");
     expect(source).not.toContain("label: 'Tema del telefono'");

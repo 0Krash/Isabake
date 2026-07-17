@@ -38,7 +38,7 @@ export default function ConflictDetailPanel({
   const confirmationText =
     confirmAction === 'local'
       ? 'Usar mi version mantendra tus cambios para enviarlos despues.'
-      : 'Usar version compartida aplicara localmente los cambios del proyecto compartido.';
+      : 'Usar version compartida aplicara localmente los cambios del negocio compartido.';
 
   return (
     <View style={[styles.container, { borderColor: colors.border }]}>

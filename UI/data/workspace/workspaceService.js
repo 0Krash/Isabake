@@ -82,7 +82,7 @@ export const toRemoteWorkspaceMetadata = (workspace = {}, options = {}) => {
     accountUserId: options.accountUserId || workspace.accountUserId || null,
     groupId,
     isRemote: true,
-    name: workspace.name || 'Proyecto compartido',
+    name: workspace.name || 'Negocio compartido',
     ownerUserId: workspace.ownerUserId || null,
     remoteGroupId: groupId,
     syncStatus: 'remote',
@@ -342,7 +342,7 @@ export const createRemoteWorkspace = async ({ client, name, session } = {}) => {
 };
 
 export const createPrivateWorkspace = async ({ name } = {}) =>
-  createLocalWorkspace({ name: name || 'Proyecto personal' });
+  createLocalWorkspace({ name: name || 'Negocio personal' });
 
 export const selectRemoteWorkspace = async (workspace) =>
   setCurrentWorkspace(toRemoteWorkspaceMetadata(workspace));

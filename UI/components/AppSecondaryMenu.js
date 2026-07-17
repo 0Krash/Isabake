@@ -57,7 +57,7 @@ export default function AppSecondaryMenu({
                 Opciones
               </Text>
               <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                Cuenta, respaldo y proyecto compartido
+                Cuenta, respaldo y negocio compartido
               </Text>
             </View>
             <Pressable

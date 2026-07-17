@@ -11,9 +11,9 @@ export const createSecondaryMenuItems = ({
   showConflicts = true,
 } = {}) => [
   {
-    description: 'Colaboradores e invitaciones',
+    description: 'Equipo, accesos e invitaciones',
     key: 'workspace',
-    label: 'Compartir proyecto',
+    label: 'Administrar negocios',
   },
   {
     description: 'Estado, respaldo e historial',

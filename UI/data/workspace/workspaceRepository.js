@@ -12,7 +12,7 @@ const CURRENT_WORKSPACE_DOCUMENT_ID = 'currentWorkspace';
 const currentWorkspaceListeners = new Set();
 
 const nowIso = () => new Date().toISOString();
-const PERSONAL_WORKSPACE_NAME = 'Proyecto personal';
+const PERSONAL_WORKSPACE_NAME = 'Negocio personal';
 
 const getWorkspaceGroupId = (workspace = {}) =>
   workspace.groupId || workspace.remoteGroupId || workspace.workspaceId;
@@ -143,7 +143,7 @@ const saveWorkspaceMetadata = async (workspace, options = {}) => {
       groupId,
       accountUserId: workspace.accountUserId || null,
       isRemote: Boolean(workspace.isRemote),
-      name: workspace.name || 'Proyecto personal',
+      name: workspace.name || 'Negocio personal',
       ownerDeviceId,
       ownerUserId: workspace.ownerUserId || null,
       remoteGroupId: workspace.isRemote ? groupId : workspace.remoteGroupId || null,
@@ -219,7 +219,7 @@ export const createLocalWorkspace = async ({ name } = {}, options = {}) => {
   return setCurrentWorkspace(
     {
       groupId: workspaceId,
-      name: name || 'Proyecto personal',
+      name: name || 'Negocio personal',
       syncStatus: 'local',
       workspaceId,
     },
@@ -234,7 +234,7 @@ export const getOrCreatePersonalWorkspace = async (options = {}) => {
     return firstWorkspace;
   }
 
-  return createLocalWorkspace({ name: 'Proyecto personal' }, options);
+  return createLocalWorkspace({ name: 'Negocio personal' }, options);
 };
 
 export const getOrCreateDefaultLocalWorkspace = async (options = {}) => {

@@ -39,7 +39,7 @@ jest.mock('./workspaceRepository', () => ({
     const workspace = {
       groupId: 'local_default',
       isRemote: false,
-      name: 'Proyecto personal',
+      name: 'Negocio personal',
       syncStatus: 'local',
       workspaceId: 'local_default',
     };
@@ -52,7 +52,7 @@ jest.mock('./workspaceRepository', () => ({
       mockLocalWorkspaces.find((item) => !item.isRemote) || {
         groupId: 'local_default',
         isRemote: false,
-        name: 'Proyecto personal',
+        name: 'Negocio personal',
         syncStatus: 'local',
         workspaceId: 'local_default',
       };

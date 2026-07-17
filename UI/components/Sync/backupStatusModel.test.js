@@ -182,7 +182,7 @@ describe('backupStatusModel', () => {
       expect.objectContaining({
         description: 'Tus cambios están guardados localmente.',
         statusKey: 'needs_workspace',
-        title: 'Selecciona un proyecto compartido',
+        title: 'Selecciona un negocio compartido',
       }),
     );
     expect(

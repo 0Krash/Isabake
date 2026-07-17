@@ -65,8 +65,8 @@ export default function TransactionMenu({
       value: 'Abrir',
     },
     {
-      description: 'Equipo, invitaciones y proyectos disponibles.',
-      label: 'Compartir proyecto',
+      description: 'Equipo, accesos e invitaciones.',
+      label: 'Administrar negocios',
       onPress: onOpenWorkspace,
       value: 'Abrir',
     },
