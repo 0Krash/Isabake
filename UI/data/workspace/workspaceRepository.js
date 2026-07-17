@@ -10,6 +10,7 @@ const WORKSPACE_COLLECTION = '__local_workspaces';
 const LOCAL_META_COLLECTION = '__local_meta';
 const CURRENT_WORKSPACE_DOCUMENT_ID = 'currentWorkspace';
 const currentWorkspaceListeners = new Set();
+let cachedCurrentWorkspace = null;
 
 const nowIso = () => new Date().toISOString();
 const PERSONAL_WORKSPACE_NAME = 'Negocio personal';
@@ -53,10 +54,13 @@ export const subscribeToCurrentWorkspaceChanges = (listener) => {
 };
 
 const notifyCurrentWorkspaceChanged = (workspace) => {
+  cachedCurrentWorkspace = workspace || null;
   currentWorkspaceListeners.forEach((listener) => {
     listener(workspace);
   });
 };
+
+export const getCachedCurrentWorkspace = () => cachedCurrentWorkspace;
 
 export const getCurrentWorkspace = async (options = {}) => {
   const pointerDocument = await getDocument(
@@ -70,6 +74,7 @@ export const getCurrentWorkspace = async (options = {}) => {
   const workspaceId = pointerDocument?.data?.workspaceId;
 
   if (!workspaceId) {
+    cachedCurrentWorkspace = null;
     return null;
   }
 
@@ -78,7 +83,9 @@ export const getCurrentWorkspace = async (options = {}) => {
     includeDeleted: true,
   });
 
-  return documentToWorkspace(workspaceDocument);
+  const currentWorkspace = documentToWorkspace(workspaceDocument);
+  cachedCurrentWorkspace = currentWorkspace;
+  return currentWorkspace;
 };
 
 export const getLocalWorkspaces = async (options = {}) => {
@@ -269,6 +276,7 @@ export const clearCurrentWorkspace = async (options = {}) => {
 
 export default {
   clearCurrentWorkspace,
+  getCachedCurrentWorkspace,
   createLocalWorkspace,
   deleteWorkspaceMetadata,
   getCurrentWorkspace,

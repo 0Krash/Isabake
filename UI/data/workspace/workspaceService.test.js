@@ -452,6 +452,45 @@ describe('workspaceService', () => {
     ]);
   });
 
+  test('keeps cached workspace state without auth warning when offline', async () => {
+    const cachedRemoteWorkspace = {
+      accountUserId: 'account_1',
+      groupId: 'group_1',
+      isRemote: true,
+      name: 'Panaderia',
+      syncStatus: 'remote',
+      workspaceId: 'group_1',
+      workspaceRole: 'admin',
+    };
+    mockLocalWorkspaces.push(cachedRemoteWorkspace);
+    mockCurrentWorkspace = cachedRemoteWorkspace;
+    mockGetFreshAuthSession.mockResolvedValueOnce({
+      accessToken: 'jwt_access',
+      userId: 'account_1',
+    });
+
+    const result = await refreshWorkspaceState({
+      client: {
+        listWorkspaces: jest.fn(async () => {
+          throw new Error('network_error');
+        }),
+      },
+      session: { userId: 'account_1' },
+    });
+
+    expect(result.authRequired).toBe(false);
+    expect(result.error).toBe('network_error');
+    expect(result.currentWorkspace).toEqual(
+      expect.objectContaining({ groupId: 'group_1', isRemote: true }),
+    );
+    expect(result.workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ groupId: 'local_1', isRemote: false }),
+        expect.objectContaining({ groupId: 'group_1', isRemote: true }),
+      ]),
+    );
+  });
+
   test('strict refresh does not expose cached remote workspaces when auth is missing', async () => {
     mockGetFreshAuthSession.mockRejectedValueOnce(new Error('auth_required'));
     mockLocalWorkspaces.push({

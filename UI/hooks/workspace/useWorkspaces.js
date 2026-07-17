@@ -29,6 +29,14 @@ import {
 const canManageWorkspaceInvitations = (workspace = {}) =>
   ['owner', 'admin'].includes(workspace?.workspaceRole);
 
+const getAuthRequiredError = (error) => {
+  const message = String(error?.message || error || '');
+
+  return message === 'auth_required' || message.includes('session_expired')
+    ? message
+    : null;
+};
+
 export default function useWorkspaces({
   autoLoad = true,
   autoLoadRemote = true,
@@ -199,9 +207,9 @@ export default function useWorkspaces({
       } catch (nextError) {
         const cachedMembers = await loadCachedWorkspaceDetails(workspace);
         setMembers(cachedMembers.members);
-        const message = String(nextError?.message || nextError);
-        setAuthRequired(message === 'auth_required');
-        setError(message);
+        const authError = getAuthRequiredError(nextError);
+        setAuthRequired(Boolean(authError));
+        setError(authError);
         return cachedMembers.members;
       } finally {
         setLoading(false);
@@ -236,9 +244,9 @@ export default function useWorkspaces({
       } catch (nextError) {
         const cachedDetails = await loadCachedWorkspaceDetails(workspace);
         setInvitations(cachedDetails.invitations);
-        const message = String(nextError?.message || nextError);
-        setAuthRequired(message === 'auth_required');
-        setError(message);
+        const authError = getAuthRequiredError(nextError);
+        setAuthRequired(Boolean(authError));
+        setError(authError);
         return cachedDetails.invitations;
       } finally {
         setLoading(false);
@@ -261,9 +269,9 @@ export default function useWorkspaces({
     } catch (nextError) {
       const cachedInvitations = await loadCachedMyWorkspaceInvitations();
       setMyInvitations(cachedInvitations);
-      const message = String(nextError?.message || nextError);
-      setAuthRequired(message === 'auth_required');
-      setError(message);
+      const authError = getAuthRequiredError(nextError);
+      setAuthRequired(Boolean(authError));
+      setError(authError);
       return cachedInvitations;
     } finally {
       setLoading(false);

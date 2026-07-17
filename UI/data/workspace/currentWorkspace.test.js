@@ -59,6 +59,7 @@ import {
 } from './currentWorkspace';
 import {
   getCurrentWorkspace,
+  getCachedCurrentWorkspace,
   createLocalWorkspace,
   getLocalWorkspaces,
   getOrCreatePersonalWorkspace,
@@ -216,6 +217,12 @@ describe('currentWorkspace', () => {
         remoteGroupId: 'remote_group_1',
         syncStatus: 'remote',
         workspaceRole: 'admin',
+      }),
+    );
+    expect(getCachedCurrentWorkspace()).toEqual(
+      expect.objectContaining({
+        groupId: 'remote_group_1',
+        isRemote: true,
       }),
     );
   });

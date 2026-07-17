@@ -53,6 +53,14 @@ const purgeRemovedRemoteWorkspace = async (workspace = {}) => {
 const getSessionUserId = (session = {}) =>
   session?.userId || session?.user?.userId || session?.user?.id || null;
 
+const isAuthRequiredError = (error) => {
+  const message = String(error?.message || error || '');
+
+  return (
+    message.includes('auth_required') || message.includes('session_expired')
+  );
+};
+
 const isWorkspaceVisibleForSession = (
   workspace = {},
   sessionUserId,
@@ -271,8 +279,10 @@ export const refreshWorkspaceState = async ({
       workspaces,
     };
   } catch (error) {
+    const authRequired = isAuthRequiredError(error);
+
     return {
-      authRequired: true,
+      authRequired,
       currentWorkspace: visibleCurrentWorkspace,
       error: String(error?.message || error),
       localWorkspaces: localOnlyWorkspaces,
