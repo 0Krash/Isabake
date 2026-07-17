@@ -5,6 +5,7 @@ import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
 export default function AppHeader({
+  actionElement,
   actionLabel,
   onAction,
   subtitle,
@@ -24,7 +25,9 @@ export default function AppHeader({
           </Text>
         ) : null}
       </View>
-      {actionLabel && onAction ? (
+      {actionElement ? (
+        actionElement
+      ) : actionLabel && onAction ? (
         <Pressable
           onPress={onAction}
           style={[styles.action, { borderColor: colors.border }]}

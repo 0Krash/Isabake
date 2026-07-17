@@ -15,6 +15,17 @@ export type IconManifestEntry = {
 
 export const iconManifest: IconManifestEntry[] = [
   {
+    "addedAt": "2026-07-17",
+    "category": "entities",
+    "id": "account-user",
+    "license": "CC0 License",
+    "name": "account-user",
+    "originalName": "User Account Profile",
+    "path": "assets/icons/entities/account-user.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/380123/user-account-profile",
+    "style": "outline"
+  },
+  {
     "addedAt": "2026-07-14",
     "category": "navigation",
     "id": "close",
