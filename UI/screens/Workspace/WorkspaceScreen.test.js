@@ -15,6 +15,7 @@ import {
   getMemberDisplayName,
   getInvitationActionState,
   getShareAccountRequiredModalState,
+  getWorkspaceAccountAccessState,
   getWorkspaceRowState,
   getVisibleMembersForDisplay,
   getWorkspaceOwnershipLabel,
@@ -67,14 +68,54 @@ describe('WorkspaceScreen model helpers', () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
+  test('builds account access state without exposing session secrets', () => {
+    expect(getWorkspaceAccountAccessState()).toEqual({
+      actionLabel: 'Iniciar sesión',
+      detail: 'Accede para crear y administrar negocios compartidos',
+      iconName: 'account-user',
+      label: 'Sin cuenta',
+      signedIn: false,
+      tone: 'neutral',
+    });
+
+    expect(getWorkspaceAccountAccessState({ loading: true })).toEqual({
+      actionLabel: 'Abrir',
+      detail: 'Verificando sesión',
+      iconName: 'account-user',
+      label: 'Cargando cuenta',
+      signedIn: false,
+      tone: 'neutral',
+    });
+
+    const signedInState = getWorkspaceAccountAccessState({
+      session: {
+        accessToken: 'raw-token',
+        displayName: 'Ana Panadera',
+        refreshTokenHash: 'hash-value',
+      },
+    });
+
+    expect(signedInState).toEqual({
+      actionLabel: 'Ver cuenta',
+      detail: 'Ana Panadera',
+      iconName: 'account-user',
+      label: 'Cuenta activa',
+      signedIn: true,
+      tone: 'primary',
+    });
+    expect(JSON.stringify(signedInState)).not.toMatch(
+      /raw-token|hash-value|token|hash|password|jwt/i,
+    );
+  });
+
   test('defines tab state without side effects', () => {
     expect(workspaceTabs.map((tab) => tab.label)).toEqual([
-      'Proyectos',
+      'Negocios',
       'Equipo',
       'Invitaciones',
     ]);
     expect(getWorkspaceTabState('invitations')).toEqual([
-      { active: false, key: 'workspaces', label: 'Proyectos' },
+      { active: false, key: 'workspaces', label: 'Negocios' },
       { active: false, key: 'team', label: 'Equipo' },
       { active: true, key: 'invitations', label: 'Invitaciones' },
     ]);
@@ -82,12 +123,12 @@ describe('WorkspaceScreen model helpers', () => {
 
   test('labels local-only and shared workspace modes', () => {
     expect(getWorkspaceModeLabel({ isRemote: false })).toBe(
-      'Proyecto personal',
+      'Negocio personal',
     );
     expect(getWorkspaceModeLabel({ isRemote: true })).toBe('Compartido');
-    expect(getWorkspaceModeLabel(null)).toBe('Proyecto personal');
+    expect(getWorkspaceModeLabel(null)).toBe('Negocio personal');
     expect(getWorkspaceOwnershipLabel({ isRemote: false })).toBe(
-      'Solo tu puedes ver este proyecto',
+      'Solo tu puedes ver este negocio',
     );
     expect(
       getWorkspaceOwnershipLabel({ isRemote: true, workspaceRole: 'owner' }),
@@ -97,9 +138,9 @@ describe('WorkspaceScreen model helpers', () => {
         isRemote: true,
         name: 'ws_shared_phase_25_group',
       }),
-    ).toBe('Proyecto compartido');
+    ).toBe('Negocio compartido');
     expect(formatWorkspaceName({ isRemote: false, name: 'local_1' })).toBe(
-      'Proyecto personal',
+      'Negocio personal',
     );
     expect(
       formatWorkspaceName({ isRemote: true, name: 'Panaderia Norte' }),
@@ -226,7 +267,7 @@ describe('WorkspaceScreen model helpers', () => {
       dedupeWorkspaceDisplayList(
         [
           { groupId: 'group_1', isRemote: true, name: 'Panaderia Norte' },
-          { groupId: 'local_1', isRemote: false, name: 'ZZ Proyecto personal' },
+          { groupId: 'local_1', isRemote: false, name: 'ZZ Negocio personal' },
           { groupId: 'group_2', isRemote: true, name: 'Panaderia Sur' },
         ],
         { groupId: 'group_2', isRemote: true, name: 'Panaderia Sur' },
@@ -260,7 +301,7 @@ describe('WorkspaceScreen model helpers', () => {
 
     expect(getDisplayInitials('Panaderia Norte')).toBe('PN');
     expect(getCurrentWorkspaceCardState(currentWorkspace, 'owner')).toEqual({
-      detailLabel: 'Propietario',
+      detailLabel: 'Acceso compartido · Propietario',
       initials: 'PN',
       name: 'Panaderia Norte',
       roleLabel: 'Propietario',
@@ -421,7 +462,7 @@ describe('WorkspaceScreen model helpers', () => {
     ).toEqual({
       alreadyExists: true,
       canSubmit: false,
-      error: 'Ya existe un proyecto con ese nombre.',
+      error: 'Ya existe un negocio con ese nombre.',
       normalizedName: 'panaderia norte',
     });
     expect(
@@ -451,13 +492,13 @@ describe('WorkspaceScreen model helpers', () => {
       'Solo propietarios y administradores pueden realizar esta accion.',
     );
     expect(formatWorkspaceError('workspace_owner_required')).toBe(
-      'Solo el propietario puede eliminar el proyecto.',
+      'Solo el propietario puede eliminar el negocio.',
     );
     expect(formatWorkspaceError('workspace_owner_self_required')).toBe(
       'Solo el propietario puede salir o cambiar su propio rol.',
     );
     expect(formatWorkspaceError('workspace_name_already_exists')).toBe(
-      'Ya existe un proyecto con ese nombre.',
+      'Ya existe un negocio con ese nombre.',
     );
     expect(formatWorkspaceError('invitation_email_mismatch')).toBe(
       'Debes iniciar sesion con el correo invitado para aceptar o rechazar esta invitacion.',
@@ -475,7 +516,7 @@ describe('WorkspaceScreen model helpers', () => {
       'No hay miembros para mostrar.',
     );
     expect(getWorkspaceEmptyState({ authRequired: true })).toBe(
-      'Inicia sesion para ver proyectos compartidos.',
+      'Inicia sesion para ver negocios compartidos.',
     );
     expect(
       getInvitationActionState({
@@ -629,7 +670,7 @@ describe('WorkspaceScreen model helpers', () => {
         workspace,
       }),
     ).toBe(
-      'Eres la unica persona en este proyecto. Antes de salir, agrega a otra persona o elimina el proyecto si ya no lo necesitas.',
+      'Eres la unica persona en este negocio. Antes de salir, agrega a otra persona o elimina el negocio si ya no lo necesitas.',
     );
 
     expect(
@@ -709,7 +750,7 @@ describe('WorkspaceScreen model helpers', () => {
       }),
     ).toEqual({
       blockedReason:
-        'Eres la unica persona en este proyecto. Antes de salir, agrega a otra persona o elimina el proyecto si ya no lo necesitas.',
+        'Eres la unica persona en este negocio. Antes de salir, agrega a otra persona o elimina el negocio si ya no lo necesitas.',
       canLeave: false,
       showAction: false,
     });

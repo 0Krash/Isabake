@@ -7,7 +7,7 @@ import {
 export { dedupeWorkspaces, getWorkspaceListKey, normalizeWorkspaceId };
 
 export const workspaceTabs = [
-  { key: 'workspaces', label: 'Proyectos' },
+  { key: 'workspaces', label: 'Negocios' },
   { key: 'team', label: 'Equipo' },
   { key: 'invitations', label: 'Invitaciones' },
 ];
@@ -39,8 +39,49 @@ export const getWorkspaceTabState = (activeTab = 'workspaces') =>
     active: tab.key === activeTab,
   }));
 
+export const getWorkspaceAccountAccessState = ({
+  loading = false,
+  session = null,
+} = {}) => {
+  const signedIn = Boolean(session);
+  const displayName = String(
+    session?.displayName || session?.email || '',
+  ).trim();
+
+  if (loading) {
+    return {
+      actionLabel: 'Abrir',
+      detail: 'Verificando sesión',
+      iconName: 'account-user',
+      label: 'Cargando cuenta',
+      signedIn: false,
+      tone: 'neutral',
+    };
+  }
+
+  if (signedIn) {
+    return {
+      actionLabel: 'Ver cuenta',
+      detail: displayName || 'Sesión iniciada',
+      iconName: 'account-user',
+      label: 'Cuenta activa',
+      signedIn: true,
+      tone: 'primary',
+    };
+  }
+
+  return {
+    actionLabel: 'Iniciar sesión',
+    detail: 'Accede para crear y administrar negocios compartidos',
+    iconName: 'account-user',
+    label: 'Sin cuenta',
+    signedIn: false,
+    tone: 'neutral',
+  };
+};
+
 export const getWorkspaceModeLabel = (workspace) =>
-  workspace?.isRemote ? 'Compartido' : 'Proyecto personal';
+  workspace?.isRemote ? 'Compartido' : 'Negocio personal';
 
 export const isTechnicalWorkspaceName = (name = '') =>
   /^(phase_|ws_|workspace_|group_|local_)/i.test(String(name || '').trim()) ||
@@ -50,7 +91,7 @@ export const formatWorkspaceName = (workspace = {}) => {
   const name = String(workspace?.name || '').trim();
 
   if (!name || isTechnicalWorkspaceName(name)) {
-    return workspace?.isRemote ? 'Proyecto compartido' : 'Proyecto personal';
+    return workspace?.isRemote ? 'Negocio compartido' : 'Negocio personal';
   }
 
   return name;
@@ -58,7 +99,7 @@ export const formatWorkspaceName = (workspace = {}) => {
 
 export const getWorkspaceOwnershipLabel = (workspace = {}) => {
   if (!workspace?.isRemote) {
-    return 'Solo tu puedes ver este proyecto';
+    return 'Solo tu puedes ver este negocio';
   }
 
   return formatWorkspaceRole(workspace.workspaceRole || 'member');
@@ -79,9 +120,9 @@ export const formatWorkspaceRole = (role = 'local') => {
 export const formatWorkspaceRoleDescription = (role = 'member') => {
   const descriptions = {
     admin:
-      'Puede administrar usuarios, invitaciones y editar datos del proyecto.',
-    member: 'Puede crear y editar datos del proyecto compartido.',
-    owner: 'Control total del proyecto, usuarios e invitaciones.',
+      'Puede administrar usuarios, invitaciones y editar datos del negocio.',
+    member: 'Puede crear y editar datos del negocio compartido.',
+    owner: 'Control total del negocio, usuarios e invitaciones.',
     viewer: 'Puede consultar la informacion sin editarla.',
   };
 
@@ -169,7 +210,7 @@ export const formatWorkspaceError = (error) => {
   }
 
   if (message.includes('auth_required')) {
-    return 'Inicia sesion para administrar proyectos compartidos.';
+    return 'Inicia sesion para administrar negocios compartidos.';
   }
 
   if (message.includes('workspace_admin_required')) {
@@ -177,7 +218,7 @@ export const formatWorkspaceError = (error) => {
   }
 
   if (message.includes('workspace_owner_required')) {
-    return 'Solo el propietario puede eliminar el proyecto.';
+    return 'Solo el propietario puede eliminar el negocio.';
   }
 
   if (message.includes('workspace_owner_self_required')) {
@@ -188,7 +229,7 @@ export const formatWorkspaceError = (error) => {
     message.includes('workspace_name_already_exists') ||
     message.includes('workspace_already_exists')
   ) {
-    return 'Ya existe un proyecto con ese nombre.';
+    return 'Ya existe un negocio con ese nombre.';
   }
 
   if (message.includes('workspace_member_already_exists')) {
@@ -196,7 +237,7 @@ export const formatWorkspaceError = (error) => {
   }
 
   if (message.includes('last_owner_required')) {
-    return 'Debe quedar al menos un propietario activo en el proyecto.';
+    return 'Debe quedar al menos un propietario activo en el negocio.';
   }
 
   if (message.includes('invitation_email_mismatch')) {
@@ -215,7 +256,7 @@ export const formatWorkspaceError = (error) => {
     return 'No se encontro una invitacion pendiente para esta accion.';
   }
 
-  return 'No se pudo completar la accion del proyecto.';
+  return 'No se pudo completar la accion del negocio.';
 };
 
 export const getWorkspaceEmptyState = ({
@@ -226,7 +267,7 @@ export const getWorkspaceEmptyState = ({
   type = 'workspaces',
 } = {}) => {
   if (loading) {
-    return 'Cargando informacion del proyecto...';
+    return 'Cargando informacion del negocio...';
   }
 
   if (error) {
@@ -234,7 +275,7 @@ export const getWorkspaceEmptyState = ({
   }
 
   if (authRequired) {
-    return 'Inicia sesion para ver proyectos compartidos.';
+    return 'Inicia sesion para ver negocios compartidos.';
   }
 
   if (type === 'members') {
@@ -250,10 +291,10 @@ export const getWorkspaceEmptyState = ({
   }
 
   if (!currentWorkspace) {
-    return 'No hay proyecto seleccionado. Puedes seguir trabajando en tu proyecto personal.';
+    return 'No hay negocio seleccionado. Puedes seguir trabajando en tu negocio personal.';
   }
 
-  return 'No hay proyectos compartidos disponibles.';
+  return 'No hay negocios compartidos disponibles.';
 };
 
 export const getInvitationActionState = ({
@@ -337,7 +378,7 @@ export const getLeaveWorkspaceBlockedReason = ({
   }
 
   if (members.length <= 1) {
-    return 'Eres la unica persona en este proyecto. Antes de salir, agrega a otra persona o elimina el proyecto si ya no lo necesitas.';
+    return 'Eres la unica persona en este negocio. Antes de salir, agrega a otra persona o elimina el negocio si ya no lo necesitas.';
   }
 
   const currentMember = members.find((member) => member.isCurrentUser);
@@ -474,9 +515,9 @@ export const getWorkspaceNameFormState = ({
     alreadyExists,
     canSubmit: Boolean(normalizedName) && !alreadyExists,
     error: alreadyExists
-      ? 'Ya existe un proyecto con ese nombre.'
+      ? 'Ya existe un negocio con ese nombre.'
       : !normalizedName
-        ? 'Agrega un nombre para el proyecto.'
+        ? 'Agrega un nombre para el negocio.'
         : null,
     normalizedName,
   };
@@ -545,7 +586,7 @@ export const sanitizeInvitationForDisplay = (
     invitation.invitedByUserId ||
     'Un administrador';
   const workspaceName =
-    workspace.name || invitation.workspaceName || 'Proyecto compartido';
+    workspace.name || invitation.workspaceName || 'Negocio compartido';
 
   return {
     ...(exposeDevInviteLink && invitation.devInviteLink
@@ -571,7 +612,7 @@ export const sanitizeInvitationForDisplay = (
 
 export const getWorkspaceTypeLabel = (workspace = {}) => {
   if (!workspace?.isRemote) {
-    return 'Proyecto privado';
+    return 'Negocio privado';
   }
 
   return `${formatWorkspaceRole(
@@ -580,7 +621,7 @@ export const getWorkspaceTypeLabel = (workspace = {}) => {
 };
 
 export const getWorkspaceStatusLabel = (workspace = {}) =>
-  workspace?.isRemote ? 'Compartido' : 'Proyecto personal';
+  workspace?.isRemote ? 'Compartido' : 'Negocio personal';
 
 export const getWorkspaceRowState = (workspace = {}, currentWorkspace = {}) => {
   const workspaceKey = getWorkspaceListKey(workspace);
@@ -602,7 +643,7 @@ export const getCurrentWorkspaceCardState = (
   role = 'local',
 ) => ({
   detailLabel: workspace?.isRemote
-    ? formatWorkspaceRole(role)
+    ? `Acceso compartido · ${formatWorkspaceRole(role)}`
     : 'Solo tu puedes ver la información',
   initials: getDisplayInitials(formatWorkspaceName(workspace)),
   name: formatWorkspaceName(workspace),

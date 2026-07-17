@@ -22,6 +22,7 @@ import {
   formatWorkspaceRoleDescription,
   formatWorkspaceDate,
   getShareAccountRequiredModalState,
+  getWorkspaceAccountAccessState,
   getCurrentWorkspaceCardState,
   getInvitationActionState,
   getInvitationFormState,
@@ -71,7 +72,7 @@ function Avatar({ colors, label }) {
   );
 }
 
-function WorkspaceTypeIcon({ colors, workspace }) {
+function WorkspaceTypeIcon({ colors, style, workspace }) {
   const isRemote = Boolean(workspace?.isRemote);
 
   return (
@@ -79,6 +80,7 @@ function WorkspaceTypeIcon({ colors, workspace }) {
       style={[
         styles.avatar,
         styles.workspaceTypeIcon,
+        style,
         { backgroundColor: colors.primaryMuted, borderColor: colors.border },
       ]}
     >
@@ -124,45 +126,84 @@ export function BusinessContextCard({ colors, role, workspace }) {
       style={[
         styles.activeBusinessPanel,
         {
-          backgroundColor: colors.primaryMuted,
-          borderColor: colors.primary,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
         },
       ]}
     >
       <View
         pointerEvents="none"
         style={[
-          styles.activeBusinessGlow,
-          { backgroundColor: colors.primary, opacity: 0.12 },
+          styles.activeBusinessAccent,
+          { backgroundColor: colors.primary },
         ]}
       />
-      <View style={styles.activeBusinessTop}>
-        <View style={styles.contextRow}>
-          <WorkspaceTypeIcon colors={colors} workspace={workspace} />
-          <View style={styles.rowText}>
-            <Text style={[styles.meta, { color: colors.primaryText }]}>
-              Actualmente trabajando con:
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[styles.activeBusinessName, { color: colors.textPrimary }]}
-            >
-              {card.name}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.meta,
-                styles.activeBusinessMeta,
-                { color: colors.textMuted },
-              ]}
-            >
-              {card.detailLabel}
-            </Text>
-          </View>
+      <View style={styles.activeBusinessLayout}>
+        <WorkspaceTypeIcon
+          colors={colors}
+          style={styles.activeBusinessIcon}
+          workspace={workspace}
+        />
+        <View style={styles.activeBusinessCopy}>
+          <Text
+            style={[styles.activeBusinessKicker, { color: colors.primaryText }]}
+          >
+            Negocio actual
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.activeBusinessName, { color: colors.textPrimary }]}
+          >
+            {card.name}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.meta,
+              styles.activeBusinessMeta,
+              { color: colors.textMuted },
+            ]}
+          >
+            {card.detailLabel}
+          </Text>
         </View>
       </View>
     </View>
+  );
+}
+
+export function AccountAccessButton({
+  colors,
+  loading = false,
+  onPress,
+  session,
+}) {
+  const state = getWorkspaceAccountAccessState({ loading, session });
+  const accentColor = state.signedIn ? colors.primary : colors.textMuted;
+
+  return (
+    <Pressable
+      accessibilityLabel={`${state.label}. ${state.actionLabel}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={[
+        styles.accountAccessButton,
+        state.signedIn ? styles.accountAccessButtonActive : null,
+        {
+          backgroundColor: state.signedIn
+            ? colors.primaryMuted
+            : colors.surfaceMuted,
+          borderColor: state.signedIn ? colors.primary : colors.border,
+        },
+      ]}
+    >
+      <AppIcon
+        color={accentColor}
+        decorative
+        name={state.iconName}
+        size={state.signedIn ? 24 : 22}
+      />
+    </Pressable>
   );
 }
 
@@ -485,14 +526,14 @@ function PromoteOwnerPanel({ colors, loading, member, onClose, onConfirm }) {
         ]}
       >
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-          Hacer propietario a {member?.displayName || 'Usuario del proyecto'}
+          Hacer propietario a {member?.displayName || 'Usuario del negocio'}
         </Text>
         <Text style={[styles.note, { color: colors.textMuted }]}>
-          Esta persona tendra control total del proyecto. Podra crear, eliminar
-          y editar cualquier cosa.
+          Esta persona tendra control total del negocio. Podra crear, eliminar y
+          editar cualquier cosa.
         </Text>
         <Text style={[styles.note, { color: colors.textMuted }]}>
-          Una vez aprovado no podras cambiar su rol en este proyecto.
+          Una vez aprovado no podras cambiar su rol en este negocio.
         </Text>
         <View style={styles.modalActions}>
           <Pressable
@@ -572,12 +613,12 @@ export function TeamTab({
       <View style={[styles.sectionHeader, styles.centeredSectionHeader]}>
         <View style={styles.rowText}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Usuarios del proyecto
+            Usuarios del negocio
           </Text>
           {isLocalWorkspace ? (
             <Text style={[styles.meta, { color: colors.textMuted }]}>
-              Este es tu proyecto personal. Para invitar personas, crea o
-              selecciona un proyecto compartido.
+              Este es tu negocio personal. Para invitar personas, crea o
+              selecciona un negocio compartido.
             </Text>
           ) : null}
         </View>
@@ -598,10 +639,10 @@ export function TeamTab({
       {isLocalWorkspace ? (
         <View style={[styles.localNotice, { borderColor: colors.border }]}>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            No se pueden invitar a otros a un proyecto privado.
+            No se pueden invitar a otros a un negocio privado.
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            El equipo aparece cuando trabajas con un proyecto compartido.
+            El equipo aparece cuando trabajas con un negocio compartido.
           </Text>
         </View>
       ) : members.length ? (
@@ -871,7 +912,7 @@ export function InvitationsTab({
                 Nueva invitacion
               </Text>
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                Agrega personas al proyecto activo.
+                Agrega personas al negocio activo.
               </Text>
             </View>
           </View>
@@ -971,7 +1012,7 @@ export function InvitationsTab({
                 Invitaciones enviadas
               </Text>
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                Invitaciones pendientes creadas por este proyecto.
+                Invitaciones pendientes creadas por este negocio.
               </Text>
             </View>
           </View>
@@ -1065,7 +1106,7 @@ function WorkspaceRow({
             style={styles.overflowButton}
           >
             <AppIcon
-              accessibilityLabel="Acciones del proyecto"
+              accessibilityLabel="Acciones del negocio"
               color={colors.textPrimary}
               name="dots-vertical"
               size={20}
@@ -1126,7 +1167,7 @@ function DeleteWorkspaceDialog({
 }) {
   const [confirmationText, setConfirmationText] = useState('');
   const isPrivateProject = !workspace?.isRemote;
-  const targetName = workspace?.name || 'Proyecto compartido';
+  const targetName = workspace?.name || 'Negocio compartido';
   const nameMatches =
     normalizeDeleteName(confirmationText) === normalizeDeleteName(targetName);
   const DeleteModalRoot = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
@@ -1151,17 +1192,17 @@ function DeleteWorkspaceDialog({
           ]}
         >
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Eliminar proyecto
+            Eliminar negocio
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             {isPrivateProject
-              ? 'Esta accion elimina este proyecto privado.'
-              : 'Esta accion elimina el proyecto para todos. Nadie podra seguir entrando a este proyecto compartido.'}
+              ? 'Esta accion elimina este negocio privado.'
+              : 'Esta accion elimina el negocio para todos. Nadie podra seguir entrando a este negocio compartido.'}
           </Text>
           <Text style={[styles.note, { color: colors.danger }]}>
             {isPrivateProject
-              ? 'Se perdera todo lo trabajado dentro de este proyecto: transacciones, recetas, ingredientes e inventario.'
-              : 'Se perdera lo trabajado dentro de este proyecto compartido: transacciones, recetas, ingredientes, inventario, invitaciones y colaboradores asociados.'}
+              ? 'Se perdera todo lo trabajado dentro de este negocio: transacciones, recetas, ingredientes e inventario.'
+              : 'Se perdera lo trabajado dentro de este negocio compartido: transacciones, recetas, ingredientes, inventario, invitaciones y colaboradores asociados.'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             Escribe exactamente: {targetName}
@@ -1354,7 +1395,9 @@ function AccountRequiredContent({ colors, loading, onClose, onOpenAccount }) {
               styles.modalButton,
               {
                 backgroundColor:
-                  loading || !onOpenAccount ? colors.surfaceMuted : colors.primary,
+                  loading || !onOpenAccount
+                    ? colors.surfaceMuted
+                    : colors.primary,
               },
             ]}
           >
@@ -1440,15 +1483,15 @@ function LeaveWorkspaceDialog({
           ]}
         >
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Salir del proyecto
+            Salir del negocio
           </Text>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            {workspace?.name || 'Proyecto compartido'}
+            {workspace?.name || 'Negocio compartido'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            Perderas acceso a este proyecto compartido y dejara de aparecer en
-            tu lista de proyectos. La informacion de este proyecto dejara de
-            estar disponible para tu cuenta.
+            Perderas acceso a este negocio compartido y dejara de aparecer en tu
+            lista de negocios. La informacion de este negocio dejara de estar
+            disponible para tu cuenta.
           </Text>
           <View style={styles.modalActions}>
             <Pressable
@@ -1517,11 +1560,11 @@ function RemoveMemberDialog({ colors, loading, member, onClose, onConfirm }) {
             Remover colaborador
           </Text>
           <Text style={[styles.body, { color: colors.textPrimary }]}>
-            {member?.displayName || 'Usuario del proyecto'}
+            {member?.displayName || 'Usuario del negocio'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
-            Esta persona perdera acceso al proyecto y dejara de verlo en su
-            lista. La informacion de este proyecto dejara de estar disponible
+            Esta persona perdera acceso al negocio y dejara de verlo en su
+            lista. La informacion de este negocio dejara de estar disponible
             para su cuenta.
           </Text>
           <View style={styles.modalActions}>
@@ -1582,9 +1625,9 @@ function CreateWorkspaceDialog({
   onConfirm,
   onOpenAccountRequired,
   onSetWorkspaceType,
-  placeholder = 'Nombre del nuevo proyecto',
+  placeholder = 'Nombre del nuevo negocio',
   showWorkspaceTypePicker = false,
-  title = 'Crear proyecto',
+  title = 'Crear negocio',
   workspaceType = 'private',
 }) {
   const inputRef = useRef(null);
@@ -1683,7 +1726,9 @@ function CreateWorkspaceDialog({
   return (
     <Modal
       animationType="fade"
-      onRequestClose={showInlineAccountRequired ? closeAccountRequired : onClose}
+      onRequestClose={
+        showInlineAccountRequired ? closeAccountRequired : onClose
+      }
       onShow={scheduleFocus}
       transparent
       visible
@@ -1730,7 +1775,7 @@ function CreateWorkspaceDialog({
           />
           {showNameMissing ? (
             <Text style={[styles.error, { color: colors.danger }]}>
-              Agrega un nombre para el proyecto.
+              Agrega un nombre para el negocio.
             </Text>
           ) : null}
           {error && !showNameMissing ? (
@@ -1933,7 +1978,7 @@ export function WorkspacesTab({
       onSetNewWorkspaceType?.('private');
       setAccountRequiredOpen(true);
     } else {
-      setCreateError(result?.message || 'No se pudo crear el proyecto.');
+      setCreateError(result?.message || 'No se pudo crear el negocio.');
     }
 
     return result;
@@ -1955,7 +2000,7 @@ export function WorkspacesTab({
     const targetWorkspace = renameWorkspaceTarget;
 
     if (!targetWorkspace) {
-      const message = 'Selecciona el proyecto que quieres editar.';
+      const message = 'Selecciona el negocio que quieres editar.';
       setRenameError(message);
       return { message, ok: false };
     }
@@ -1966,7 +2011,7 @@ export function WorkspacesTab({
       setRenameOpen(false);
       setRenameWorkspaceTarget(null);
     } else {
-      setRenameError(result?.message || 'No se pudo guardar el proyecto.');
+      setRenameError(result?.message || 'No se pudo guardar el negocio.');
     }
 
     return result;
@@ -2028,13 +2073,10 @@ export function WorkspacesTab({
         { backgroundColor: colors.surface },
       ]}
     >
-      <View style={styles.sectionHeader}>
+      <View style={[styles.sectionHeader, styles.centeredSectionHeader]}>
         <View style={styles.rowText}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Proyectos
-          </Text>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Administra todos tus proyectos.
+            Tus negocios
           </Text>
         </View>
         <Pressable
@@ -2059,9 +2101,6 @@ export function WorkspacesTab({
       </View>
 
       <View style={styles.subsection}>
-        <Text style={[styles.body, { color: colors.textPrimary }]}>
-          Cambiar proyecto
-        </Text>
         {workspaces.length ? (
           workspaces.map((workspace) => {
             const row = getWorkspaceRowState(workspace, currentWorkspace);
@@ -2130,8 +2169,8 @@ export function WorkspacesTab({
               closeRenameWorkspace();
             }}
             onConfirm={handleRenameWorkspace}
-            placeholder="Nombre del proyecto"
-            title="Editar proyecto"
+            placeholder="Nombre del negocio"
+            title="Editar negocio"
           />
         ) : null}
         {createOpen ? (
@@ -2217,14 +2256,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   accountRequiredCard: {
-    gap: 18,
-    marginHorizontal: 20,
-    padding: 18,
-    width: '90%',
+    gap: 16,
+    padding: 16,
   },
   accountRequiredDescription: {
-    fontSize: typography.sizes.body,
-    lineHeight: 23,
+    fontSize: typography.sizes.label,
+    lineHeight: 20,
   },
   accountRequiredDivider: {
     height: 1,
@@ -2232,7 +2269,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   accountRequiredHeader: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
   },
@@ -2240,9 +2277,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    height: 48,
+    height: 42,
     justifyContent: 'center',
-    width: 48,
+    width: 42,
   },
   accountRequiredInfo: {
     alignItems: 'center',
@@ -2263,40 +2300,74 @@ const styles = StyleSheet.create({
   accountRequiredPrivacyText: {
     flex: 1,
     fontSize: typography.sizes.label,
-    lineHeight: 19,
+    lineHeight: 20,
   },
   accountRequiredTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.bold,
     lineHeight: 22,
   },
+  accountAccessButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  accountAccessButtonActive: {
+    borderWidth: 1.5,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 3,
+  },
   activeBusinessPanel: {
     borderRadius: 8,
     borderWidth: 1,
-    gap: 8,
-    minHeight: 104,
+    justifyContent: 'center',
+    minHeight: 88,
     overflow: 'hidden',
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  activeBusinessAccent: {
+    bottom: 0,
+    left: 0,
+    opacity: 0.9,
+    position: 'absolute',
+    top: 0,
+    width: 4,
+  },
+  activeBusinessIcon: {
+    height: 54,
+    width: 46,
+  },
+  activeBusinessCopy: {
+    flex: 1,
+    gap: 2,
+    justifyContent: 'space-between',
+    minHeight: 54,
+    minWidth: 0,
+  },
+  activeBusinessLayout: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    minHeight: 54,
+    width: '100%',
+  },
+  activeBusinessKicker: {
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
   },
   activeBusinessMeta: {
     minHeight: 18,
   },
   activeBusinessName: {
-    fontSize: 28,
+    fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
-    marginTop: 2,
-  },
-  activeBusinessGlow: {
-    borderRadius: 90,
-    height: 96,
-    position: 'absolute',
-    right: -28,
-    top: -42,
-    width: 148,
-  },
-  activeBusinessTop: {
-    alignItems: 'flex-start',
-    gap: 10,
   },
   avatar: {
     alignItems: 'center',
@@ -2348,6 +2419,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 20,
     justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     zIndex: 20,
   },
   contextRow: {
@@ -2442,10 +2515,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     gap: 14,
-    marginHorizontal: 20,
+    marginHorizontal: 0,
     maxHeight: '82%',
+    maxWidth: 390,
     padding: 16,
-    width: '90%',
+    width: '100%',
   },
   modalSection: {
     borderTopWidth: 1,
@@ -2455,6 +2529,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   note: {
     fontSize: typography.sizes.label,
@@ -2499,6 +2575,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   workspaceTypeOption: {
     alignItems: 'center',

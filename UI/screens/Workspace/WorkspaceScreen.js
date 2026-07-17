@@ -21,6 +21,7 @@ import {
 import useAuthSession from '../../hooks/auth/useAuthSession';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
+  AccountAccessButton,
   BusinessContextCard,
   BusinessShareTabs,
   InvitationsTab,
@@ -214,7 +215,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
         ]);
       }
 
-      setMessage('Compartir proyecto actualizado.');
+      setMessage('Negocios actualizados.');
     } catch (error) {
       setMessage(formatWorkspaceError(error));
     } finally {
@@ -230,14 +231,14 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
 
     if (!formState.canSubmit) {
       const nextMessage =
-        formState.error || 'Agrega un nombre para el proyecto.';
+        formState.error || 'Agrega un nombre para el negocio.';
       setMessage(nextMessage);
       return { message: nextMessage, ok: false };
     }
 
     if (newWorkspaceType === 'shared' && !auth.session) {
       const nextMessage =
-        'Inicia sesion para crear proyectos compartidos. Puedes crear proyectos privados sin cuenta.';
+        'Inicia sesion para crear negocios compartidos. Puedes crear negocios privados sin cuenta.';
       return { message: nextMessage, reason: 'account_required', ok: false };
     }
 
@@ -248,8 +249,8 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           type: newWorkspaceType,
         }),
       newWorkspaceType === 'private'
-        ? 'Proyecto privado creado y seleccionado.'
-        : 'Proyecto compartido creado y seleccionado.',
+        ? 'Negocio privado creado y seleccionado.'
+        : 'Negocio compartido creado y seleccionado.',
     );
 
     if (result.ok) {
@@ -269,7 +270,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
 
     if (!formState.canSubmit) {
       const nextMessage =
-        formState.error || 'Agrega un nombre para el proyecto.';
+        formState.error || 'Agrega un nombre para el negocio.';
       setMessage(nextMessage);
       return { message: nextMessage, ok: false };
     }
@@ -280,7 +281,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           name: formState.normalizedName,
           workspace,
         }),
-      'Nombre del proyecto actualizado.',
+      'Nombre del negocio actualizado.',
     );
 
     if (result.ok) {
@@ -344,13 +345,13 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           leaveRemote: true,
           workspace,
         }),
-      'Saliste del proyecto compartido. Ya no aparecera en tu lista.',
+      'Saliste del negocio compartido. Ya no aparecera en tu lista.',
     );
 
   const deleteCurrentWorkspace = (workspace = currentWorkspace) =>
     runAction(
       () => workspaceState.deleteWorkspace(workspace),
-      'Proyecto eliminado.',
+      'Negocio eliminado.',
     );
 
   const removeMember = (member) => {
@@ -365,7 +366,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
   const selectWorkspace = async (workspace) => {
     return runAction(
       () => workspaceState.selectWorkspace(workspace),
-      'Proyecto seleccionado.',
+      'Negocio seleccionado.',
     );
   };
 
@@ -377,14 +378,22 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
     >
       {activeTab === 'workspaces' && workspaceMenuKey ? (
         <Pressable
-          accessibilityLabel="Cerrar menu de proyecto"
+          accessibilityLabel="Cerrar menu de negocio"
           onPress={() => setWorkspaceMenuKey(null)}
           style={styles.screenDismissLayer}
         />
       ) : null}
       <AppHeader
-        subtitle="Usuarios, invitaciones y espacios de trabajo."
-        title="Compartir proyectos"
+        actionElement={
+          <AccountAccessButton
+            colors={colors}
+            loading={auth.loading}
+            onPress={onOpenAccount}
+            session={auth.session}
+          />
+        }
+        subtitle="Organiza equipo, accesos e invitaciones."
+        title="Administrar negocios"
       />
 
       <BusinessContextCard
