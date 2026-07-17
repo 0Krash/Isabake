@@ -6,6 +6,7 @@ import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 export const TRANSACTIONS_PAGE_SIZE = 20;
+const transactionStateCache = new Map();
 
 const CATEGORY_LABELS = {
   1: 'Materia prima',
@@ -173,21 +174,37 @@ const calculateTotalsByDateCategory = (transactions) => {
   return Object.values(groups);
 };
 
+const getTransactionCacheKey = (groupId, transactionType) =>
+  groupId ? `${groupId}:${transactionType || ''}` : null;
+
+const getCachedTransactionState = (groupId, transactionType) =>
+  transactionStateCache.get(getTransactionCacheKey(groupId, transactionType));
+
 export default function useTransactionBalanceLocal(
   transactionType,
   { autoLoad = true } = {},
 ) {
-  const { groupId } = useCurrentWorkspaceScope({ autoLoad });
-  const [transactions, setTransactions] = useState([]);
-  const [totalAmountByCategory, setTotalAmountByCategory] = useState([]);
+  const { groupId, loading: workspaceLoading } = useCurrentWorkspaceScope({
+    autoLoad,
+  });
+  const waitingForWorkspace = Boolean(autoLoad && workspaceLoading && !groupId);
+  const cachedState = getCachedTransactionState(groupId, transactionType);
+  const [transactions, setTransactions] = useState(
+    () => cachedState?.transactions || [],
+  );
+  const [totalAmountByCategory, setTotalAmountByCategory] = useState(
+    () => cachedState?.totalAmountByCategory || [],
+  );
   const [totalAmountByDateCategory, setTotalAmountByDateCategory] = useState(
-    [],
+    () => cachedState?.totalAmountByDateCategory || [],
   );
   const [pagination, setPagination] = useState({
-    hasMore: false,
-    page: 0,
+    hasMore: cachedState?.pagination?.hasMore || false,
+    page: cachedState?.pagination?.page || 0,
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(
+    () => Boolean(autoLoad) && !cachedState,
+  );
   const [isLoadingMoreTransactions, setIsLoadingMoreTransactions] =
     useState(false);
   const [error, setError] = useState(null);
@@ -225,16 +242,30 @@ export default function useTransactionBalanceLocal(
         transactionRepository.getAll({ groupId: effectiveGroupId }),
       ]);
       const normalizedTransactions = allTransactions.map(normalizeTransaction);
+      const nextState = {
+        pagination: transactionsResponse.pagination,
+        totalAmountByCategory: calculateTotalsByCategory(
+          normalizedTransactions,
+        ),
+        totalAmountByDateCategory: calculateTotalsByDateCategory(
+          normalizedTransactions,
+        ),
+        transactions: transactionsResponse.data,
+      };
+      const cacheKey = getTransactionCacheKey(
+        effectiveGroupId,
+        transactionType,
+      );
 
-      setTransactions(transactionsResponse.data);
-      setPagination(transactionsResponse.pagination);
-      setTotalAmountByCategory(
-        calculateTotalsByCategory(normalizedTransactions),
-      );
-      setTotalAmountByDateCategory(
-        calculateTotalsByDateCategory(normalizedTransactions),
-      );
-      return transactionsResponse.data;
+      if (cacheKey) {
+        transactionStateCache.set(cacheKey, nextState);
+      }
+
+      setTransactions(nextState.transactions);
+      setPagination(nextState.pagination);
+      setTotalAmountByCategory(nextState.totalAmountByCategory);
+      setTotalAmountByDateCategory(nextState.totalAmountByDateCategory);
+      return nextState.transactions;
     } catch (requestError) {
       console.error(
         'Error al obtener transacciones locales desde useTransactionBalanceData:',
@@ -358,12 +389,32 @@ export default function useTransactionBalanceLocal(
   );
 
   useEffect(() => {
-    if (!autoLoad) {
+    if (!autoLoad || waitingForWorkspace) {
       return;
     }
 
+    const nextCachedState = getCachedTransactionState(groupId, transactionType);
+
+    if (nextCachedState) {
+      setTransactions(nextCachedState.transactions);
+      setPagination(nextCachedState.pagination);
+      setTotalAmountByCategory(nextCachedState.totalAmountByCategory);
+      setTotalAmountByDateCategory(nextCachedState.totalAmountByDateCategory);
+    } else {
+      setTransactions([]);
+      setPagination({ hasMore: false, page: 0 });
+      setTotalAmountByCategory([]);
+      setTotalAmountByDateCategory([]);
+    }
+
     refreshTransactions().catch(() => {});
-  }, [autoLoad, groupId, refreshTransactions]);
+  }, [
+    autoLoad,
+    groupId,
+    refreshTransactions,
+    transactionType,
+    waitingForWorkspace,
+  ]);
 
   return {
     createTransaction,

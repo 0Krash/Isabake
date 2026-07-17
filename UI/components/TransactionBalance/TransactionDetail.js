@@ -53,6 +53,7 @@ const TransactionDetail = ({
   dataTransactionsResponse,
   hasMoreTransactions,
   isLoadingMoreTransactions,
+  isLoadingTransactions = false,
   ListHeaderComponent,
   loadMoreTransactions,
   onCreateTransaction,
@@ -136,29 +137,48 @@ const TransactionDetail = ({
     return null;
   };
 
-  const renderEmpty = () => (
-    <View style={[styles.emptyState, { borderColor: colors.border }]}>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-        Aún no has creado movimientos
-      </Text>
-      <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-        Crea tu primer movimiento para comenzar a ver el historial.
-      </Text>
-      {canWrite ? (
-        <Text
-          accessibilityLabel="Agregar primer movimiento"
-          accessibilityRole="button"
-          onPress={onCreateTransaction}
-          style={[
-            styles.emptyActionText,
-            { backgroundColor: colors.primaryMuted, color: colors.primaryText },
-          ]}
-        >
-          Crear movimiento
+  const renderEmpty = () => {
+    if (isLoadingTransactions) {
+      return (
+        <View style={[styles.emptyState, { borderColor: colors.border }]}>
+          <ActivityIndicator color={colors.primary} size="small" />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+            Cargando movimientos
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+            Estamos consultando la base de datos.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.emptyState, { borderColor: colors.border }]}>
+        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+          Aún no has creado movimientos
         </Text>
-      ) : null}
-    </View>
-  );
+        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+          Crea tu primer movimiento para comenzar a ver el historial.
+        </Text>
+        {canWrite ? (
+          <Text
+            accessibilityLabel="Agregar primer movimiento"
+            accessibilityRole="button"
+            onPress={onCreateTransaction}
+            style={[
+              styles.emptyActionText,
+              {
+                backgroundColor: colors.primaryMuted,
+                color: colors.primaryText,
+              },
+            ]}
+          >
+            Crear movimiento
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.mainContainer}>

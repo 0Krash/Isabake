@@ -41,6 +41,8 @@ import {
 } from './data/sync/autoSyncService';
 import { restoreAccountSessionOnStartup } from './data/auth/startupAccountSession';
 
+const primaryTabs = new Set(['home', 'recipes', 'inventory']);
+
 export default function App() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === 'dark' ? themes.dark : themes.light;
@@ -53,6 +55,9 @@ export default function App() {
   const [saleRecipe, setSaleRecipe] = useState(null);
   const [accountStatus, setAccountStatus] = useState('checking');
   const [workspaceBackTab, setWorkspaceBackTab] = useState('home');
+  const [mountedPrimaryTabs, setMountedPrimaryTabs] = useState(
+    () => new Set(['home']),
+  );
   const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
   useEffect(() => {
@@ -82,6 +87,22 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!primaryTabs.has(activeTab)) {
+      return;
+    }
+
+    setMountedPrimaryTabs((currentTabs) => {
+      if (currentTabs.has(activeTab)) {
+        return currentTabs;
+      }
+
+      const nextTabs = new Set(currentTabs);
+      nextTabs.add(activeTab);
+      return nextTabs;
+    });
+  }, [activeTab]);
 
   useEffect(() => {
     if (!dbReady) {
@@ -240,6 +261,65 @@ export default function App() {
     );
   };
 
+  const renderPrimaryScreens = () => (
+    <>
+      {mountedPrimaryTabs.has('home') ? (
+        <View
+          style={[
+            styles.primaryScreen,
+            activeTab === 'home' ? styles.visibleScreen : styles.hiddenScreen,
+          ]}
+        >
+          <TransactionBalanceScreen
+            accountStatus={accountStatus}
+            onOpenAccount={() => setActiveTab('account')}
+            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenSync={() => setActiveTab('sync')}
+            onOpenWorkspace={() => openWorkspaceFrom('home')}
+          />
+        </View>
+      ) : null}
+      {mountedPrimaryTabs.has('recipes') ? (
+        <View
+          style={[
+            styles.primaryScreen,
+            activeTab === 'recipes'
+              ? styles.visibleScreen
+              : styles.hiddenScreen,
+          ]}
+        >
+          <RecipeBookScreen
+            accountStatus={accountStatus}
+            onOpenAccount={() => setActiveTab('account')}
+            onOpenInventory={() => setActiveTab('inventory')}
+            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenSync={() => setActiveTab('sync')}
+            onOpenWorkspace={() => openWorkspaceFrom('recipes')}
+            onOpenRecipeSale={setSaleRecipe}
+          />
+        </View>
+      ) : null}
+      {mountedPrimaryTabs.has('inventory') ? (
+        <View
+          style={[
+            styles.primaryScreen,
+            activeTab === 'inventory'
+              ? styles.visibleScreen
+              : styles.hiddenScreen,
+          ]}
+        >
+          <InventoryScreen
+            accountStatus={accountStatus}
+            onOpenAccount={() => setActiveTab('account')}
+            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenSync={() => setActiveTab('sync')}
+            onOpenWorkspace={() => openWorkspaceFrom('inventory')}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+
   const openSecondaryScreen = (tabKey) => {
     setSaleRecipe(null);
 
@@ -318,7 +398,11 @@ export default function App() {
           onSelect={openSecondaryScreen}
           visible={secondaryMenuVisible && !saleRecipe}
         />
-        <View style={styles.screenContainer}>{renderScreen()}</View>
+        <View style={styles.screenContainer}>
+          {!saleRecipe && primaryTabs.has(activeTab)
+            ? renderPrimaryScreens()
+            : renderScreen()}
+        </View>
         {!saleRecipe && (
           <AppBottomNavigation
             activeTab={activeTab}
@@ -345,5 +429,14 @@ const styles = StyleSheet.create({
   dbStateText: {
     fontSize: 16,
     textAlign: 'center',
+  },
+  hiddenScreen: {
+    display: 'none',
+  },
+  primaryScreen: {
+    flex: 1,
+  },
+  visibleScreen: {
+    display: 'flex',
   },
 });

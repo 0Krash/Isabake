@@ -46,6 +46,7 @@ const TransactionBalanceScreen = ({
   const {
     hasMoreTransactions,
     isLoadingMoreTransactions,
+    isLoadingTransactions,
     loadMoreTransactions,
     refreshTransactions,
     totalAmountByCategory,
@@ -172,6 +173,7 @@ const TransactionBalanceScreen = ({
           canWrite={canWrite}
           hasMoreTransactions={hasMoreTransactions}
           isLoadingMoreTransactions={isLoadingMoreTransactions}
+          isLoadingTransactions={isLoadingTransactions}
           ListHeaderComponent={
             <>
               <Dashboard
