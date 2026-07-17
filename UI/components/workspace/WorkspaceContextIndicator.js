@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import AppIcon from '../icons/AppIcon';
 import { TransactionMenuButton } from '../TransactionBalance/TransactionMenu';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import { getBackupStatusIconName } from '../Sync/backupStatusModel';
 import useBackupStatus from '../../hooks/sync/useBackupStatus';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
@@ -42,11 +50,19 @@ export default function WorkspaceContextIndicator({
   refreshKey = 0,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
-  const { backupStatus } = useBackupStatus({ refreshKey });
+  const { backupStatus, loading: backupStatusLoading } = useBackupStatus({
+    refreshKey,
+  });
   const { workspace } = useCurrentWorkspaceScope();
   const workspaceState = useWorkspaces();
   const [attentionVersion, setAttentionVersion] = useState(0);
   const backupColor = toneColor(backupStatus?.tone, colors);
+  const backupIconName = getBackupStatusIconName(backupStatus?.statusKey);
+  const backupIsLoading =
+    backupStatusLoading || backupStatus?.statusKey === 'syncing';
+  const workspaceName = workspace
+    ? formatWorkspaceName(workspace)
+    : 'Cargando negocio';
   const hasInvitationAttention =
     workspaceState.myInvitations.length > 0 &&
     !isInvitationAttentionSeen(workspaceState.myInvitations);
@@ -88,7 +104,7 @@ export default function WorkspaceContextIndicator({
               numberOfLines={1}
               style={[styles.title, { color: colors.textPrimary }]}
             >
-              {formatWorkspaceName(workspace)}
+              {workspaceName}
             </Text>
             {hasInvitationAttention ? (
               <View
@@ -112,7 +128,7 @@ export default function WorkspaceContextIndicator({
         </Pressable>
         {backupStatus?.showInMainScreens ? (
           <Pressable
-            accessibilityLabel="Abrir centro de sincronización"
+            accessibilityLabel={`Abrir centro de sincronización. ${backupStatus.title}`}
             accessibilityRole={onOpenSync ? 'button' : undefined}
             disabled={!onOpenSync}
             onPress={onOpenSync}
@@ -124,18 +140,16 @@ export default function WorkspaceContextIndicator({
               },
             ]}
           >
-            <View style={[styles.dot, { backgroundColor: backupColor }]} />
-            <Text
-              numberOfLines={1}
-              style={[styles.statusText, { color: colors.textSecondary }]}
-            >
-              {backupStatus.title}
-            </Text>
-            {backupStatus.primaryActionLabel ? (
-              <Text style={[styles.actionText, { color: colors.primary }]}>
-                {backupStatus.primaryActionLabel}
-              </Text>
-            ) : null}
+            {backupIsLoading ? (
+              <ActivityIndicator color={backupColor} size="small" />
+            ) : (
+              <AppIcon
+                color={backupColor}
+                decorative
+                name={backupIconName}
+                size={20}
+              />
+            )}
           </Pressable>
         ) : null}
         <TransactionMenuButton
@@ -151,10 +165,6 @@ export default function WorkspaceContextIndicator({
 }
 
 const styles = StyleSheet.create({
-  actionText: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
-  },
   accent: {
     borderRadius: 2,
     bottom: 10,
@@ -186,11 +196,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  dot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8,
-  },
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -201,18 +206,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    flexDirection: 'row',
-    flexShrink: 1,
-    gap: 6,
-    justifyContent: 'flex-end',
-    maxWidth: '46%',
-    minHeight: 28,
-    paddingHorizontal: 8,
-  },
-  statusText: {
-    flexShrink: 1,
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
   },
   title: {
     flexShrink: 1,

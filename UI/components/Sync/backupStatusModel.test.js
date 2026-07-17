@@ -2,6 +2,7 @@ import {
   formatRelativeBackupTime,
   getBackupStatus,
   getBackupStatusForIndicator,
+  getBackupStatusIconName,
 } from './backupStatusModel';
 
 describe('backupStatusModel', () => {
@@ -57,6 +58,22 @@ describe('backupStatusModel', () => {
         tone: 'success',
       }),
     );
+  });
+
+  test('maps backup states to compact status icons', () => {
+    expect(getBackupStatusIconName('backed_up')).toBe('status-check-circle');
+    expect(getBackupStatusIconName('pending')).toBe('status-sync');
+    expect(getBackupStatusIconName('syncing')).toBe('status-sync');
+    expect(getBackupStatusIconName('offline')).toBe('status-cloud-off');
+    expect(getBackupStatusIconName('backend_unreachable')).toBe(
+      'status-cloud-off',
+    );
+    expect(getBackupStatusIconName('conflicts')).toBe(
+      'status-alert-circle',
+    );
+    expect(getBackupStatusIconName('failed')).toBe('status-alert-circle');
+    expect(getBackupStatusIconName('local_only')).toBe('project-private');
+    expect(getBackupStatusIconName('unknown_status')).toBe('status-sync');
   });
 
   test('ignores stale auto-sync pending state when there are no user-facing pending changes', () => {

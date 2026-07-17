@@ -411,8 +411,27 @@ export const getBackupStatus = ({
 export const getBackupStatusForIndicator = (input = {}) =>
   withAction(getBackupStatus(input), input);
 
+export const getBackupStatusIconName = (statusKey = '') => {
+  const icons = {
+    backed_up: 'status-check-circle',
+    backup_not_configured: 'status-alert-circle',
+    backend_unreachable: 'status-cloud-off',
+    conflicts: 'status-alert-circle',
+    failed: 'status-alert-circle',
+    local_only: 'project-private',
+    needs_login: 'account-user',
+    needs_workspace: 'project-shared',
+    offline: 'status-cloud-off',
+    pending: 'status-sync',
+    syncing: 'status-sync',
+  };
+
+  return icons[statusKey] || 'status-sync';
+};
+
 export default {
   formatRelativeBackupTime,
+  getBackupStatusIconName,
   getBackupStatus,
   getBackupStatusForIndicator,
 };

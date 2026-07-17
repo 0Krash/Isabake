@@ -134,6 +134,50 @@ export const iconManifest: IconManifestEntry[] = [
     "path": "assets/icons/entities/project-shared.svg",
     "sourceUrl": "https://www.svgrepo.com/svg/535714/users",
     "style": "outline"
+  },
+  {
+    "addedAt": "2026-07-17",
+    "category": "status",
+    "id": "status-alert-circle",
+    "license": "CC0 License",
+    "name": "status-alert-circle",
+    "originalName": "Alert Circle Outline",
+    "path": "assets/icons/status/status-alert-circle.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/326469/alert-circle-outline",
+    "style": "outline"
+  },
+  {
+    "addedAt": "2026-07-17",
+    "category": "status",
+    "id": "status-check-circle",
+    "license": "CC0 License",
+    "name": "status-check-circle",
+    "originalName": "Checkmark Circle Outline",
+    "path": "assets/icons/status/status-check-circle.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/326558/checkmark-circle-outline",
+    "style": "outline"
+  },
+  {
+    "addedAt": "2026-07-17",
+    "category": "status",
+    "id": "status-cloud-off",
+    "license": "CC0 License",
+    "name": "status-cloud-off",
+    "originalName": "Cloud Offline Outline",
+    "path": "assets/icons/status/status-cloud-off.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/326576/cloud-offline-outline",
+    "style": "outline"
+  },
+  {
+    "addedAt": "2026-07-17",
+    "category": "status",
+    "id": "status-sync",
+    "license": "CC0 License",
+    "name": "status-sync",
+    "originalName": "Refresh Outline",
+    "path": "assets/icons/status/status-sync.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/326778/refresh-outline",
+    "style": "outline"
   }
 ];
 
