@@ -1,9 +1,12 @@
 import {
   CREATE_DOCUMENTS_TABLE_SQL,
   CREATE_SCHEMA_VERSION_TABLE_SQL,
+  CREATE_SYNC_HISTORY_TABLE_SQL,
+  CREATE_SYNC_STATE_TABLE_SQL,
   CREATE_SYNC_OUTBOX_TABLE_SQL,
   DATABASE_SCHEMA_VERSION,
   DOCUMENT_INDEX_SQL,
+  SYNC_HISTORY_INDEX_SQL,
   SYNC_OUTBOX_INDEX_SQL,
 } from './schema';
 
@@ -47,11 +50,37 @@ const runVersionOneMigration = async (db) => {
   await setSchemaVersion(db, 1);
 };
 
+const runVersionTwoMigration = async (db) => {
+  await db.execAsync(CREATE_SYNC_STATE_TABLE_SQL);
+  await setSchemaVersion(db, 2);
+};
+
+const runVersionThreeMigration = async (db) => {
+  await db.execAsync(CREATE_SYNC_HISTORY_TABLE_SQL);
+
+  for (const indexSql of SYNC_HISTORY_INDEX_SQL) {
+    await db.execAsync(indexSql);
+  }
+
+  await setSchemaVersion(db, 3);
+};
+
 export const runMigrations = async (db) => {
-  const currentVersion = await getCurrentSchemaVersion(db);
+  let currentVersion = await getCurrentSchemaVersion(db);
 
   if (currentVersion < 1) {
     await runVersionOneMigration(db);
+    currentVersion = 1;
+  }
+
+  if (currentVersion < 2) {
+    await runVersionTwoMigration(db);
+    currentVersion = 2;
+  }
+
+  if (currentVersion < 3) {
+    await runVersionThreeMigration(db);
+    currentVersion = 3;
   }
 
   const finalVersion = await getCurrentSchemaVersion(db);

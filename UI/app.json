@@ -2,6 +2,7 @@
   "expo": {
     "name": "UI",
     "slug": "UI",
+    "scheme": "isabake",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -26,13 +27,15 @@
         "backgroundColor": "#EFECFF",
         "monochromeImage": "./assets/adaptive-icon.png"
       },
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.anonymous.UI"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

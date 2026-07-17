@@ -21,6 +21,7 @@ const QuickFilterChips = ({
   scrollStyle,
   selectedKey,
   selectedTextColor,
+  showValues = true,
 }) => (
   <ScrollView
     contentContainerStyle={styles.filterList}
@@ -34,7 +35,8 @@ const QuickFilterChips = ({
       const label = getLabel(filter);
       const value = getValue ? getValue(filter) : undefined;
       const isSelected = selectedKey === key;
-      const displayLabel = value === undefined ? label : `${label} (${value})`;
+      const displayLabel =
+        showValues && value !== undefined ? `${label} (${value})` : label;
 
       return (
         <TouchableOpacity

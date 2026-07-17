@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { inventoryRepository } from '../../data/repositories';
+import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 
 const normalizeQuality = (quality) => {
   const qualityMap = {
@@ -132,6 +133,7 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
       const item = normalizeInventoryItem(
         await inventoryRepository.create(toApiInventoryItem(data), options),
       );
+      requestLocalChangeSync();
       await refreshInventory();
       return item;
     },
@@ -151,6 +153,7 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
       }
 
       const normalizedItem = normalizeInventoryItem(item);
+      requestLocalChangeSync();
       await refreshInventory();
       return normalizedItem;
     },
@@ -165,6 +168,7 @@ export default function useInventoryLocal({ autoLoad = true } = {}) {
         throw new Error('Ingrediente no encontrado');
       }
 
+      requestLocalChangeSync();
       await refreshInventory();
       return normalizeInventoryItem(item);
     },

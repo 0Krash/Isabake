@@ -5,6 +5,7 @@ import {
   softDeleteDocument,
 } from '../db/documentStore';
 import { createLocalId } from '../db/localIds';
+import { getCurrentGroupId } from '../workspace/currentWorkspace';
 
 export const normalizeName = (value) =>
   String(value || '')
@@ -80,9 +81,11 @@ export const createRepository = ({
     const id = resolveId(data, options);
     const entity = withIdentity(prepareCreate(data, id), id);
     const documentData = stripDocumentMetadata(entity);
+    const groupId =
+      options.groupId ?? data.groupId ?? (await getCurrentGroupId({ db: options.db }));
     const document = await saveDocument(collection, id, documentData, {
       db: options.db,
-      groupId: options.groupId ?? data.groupId ?? null,
+      groupId,
       remoteId: options.remoteId ?? data.remoteId ?? null,
       serverVersion: options.serverVersion ?? data.serverVersion ?? null,
       skipOutbox: options.skipOutbox,

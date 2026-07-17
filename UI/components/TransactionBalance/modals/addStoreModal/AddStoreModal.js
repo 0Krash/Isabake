@@ -592,7 +592,7 @@ export default function AddStoreModal({
       visible={AddStoreModalIsVisible}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.mainContainer}>

@@ -1,13 +1,30 @@
-import io from 'socket.io-client';
-import { API_HOST } from '@env';
+import {
+  getLegacySocketUrl,
+  isLegacySocketEnabled,
+} from './socketConfig';
 
-const socket = io(API_HOST, {
-  transports: ['websocket'],
-  jsonp: false,
-});
+let socket = null;
 
-const sendMessage = (message) => {
-  socket.emit('nuevoMensaje', message);
+const getSocket = () => {
+  if (!isLegacySocketEnabled()) {
+    return null;
+  }
+
+  if (!socket) {
+    const socketIoClient = require('socket.io-client');
+    const io = socketIoClient.default || socketIoClient;
+
+    socket = io(getLegacySocketUrl(), {
+      transports: ['websocket'],
+      jsonp: false,
+    });
+  }
+
+  return socket;
 };
 
-export { socket, sendMessage };
+const sendMessage = (message) => {
+  getSocket()?.emit('nuevoMensaje', message);
+};
+
+export { getSocket, isLegacySocketEnabled, sendMessage };

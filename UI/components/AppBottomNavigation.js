@@ -3,15 +3,11 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import typography from '../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../context/TransactionBalanceThemeContext';
-
-const tabs = [
-  { key: 'home', label: 'Inicio' },
-  { key: 'recipes', label: 'Recetas' },
-  { key: 'inventory', label: 'Inventario' },
-];
+import { getPrimaryNavigationTabs } from './appNavigationModel';
 
 export default function AppBottomNavigation({ activeTab, onTabPress }) {
   const { colors } = useTransactionBalanceTheme();
+  const tabs = getPrimaryNavigationTabs();
 
   return (
     <View
@@ -59,6 +55,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
+    textAlign: 'center',
   },
   tab: {
     alignItems: 'center',

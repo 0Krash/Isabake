@@ -2,8 +2,18 @@ import { createRepository } from './repositoryUtils';
 
 export const INVENTORY_COLLECTION = 'inventory';
 
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
+
 const normalizeLot = (lot = {}) => ({
-  brand: lot.brand || '',
+  brand: capitalizeFirstLetter(lot.brand),
   cost: Number(lot.cost || 0),
   expiryDate: lot.expiryDate || '',
   location: lot.location || '',
@@ -12,7 +22,7 @@ const normalizeLot = (lot = {}) => ({
   purchaseDate: lot.purchaseDate || '',
   quality: lot.quality ?? 3,
   quantity: Number(lot.quantity || 0),
-  supplier: lot.supplier || '',
+  supplier: capitalizeFirstLetter(lot.supplier),
   supplierId:
     lot.supplierId === null || lot.supplierId === undefined
       ? null
@@ -23,12 +33,12 @@ const normalizeLot = (lot = {}) => ({
 });
 
 const normalizeInventoryItem = (item = {}) => ({
-  category: item.category || '',
+  category: capitalizeFirstLetter(item.category),
   lots: Array.isArray(item.lots) ? item.lots.map(normalizeLot) : [],
   minimumStock: Number(item.minimumStock || 0),
-  name: item.name || '',
+  name: capitalizeFirstLetter(item.name),
   notes: item.notes || '',
-  storage: item.storage || '',
+  storage: capitalizeFirstLetter(item.storage),
 });
 
 const repository = createRepository({

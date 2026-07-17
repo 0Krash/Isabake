@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Keyboard, StyleSheet, View, Text } from 'react-native';
+import { Keyboard, Platform, StyleSheet, View, Text } from 'react-native';
 
 import Dashboard from '../../components/TransactionBalance/Dashboard';
 import SwitchSelector from '../../components/TransactionBalance/SwitchSelector';
@@ -12,16 +12,21 @@ import AddTransactionModal from '../../components/TransactionBalance/modals/addT
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
 import useTransactionBalanceData from '../../hooks/TransactionBalance/useTransactionBalanceData';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
-const TransactionBalanceScreen = () => {
+const TransactionBalanceScreen = ({
+  onOpenAppMenu,
+  onOpenConflicts,
+} = {}) => {
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [addTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
   const [deleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
     useState(false);
+  const [pendingMenuAction, setPendingMenuAction] = useState(null);
   const [transactionDetailModalIsVisible, setTransactionDetailModalIsVisible] =
     useState(false);
   const [transactionMenuIsVisible, setTransactionMenuIsVisible] =
@@ -44,10 +49,39 @@ const TransactionBalanceScreen = () => {
   };
 
   const handleOpenStoreManager = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('stores');
+      setTransactionMenuIsVisible(false);
+      return;
+    }
+
     setTransactionMenuIsVisible(false);
     setTimeout(() => {
       setAddStoreModalIsVisible(true);
     }, 90);
+  };
+
+  const handleOpenAppOptions = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('app-options');
+      setTransactionMenuIsVisible(false);
+      return;
+    }
+
+    setTransactionMenuIsVisible(false);
+    onOpenAppMenu?.();
+  };
+
+  const handleMenuDismiss = () => {
+    if (pendingMenuAction === 'stores') {
+      setAddStoreModalIsVisible(true);
+    }
+
+    if (pendingMenuAction === 'app-options') {
+      onOpenAppMenu?.();
+    }
+
+    setPendingMenuAction(null);
   };
 
   return (
@@ -66,6 +100,7 @@ const TransactionBalanceScreen = () => {
           }}
         />
       </View>
+      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
       <Dashboard
         transactionType={transactionType}
         totalAmountByCategoryResponse={totalAmountByCategory}
@@ -87,7 +122,9 @@ const TransactionBalanceScreen = () => {
       />
       <TransactionMenu
         isVisible={transactionMenuIsVisible}
+        onAfterClose={handleMenuDismiss}
         onClose={() => setTransactionMenuIsVisible(false)}
+        onOpenAppOptions={handleOpenAppOptions}
         onOpenStoreManager={handleOpenStoreManager}
       />
       {addTransactionModalIsVisible && (

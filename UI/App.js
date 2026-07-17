@@ -1,4 +1,7 @@
 import {
+  AppState,
+  Linking,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -10,10 +13,31 @@ import TransactionBalanceScreen from './screens/TransactionBalance/TransactionBa
 import RecipeBookScreen from './screens/RecipeBook/RecipeBookScreen';
 import RecipeSaleScreen from './screens/RecipeBook/RecipeSaleScreen';
 import InventoryScreen from './screens/Inventory/InventoryScreen';
+import SyncDiagnosticsScreen from './screens/Dev/SyncDiagnosticsScreen';
+import ConflictResolutionScreen from './screens/Sync/ConflictResolutionScreen';
+import SyncCenterScreen from './screens/Sync/SyncCenterScreen';
+import SyncHistoryScreen from './screens/Sync/SyncHistoryScreen';
+import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
+import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
+import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
+import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
+import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
+import {
+  initializeNetworkStatus,
+  startNetworkMonitoring,
+  stopNetworkMonitoring,
+} from './data/network/networkStatusService';
 import AppBottomNavigation from './components/AppBottomNavigation';
+import AppSecondaryMenu from './components/AppSecondaryMenu';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
 import { initDatabase } from './data/db/database';
+import {
+  handleAutoSyncAppStateChange,
+  initializeAutoSync,
+  startAutoSync,
+  stopAutoSync,
+} from './data/sync/autoSyncService';
 
 export default function App() {
   const colorScheme = useColorScheme();
@@ -21,7 +45,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
+  const [inviteToken, setInviteToken] = useState(null);
+  const [pendingSecondaryTab, setPendingSecondaryTab] = useState(null);
+  const [secondaryMenuVisible, setSecondaryMenuVisible] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
+  const devSyncDiagnosticsEnabled = isSyncDiagnosticsEnabled();
 
   useEffect(() => {
     let isMounted = true;
@@ -29,6 +57,12 @@ export default function App() {
     initDatabase()
       .then(() => {
         if (isMounted) {
+          initializeAutoSync();
+          initializeNetworkStatus();
+          startAutoSync({
+            appState: AppState.currentState === 'active' ? 'active' : 'inactive',
+          });
+          startNetworkMonitoring();
           setDbReady(true);
         }
       })
@@ -42,6 +76,53 @@ export default function App() {
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!dbReady) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      handleAutoSyncAppStateChange(nextState);
+    });
+
+    return () => {
+      subscription?.remove?.();
+      stopNetworkMonitoring();
+      stopAutoSync();
+    };
+  }, [dbReady]);
+
+  useEffect(() => {
+    const handleUrl = (url) => {
+      const navigationState = createInvitationNavigationState(url);
+
+      if (!navigationState.ok) {
+        return;
+      }
+
+      setInviteToken(navigationState.inviteToken);
+      setSecondaryMenuVisible(false);
+      setSaleRecipe(null);
+      setActiveTab('invite');
+    };
+
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) {
+          handleUrl(url);
+        }
+      })
+      .catch(() => {});
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleUrl(url);
+    });
+
+    return () => {
+      subscription?.remove?.();
     };
   }, []);
 
@@ -59,16 +140,87 @@ export default function App() {
       return (
         <RecipeBookScreen
           onOpenInventory={() => setActiveTab('inventory')}
+          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenConflicts={() => setActiveTab('conflicts')}
           onOpenRecipeSale={setSaleRecipe}
         />
       );
     }
 
     if (activeTab === 'inventory') {
-      return <InventoryScreen />;
+      return (
+        <InventoryScreen
+          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenConflicts={() => setActiveTab('conflicts')}
+        />
+      );
     }
 
-    return <TransactionBalanceScreen />;
+    if (activeTab === 'conflicts') {
+      return <ConflictResolutionScreen />;
+    }
+
+    if (activeTab === 'sync') {
+      return (
+        <SyncCenterScreen
+          onOpenConflicts={() => setActiveTab('conflicts')}
+          onOpenHistory={() => setActiveTab('sync-history')}
+        />
+      );
+    }
+
+    if (activeTab === 'sync-history') {
+      return <SyncHistoryScreen onBack={() => setActiveTab('sync')} />;
+    }
+
+    if (activeTab === 'account') {
+      return <AuthStatusScreen onOpenWorkspaces={() => setActiveTab('workspace')} />;
+    }
+
+    if (activeTab === 'workspace') {
+      return <WorkspaceScreen onOpenAccount={() => setActiveTab('account')} />;
+    }
+
+    if (activeTab === 'invite') {
+      return (
+        <InvitationAcceptScreen
+          initialToken={inviteToken}
+          onBackToWorkspace={() => setActiveTab('workspace')}
+          onOpenAccount={() => setActiveTab('account')}
+        />
+      );
+    }
+
+    if (activeTab === 'dev-sync' && devSyncDiagnosticsEnabled) {
+      return <SyncDiagnosticsScreen />;
+    }
+
+    return (
+      <TransactionBalanceScreen
+        onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+        onOpenConflicts={() => setActiveTab('conflicts')}
+      />
+    );
+  };
+
+  const openSecondaryScreen = (tabKey) => {
+    setSaleRecipe(null);
+
+    if (Platform.OS !== 'ios') {
+      setSecondaryMenuVisible(false);
+      setActiveTab(tabKey);
+      return;
+    }
+
+    setPendingSecondaryTab(tabKey);
+    setSecondaryMenuVisible(false);
+  };
+
+  const handleSecondaryMenuDismiss = () => {
+    if (pendingSecondaryTab) {
+      setActiveTab(pendingSecondaryTab);
+      setPendingSecondaryTab(null);
+    }
   };
 
   if (!dbReady || dbError) {
@@ -104,6 +256,13 @@ export default function App() {
           { backgroundColor: theme.colors.appBackground },
         ]}
       >
+        <AppSecondaryMenu
+          devToolsEnabled={devSyncDiagnosticsEnabled}
+          onClose={() => setSecondaryMenuVisible(false)}
+          onDismiss={handleSecondaryMenuDismiss}
+          onSelect={openSecondaryScreen}
+          visible={secondaryMenuVisible && !saleRecipe}
+        />
         <View style={styles.screenContainer}>{renderScreen()}</View>
         {!saleRecipe && (
           <AppBottomNavigation

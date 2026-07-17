@@ -2,8 +2,18 @@ import { createRepository, normalizeName } from './repositoryUtils';
 
 export const RECIPE_TYPE_COLLECTION = 'recipeTypes';
 
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
+
 const normalizeRecipeType = (recipeType = {}) => {
-  const name = String(recipeType.name || '').trim();
+  const name = capitalizeFirstLetter(recipeType.name);
 
   return {
     name,

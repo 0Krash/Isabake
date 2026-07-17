@@ -29,8 +29,10 @@ import TransactionMenu, {
   TransactionMenuButton,
 } from '../../components/TransactionBalance/TransactionMenu';
 import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
+import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
+import BackupStatusIndicator from '../../components/Sync/BackupStatusIndicator';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
@@ -55,6 +57,16 @@ const LIST_WINDOW_SIZE = 7;
 
 const getIngredientUnitLabel = (unitKey) =>
   ingredientUnits.find((unit) => unit.key === unitKey)?.description || 'Unidad';
+
+const capitalizeFirstLetter = (value = '') => {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return '';
+  }
+
+  return `${trimmedValue.charAt(0).toLocaleUpperCase('es-MX')}${trimmedValue.slice(1)}`;
+};
 
 const unitGroups = {
   cda: 'spoon',
@@ -177,6 +189,25 @@ const formatQuantity = (quantity, group) => {
   }
 
   return `${quantity.toFixed(0)} pza`;
+};
+
+const trimTrailingDecimals = (value) =>
+  Number(value.toFixed(2)).toLocaleString('es-MX', {
+    maximumFractionDigits: 2,
+  });
+
+const formatLotQuantity = (quantity, unit) => {
+  const numericQuantity = Number(quantity || 0);
+
+  if (unit === 'kg' && numericQuantity < 1) {
+    return `${Math.round(numericQuantity * 1000)} g`;
+  }
+
+  if (unit === 'l' && numericQuantity < 1) {
+    return `${Math.round(numericQuantity * 1000)} ml`;
+  }
+
+  return `${trimTrailingDecimals(numericQuantity)} ${unit}`;
 };
 
 const formatDate = (dateValue) => {
@@ -324,21 +355,12 @@ const getLotCostSummary = (lotForm) => {
   const taxRate = lotForm.taxApplies ? parseNumericInput(lotForm.taxRate) : 0;
   const totalWithTax = cost + cost * (taxRate / 100);
   const baseQuantity = toBaseQuantity(quantity, normalizeUnit(lotForm.unit));
-  const group = unitGroups[normalizeUnit(lotForm.unit)] || 'piece';
-  const unitLabel =
-    group === 'weight'
-      ? 'g'
-      : group === 'volume'
-        ? 'ml'
-        : normalizeUnit(lotForm.unit);
 
   return {
     baseQuantity,
     cost,
     taxRate,
     totalWithTax,
-    unitCost: baseQuantity > 0 ? totalWithTax / baseQuantity : 0,
-    unitLabel,
   };
 };
 
@@ -468,7 +490,10 @@ function useBottomSheet(isVisible, onClose) {
   };
 }
 
-export default function InventoryScreen() {
+export default function InventoryScreen({
+  onOpenAppMenu,
+  onOpenConflicts,
+} = {}) {
   const { colors } = useTransactionBalanceTheme();
   const {
     createInventoryItem: createInventoryItemLocal,
@@ -480,11 +505,13 @@ export default function InventoryScreen() {
   } = useInventoryData();
   const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [activeInventoryFilter, setActiveInventoryFilter] = useState('all');
+  const [selectedInventoryCategoryFilter, setSelectedInventoryCategoryFilter] =
+    useState('');
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deleteIsProcessing, setDeleteIsProcessing] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
+  const [pendingMenuAction, setPendingMenuAction] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [formIsVisible, setFormIsVisible] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -497,6 +524,29 @@ export default function InventoryScreen() {
     [inventoryItems, selectedItemId],
   );
 
+  const inventoryCategoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          inventoryItems
+            .map((item) => item.category?.trim())
+            .filter(Boolean)
+            .map((category) => [
+              category.toLocaleLowerCase('es-MX'),
+              {
+                id: category.toLocaleLowerCase('es-MX'),
+                name: category,
+              },
+            ]),
+        ).values(),
+      ).sort((categoryA, categoryB) =>
+        categoryA.name.localeCompare(categoryB.name, 'es', {
+          sensitivity: 'base',
+        }),
+      ),
+    [inventoryItems],
+  );
+
   const inventoryItemsWithStatus = useMemo(
     () =>
       inventoryItems.map((item) => ({
@@ -506,80 +556,58 @@ export default function InventoryScreen() {
     [inventoryItems],
   );
 
+  const inventoryItemsMatchingSearch = useMemo(() => {
+    const normalizedSearch = searchText.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return inventoryItemsWithStatus;
+    }
+
+    return inventoryItemsWithStatus.filter((item) =>
+      `${item.name} ${item.category} ${item.storage}`
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [inventoryItemsWithStatus, searchText]);
+
   const inventoryFilterOptions = useMemo(() => {
-    const counts = inventoryItemsWithStatus.reduce(
+    const countsByCategory = inventoryItemsMatchingSearch.reduce(
       (result, item) => {
-        result.all += 1;
-
-        if (item.inventoryStatus.hasLowStock) {
-          result.lowStock += 1;
-        }
-
-        if (item.inventoryStatus.hasSoonExpiry) {
-          result.expiring += 1;
-        }
-
-        if (item.inventoryStatus.hasNoLots) {
-          result.noLots += 1;
-        }
-
-        if (item.inventoryStatus.hasExpiredLots) {
-          result.expired += 1;
-        }
-
+        const category = item.category || '';
+        result[category] = (result[category] || 0) + 1;
         return result;
       },
-      {
-        all: 0,
-        expired: 0,
-        expiring: 0,
-        lowStock: 0,
-        noLots: 0,
-      },
+      {},
     );
 
     return [
-      { key: 'all', label: 'Todos', value: counts.all },
-      { key: 'lowStock', label: 'Stock bajo', value: counts.lowStock },
-      { key: 'expiring', label: 'Caduca pronto', value: counts.expiring },
-      { key: 'noLots', label: 'Sin lotes', value: counts.noLots },
-      { key: 'expired', label: 'Vencidos', value: counts.expired },
+      { category: '', count: inventoryItemsMatchingSearch.length },
+      ...Array.from(
+        new Set([
+          ...inventoryItems.map((item) => item.category || ''),
+          ...Object.keys(countsByCategory),
+        ]),
+      )
+        .filter(Boolean)
+        .sort((categoryA, categoryB) =>
+          categoryA.localeCompare(categoryB, 'es', { sensitivity: 'base' }),
+        )
+        .map((category) => ({
+          category,
+          count: countsByCategory[category] || 0,
+        })),
     ];
-  }, [inventoryItemsWithStatus]);
+  }, [inventoryItems, inventoryItemsMatchingSearch]);
 
   const filteredItems = useMemo(() => {
-    const normalizedSearch = searchText.trim().toLowerCase();
+    if (!selectedInventoryCategoryFilter) {
+      return inventoryItemsMatchingSearch;
+    }
 
-    return inventoryItemsWithStatus.filter((item) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        `${item.name} ${item.category} ${item.storage}`
-          .toLowerCase()
-          .includes(normalizedSearch);
-
-      if (!matchesSearch) {
-        return false;
-      }
-
-      if (activeInventoryFilter === 'lowStock') {
-        return item.inventoryStatus.hasLowStock;
-      }
-
-      if (activeInventoryFilter === 'expiring') {
-        return item.inventoryStatus.hasSoonExpiry;
-      }
-
-      if (activeInventoryFilter === 'noLots') {
-        return item.inventoryStatus.hasNoLots;
-      }
-
-      if (activeInventoryFilter === 'expired') {
-        return item.inventoryStatus.hasExpiredLots;
-      }
-
-      return true;
-    });
-  }, [activeInventoryFilter, inventoryItemsWithStatus, searchText]);
+    return inventoryItemsMatchingSearch.filter(
+      (item) => (item.category || '') === selectedInventoryCategoryFilter,
+    );
+  }, [inventoryItemsMatchingSearch, selectedInventoryCategoryFilter]);
 
   useEffect(() => {
     const keyboardShowListener = Keyboard.addListener('keyboardDidShow', () => {
@@ -628,10 +656,39 @@ export default function InventoryScreen() {
   ]);
 
   const handleOpenStoreManager = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('stores');
+      setMenuIsVisible(false);
+      return;
+    }
+
     setMenuIsVisible(false);
     setTimeout(() => {
       setAddStoreModalIsVisible(true);
     }, 90);
+  };
+
+  const handleOpenAppOptions = () => {
+    if (Platform.OS === 'ios') {
+      setPendingMenuAction('app-options');
+      setMenuIsVisible(false);
+      return;
+    }
+
+    setMenuIsVisible(false);
+    onOpenAppMenu?.();
+  };
+
+  const handleMenuDismiss = () => {
+    if (pendingMenuAction === 'stores') {
+      setAddStoreModalIsVisible(true);
+    }
+
+    if (pendingMenuAction === 'app-options') {
+      onOpenAppMenu?.();
+    }
+
+    setPendingMenuAction(null);
   };
 
   const openCreateForm = () => {
@@ -730,24 +787,18 @@ export default function InventoryScreen() {
       return false;
     }
 
-    if (lotForm.expiryApplies && !lotForm.expiryDate) {
-      Alert.alert(
-        'Caducidad requerida',
-        'Selecciona la fecha de caducidad o indica que no aplica.',
-      );
-      return false;
-    }
-
     const nextLotId = lotIdToUpdate || createLocalId('lot');
     const nextLot = {
       ...lotForm,
       cost: lotForm.cost || '0',
-      expiryDate: lotForm.expiryApplies ? lotForm.expiryDate : '',
+      expiryApplies: Boolean(lotForm.expiryDate),
+      expiryDate: lotForm.expiryDate || '',
       id: nextLotId,
       lotId: nextLotId,
       quality: normalizeQuality(lotForm.quality),
       quantity,
-      taxRate: lotForm.taxApplies ? lotForm.taxRate : '',
+      taxApplies: Boolean(parseNumericInput(lotForm.taxRate)),
+      taxRate: lotForm.taxRate || '',
       unit: normalizeUnit(lotForm.unit),
     };
 
@@ -860,35 +911,70 @@ export default function InventoryScreen() {
     });
   };
 
-  const activeFilterLabel =
-    inventoryFilterOptions.find(
-      (filter) => filter.key === activeInventoryFilter,
-    )?.label || 'Todos';
-  const activeFilterEmptyTitle =
-    {
-      expired: 'Sin lotes vencidos',
-      expiring: 'Sin caducidades próximas',
-      lowStock: 'Sin ingredientes con stock bajo',
-      noLots: 'Sin ingredientes sin lotes',
-    }[activeInventoryFilter] || 'Sin resultados';
+  const confirmDeleteInventoryCategory = (category) => {
+    requestDeleteConfirmation({
+      confirmLabel: 'Eliminar',
+      message: `Se quitará la categoría "${category.name}" de los ingredientes que la usan.`,
+      onConfirm: async () => {
+        const itemsToUpdate = inventoryItems.filter(
+          (item) => item.category === category.name,
+        );
+
+        try {
+          const updatedItems = await Promise.all(
+            itemsToUpdate.map((item) =>
+              updateInventoryItemLocal(item.id, {
+                ...item,
+                category: '',
+              }),
+            ),
+          );
+          const updatedItemsById = new Map(
+            updatedItems.map((item) => [item.id, item]),
+          );
+
+          setInventoryItems((items) =>
+            items.map((item) => updatedItemsById.get(item.id) || item),
+          );
+          setInventoryForm((currentForm) =>
+            currentForm.category === category.name
+              ? {
+                  ...currentForm,
+                  category: '',
+                }
+              : currentForm,
+          );
+        } catch (error) {
+          console.warn('Error al eliminar categoría de inventario:', error);
+          Alert.alert(
+            'No se pudo eliminar',
+            'No se pudo quitar la categoría localmente. Intenta nuevamente.',
+          );
+        }
+      },
+      title: 'Eliminar categoría',
+    });
+  };
+
   const inventorySearchIsActive = searchText.trim().length > 0;
-  const inventoryFilterIsActive = activeInventoryFilter !== 'all';
+  const inventoryFilterIsActive = Boolean(selectedInventoryCategoryFilter);
+  const activeFilterSummary = [
+    inventorySearchIsActive ? `"${searchText.trim()}"` : '',
+    inventoryFilterIsActive ? selectedInventoryCategoryFilter : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const inventoryEmptyTitle = isLoadingInventory
     ? 'Cargando inventario'
     : inventorySearchIsActive
       ? 'Sin resultados'
       : inventoryFilterIsActive
-        ? activeFilterEmptyTitle
+        ? `Sin ingredientes en ${selectedInventoryCategoryFilter}`
         : 'Sin ingredientes';
   const inventoryEmptyMessage = isLoadingInventory
     ? 'Estamos consultando la base de datos.'
     : inventorySearchIsActive || inventoryFilterIsActive
-      ? `No encontramos ingredientes para ${[
-          inventorySearchIsActive ? `"${searchText.trim()}"` : '',
-          inventoryFilterIsActive ? activeFilterLabel.toLowerCase() : '',
-        ]
-          .filter(Boolean)
-          .join(' · ')}.`
+      ? `No encontramos ingredientes para ${activeFilterSummary}.`
       : 'Agrega un ingrediente para comenzar a controlar tu inventario.';
 
   return (
@@ -910,6 +996,8 @@ export default function InventoryScreen() {
           }}
         />
       </View>
+
+      <BackupStatusIndicator onPrimaryAction={onOpenConflicts} />
 
       <View style={styles.searchContainer}>
         <TextInput
@@ -952,16 +1040,40 @@ export default function InventoryScreen() {
         colors={colors}
         filters={inventoryFilterOptions}
         getAccessibilityLabel={(filter) =>
-          `Filtrar inventario por ${filter.label}: ${filter.value}`
+          `Filtrar inventario por ${filter.category || 'todos los ingredientes'}: ${filter.count} ingredientes`
         }
-        getKey={(filter) => filter.key}
-        getLabel={(filter) => filter.label}
-        getValue={(filter) => filter.value}
+        getKey={(filter) => filter.category}
+        getLabel={(filter) => filter.category || 'Todos'}
+        getValue={(filter) => filter.count}
         inactiveTextColor={colors.textMuted}
-        onSelect={(filter) => setActiveInventoryFilter(filter.key)}
+        onSelect={(filter) =>
+          setSelectedInventoryCategoryFilter(filter.category)
+        }
         scrollStyle={styles.inventoryFilterScroll}
-        selectedKey={activeInventoryFilter}
+        selectedKey={selectedInventoryCategoryFilter}
+        showValues={false}
       />
+      {(inventorySearchIsActive || inventoryFilterIsActive) && (
+        <View style={styles.activeFilterBar}>
+          <Text style={[styles.activeFilterText, { color: colors.textMuted }]}>
+            {activeFilterSummary}
+          </Text>
+          <TouchableOpacity
+            accessibilityLabel="Limpiar filtros de inventario"
+            accessibilityRole="button"
+            activeOpacity={0.75}
+            onPress={() => {
+              Keyboard.dismiss();
+              setSearchText('');
+              setSelectedInventoryCategoryFilter('');
+            }}
+          >
+            <Text style={[styles.resetText, { color: colors.primaryText }]}>
+              Limpiar filtros
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         contentContainerStyle={styles.inventoryList}
@@ -972,15 +1084,7 @@ export default function InventoryScreen() {
         maxToRenderPerBatch={LIST_RENDER_BATCH_SIZE}
         removeClippedSubviews={Platform.OS === 'android'}
         renderItem={({ item }) => {
-          const { inventoryStatus } = item;
-          const summary = inventoryStatus.summary;
-          const statusBadges = [
-            inventoryStatus.hasExpiredLots ? 'Vencido' : '',
-            inventoryStatus.hasLowStock ? 'Stock bajo' : '',
-            inventoryStatus.hasMixedStockUnits ? 'Stock mixto' : '',
-            inventoryStatus.hasSoonExpiry ? 'Caduca pronto' : '',
-            inventoryStatus.hasNoLots ? 'Sin lotes' : '',
-          ].filter(Boolean);
+          const summary = item.inventoryStatus.summary;
 
           return (
             <TouchableOpacity
@@ -1049,32 +1153,6 @@ export default function InventoryScreen() {
                   Mínimo: {item.minimumStock} {summary.stockBaseUnitLabel}
                 </Text>
               )}
-              {statusBadges.length > 0 && (
-                <View style={styles.inventoryBadgeRow}>
-                  {statusBadges.map((badge) => {
-                    const isDanger = badge === 'Vencido';
-                    return (
-                      <Text
-                        key={badge}
-                        numberOfLines={1}
-                        style={[
-                          styles.inventoryStatusBadge,
-                          {
-                            backgroundColor: isDanger
-                              ? colors.dangerSurface
-                              : colors.primaryMuted,
-                            color: isDanger
-                              ? colors.danger
-                              : colors.primaryText,
-                          },
-                        ]}
-                      >
-                        {badge}
-                      </Text>
-                    );
-                  })}
-                </View>
-              )}
             </TouchableOpacity>
           );
         }}
@@ -1095,7 +1173,7 @@ export default function InventoryScreen() {
                   onPress={() => {
                     Keyboard.dismiss();
                     setSearchText('');
-                    setActiveInventoryFilter('all');
+                    setSelectedInventoryCategoryFilter('');
                   }}
                   style={[
                     styles.emptyActionButton,
@@ -1136,7 +1214,9 @@ export default function InventoryScreen() {
 
       <TransactionMenu
         isVisible={menuIsVisible}
+        onAfterClose={handleMenuDismiss}
         onClose={() => setMenuIsVisible(false)}
+        onOpenAppOptions={handleOpenAppOptions}
         onOpenStoreManager={handleOpenStoreManager}
       />
 
@@ -1177,11 +1257,13 @@ export default function InventoryScreen() {
       />
 
       <InventoryFormModal
+        categoryOptions={inventoryCategoryOptions}
         colors={colors}
         form={inventoryForm}
         isVisible={formIsVisible}
         onChange={setInventoryForm}
         onClose={closeForm}
+        onDeleteCategory={confirmDeleteInventoryCategory}
         onSave={saveInventoryItem}
         title={editingItemId ? 'Editar ingrediente' : 'Nuevo ingrediente'}
       />
@@ -1191,7 +1273,10 @@ export default function InventoryScreen() {
         transparent
         visible={Boolean(deleteDialog)}
       >
-        <View style={styles.deleteModalRoot}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.deleteModalRoot}
+        >
           <Pressable
             onPress={closeDeleteDialog}
             style={[
@@ -1327,7 +1412,7 @@ export default function InventoryScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1373,10 +1458,7 @@ const InventoryDetailModal = ({
   const lotCreationIsActive =
     !editingLotId && (Boolean(focusedLotField) || hasLotFormChanges(lotForm));
   const lotFormIsValid = Boolean(
-    lotForm.brand.trim() &&
-    Number(lotForm.quantity || 0) &&
-    lotForm.supplier &&
-    (!lotForm.expiryApplies || lotForm.expiryDate),
+    lotForm.brand.trim() && Number(lotForm.quantity || 0) && lotForm.supplier,
   );
 
   useEffect(() => {
@@ -1438,8 +1520,8 @@ const InventoryDetailModal = ({
       return;
     }
 
-    const selectedStore = stores.find(
-      (store) => idsMatch(store.storeId, lotForm.supplierId),
+    const selectedStore = stores.find((store) =>
+      idsMatch(store.storeId, lotForm.supplierId),
     );
 
     if (!selectedStore) {
@@ -1705,7 +1787,11 @@ const InventoryDetailModal = ({
 
             cancelLotCreation();
           }}
-          style={[styles.secondaryButton, { borderColor: colors.border }]}
+          style={[
+            styles.secondaryButton,
+            styles.lotFormSecondaryAction,
+            { borderColor: colors.border },
+          ]}
         >
           <Text
             style={[styles.secondaryButtonText, { color: colors.textPrimary }]}
@@ -1777,7 +1863,7 @@ const InventoryDetailModal = ({
                   {lot.brand}
                 </Text>
                 <Text style={[styles.lotMeta, { color: colors.textMuted }]}>
-                  {lot.quantity} {lot.unit}
+                  {formatLotQuantity(lot.quantity, lot.unit)}
                 </Text>
               </View>
               <Text style={[styles.lotCost, { color: colors.textPrimary }]}>
@@ -1937,212 +2023,220 @@ const InventoryDetailModal = ({
             style={StyleSheet.absoluteFill}
           />
         </Animated.View>
-        <Animated.View
-          style={[
-            styles.detailSheet,
-            { backgroundColor: colors.screenBackground },
-            detailSheet.sheetStyle,
-          ]}
-          {...detailSheet.sheetPanHandlers}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          pointerEvents="box-none"
+          style={styles.keyboardSheetWrapper}
         >
-          <View
-            style={styles.dragHandleArea}
-            {...detailSheet.handlePanHandlers}
+          <Animated.View
+            style={[
+              styles.detailSheet,
+              { backgroundColor: colors.screenBackground },
+              detailSheet.sheetStyle,
+            ]}
+            {...detailSheet.sheetPanHandlers}
           >
             <View
-              style={[styles.dragHandle, { backgroundColor: colors.border }]}
-            />
-          </View>
-          <View style={styles.detailHeader}>
-            <View
-              style={[
-                styles.ingredientInitials,
-                { backgroundColor: colors.primaryMuted },
-              ]}
+              style={styles.dragHandleArea}
+              {...detailSheet.handlePanHandlers}
             >
-              <Text
+              <View
+                style={[styles.dragHandle, { backgroundColor: colors.border }]}
+              />
+            </View>
+            <View style={styles.detailHeader}>
+              <View
                 style={[
-                  styles.ingredientInitialsText,
-                  { color: colors.primaryText },
+                  styles.ingredientInitials,
+                  { backgroundColor: colors.primaryMuted },
                 ]}
               >
-                {getInitials(item.name)}
-              </Text>
-            </View>
-            <View style={styles.detailHeaderText}>
-              <View style={styles.detailTitleRow}>
                 <Text
-                  numberOfLines={1}
-                  style={[styles.detailTitle, { color: colors.textPrimary }]}
-                >
-                  {item.name}
-                </Text>
-                <TouchableOpacity
-                  accessibilityLabel="Editar ingrediente"
-                  accessibilityRole="button"
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    onEditItem(item);
-                  }}
                   style={[
-                    styles.editIngredientIconButton,
-                    {
-                      backgroundColor: colors.fieldBackground,
-                      borderColor: colors.border,
-                    },
+                    styles.ingredientInitialsText,
+                    { color: colors.primaryText },
                   ]}
                 >
-                  <Edit3Icon color={colors.textSecondary} />
-                </TouchableOpacity>
+                  {getInitials(item.name)}
+                </Text>
               </View>
-              <Text
-                style={[styles.detailSubtitle, { color: colors.textMuted }]}
-              >
-                {item.category || 'Sin categoría'} ·{' '}
-                {item.storage || 'Sin ubicación'}
-              </Text>
-            </View>
-          </View>
-
-          <ScrollView
-            ref={detailScrollRef}
-            contentContainerStyle={styles.detailContent}
-            onScroll={detailSheet.onScroll}
-            keyboardShouldPersistTaps="handled"
-            scrollEventThrottle={16}
-            showsVerticalScrollIndicator={false}
-          >
-            <View
-              style={[
-                styles.summaryPanel,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            >
-              <InfoBlock
-                colors={colors}
-                label="Total"
-                value={summary.totalText}
-              />
-              <InfoBlock
-                colors={colors}
-                label="Marcas y lotes"
-                value={`${item.lots.length}`}
-              />
-              <InfoBlock
-                colors={colors}
-                label="Caduca pronto"
-                value={formatDate(summary.nextExpiry?.expiryDate)}
-              />
+              <View style={styles.detailHeaderText}>
+                <View style={styles.detailTitleRow}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.detailTitle, { color: colors.textPrimary }]}
+                  >
+                    {item.name}
+                  </Text>
+                  <TouchableOpacity
+                    accessibilityLabel="Editar ingrediente"
+                    accessibilityRole="button"
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      onEditItem(item);
+                    }}
+                    style={[
+                      styles.editIngredientIconButton,
+                      {
+                        backgroundColor: colors.fieldBackground,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Edit3Icon color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text
+                  style={[styles.detailSubtitle, { color: colors.textMuted }]}
+                >
+                  {item.category || 'Sin categoría'} ·{' '}
+                  {item.storage || 'Sin ubicación'}
+                </Text>
+              </View>
             </View>
 
-            {renderLotsSection()}
-
-            <Text
-              onLayout={(event) => {
-                lotFormTitleY.current = event.nativeEvent.layout.y;
-              }}
-              style={[styles.sectionTitle, { color: colors.textPrimary }]}
+            <ScrollView
+              ref={detailScrollRef}
+              contentContainerStyle={styles.detailContent}
+              onScroll={detailSheet.onScroll}
+              keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={16}
+              showsVerticalScrollIndicator={false}
             >
-              {editingLotId ? 'Editar lote' : 'Agregar lote'}
-            </Text>
-            <View
-              onLayout={(event) => {
-                lotFormY.current = event.nativeEvent.layout.y;
-              }}
-              style={[
-                styles.formPanel,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: editingLotId ? colors.primary : colors.border,
-                },
-                editingLotId && styles.formPanelEditing,
-              ]}
-            >
-              <Text
-                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+              <View
+                style={[
+                  styles.summaryPanel,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
               >
-                Producto
-              </Text>
-              <BrandInput
-                allInventoryItems={inventoryItems}
-                colors={colors}
-                isFocused={focusedLotField === 'brand'}
-                onBlur={() => setFocusedLotField(null)}
-                onFocus={() => {
-                  setFocusedLotField('brand');
-                  scrollToLotFormStart();
-                }}
-                onChangeText={(value) =>
-                  setLotForm((current) => ({ ...current, brand: value }))
-                }
-                value={lotForm.brand}
-              />
-              <Text
-                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
-              >
-                Cantidad y costo
-              </Text>
-              <View style={styles.formRow}>
-                <FormInput
+                <InfoBlock
                   colors={colors}
-                  isFocused={focusedLotField === 'quantity'}
-                  keyboardType="numeric"
-                  label="Cantidad"
+                  label="Total"
+                  value={summary.totalText}
+                />
+                <InfoBlock
+                  colors={colors}
+                  label="Marcas y lotes"
+                  value={`${item.lots.length}`}
+                />
+                <InfoBlock
+                  colors={colors}
+                  label="Caduca pronto"
+                  value={formatDate(summary.nextExpiry?.expiryDate)}
+                />
+              </View>
+
+              {renderLotsSection()}
+
+              <Text
+                onLayout={(event) => {
+                  lotFormTitleY.current = event.nativeEvent.layout.y;
+                }}
+                style={[styles.sectionTitle, { color: colors.textPrimary }]}
+              >
+                {editingLotId ? 'Editar lote' : 'Agregar lote'}
+              </Text>
+              <View
+                onLayout={(event) => {
+                  lotFormY.current = event.nativeEvent.layout.y;
+                }}
+                style={[
+                  styles.formPanel,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: editingLotId ? colors.primary : colors.border,
+                  },
+                  editingLotId && styles.formPanelEditing,
+                ]}
+              >
+                {/* <Text
+                  style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+                >
+                  Producto
+                </Text> */}
+                <BrandInput
+                  allInventoryItems={inventoryItems}
+                  colors={colors}
+                  isFocused={focusedLotField === 'brand'}
                   onBlur={() => setFocusedLotField(null)}
                   onFocus={() => {
-                    setFocusedLotField('quantity');
+                    setFocusedLotField('brand');
                     scrollToLotFormStart();
                   }}
                   onChangeText={(value) =>
-                    setLotForm((current) => ({ ...current, quantity: value }))
+                    setLotForm((current) => ({ ...current, brand: value }))
                   }
-                  value={lotForm.quantity}
+                  value={lotForm.brand}
                 />
-                <UnitSelector
-                  colors={colors}
-                  isFocused={focusedLotField === 'unit'}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setFocusedLotField('unit');
-                    setUnitPickerIsVisible(true);
-                  }}
-                  value={lotForm.unit}
-                />
-              </View>
-              <View style={styles.formRow}>
-                <FormInput
-                  colors={colors}
-                  isFocused={focusedLotField === 'cost'}
-                  keyboardType="decimal-pad"
-                  label="Costo total del lote"
-                  onBlur={() => {
-                    setFocusedLotField(null);
-                    setLotForm((current) => ({
-                      ...current,
-                      cost: formatCurrencyInput(current.cost),
-                    }));
-                  }}
-                  onChangeText={(value) =>
-                    setLotForm((current) => ({ ...current, cost: value }))
-                  }
-                  onFocus={() => {
-                    setFocusedLotField('cost');
-                    scrollToLotFormStart();
-                  }}
-                  prefix="MXN"
-                  value={lotForm.cost}
-                />
-                <QualitySelector
-                  colors={colors}
-                  isFocused={focusedLotField === 'quality'}
-                  value={lotForm.quality}
-                  onChange={(quality) =>
-                    setLotForm((current) => ({ ...current, quality }))
-                  }
-                />
-              </View>
-              {(lotCostSummary.cost > 0 || lotCostSummary.baseQuantity > 0) && (
+                {/* <Text
+                  style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+                >
+                  Cantidad y costo
+                </Text> */}
+                <View style={styles.formRow}>
+                  <FormInput
+                    colors={colors}
+                    isFocused={focusedLotField === 'quantity'}
+                    keyboardType="numeric"
+                    label="Cantidad"
+                    onBlur={() => setFocusedLotField(null)}
+                    onFocus={() => {
+                      setFocusedLotField('quantity');
+                      scrollToLotFormStart();
+                    }}
+                    onChangeText={(value) =>
+                      setLotForm((current) => ({ ...current, quantity: value }))
+                    }
+                    value={lotForm.quantity}
+                  />
+                  <UnitSelector
+                    colors={colors}
+                    isFocused={focusedLotField === 'unit'}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setFocusedLotField('unit');
+                      setUnitPickerIsVisible(true);
+                    }}
+                    value={lotForm.unit}
+                  />
+                </View>
+                <View style={styles.formRow}>
+                  <FormInput
+                    colors={colors}
+                    isFocused={focusedLotField === 'cost'}
+                    keyboardType="decimal-pad"
+                    label="Costo total del lote"
+                    onBlur={() => {
+                      setFocusedLotField(null);
+                      setLotForm((current) => ({
+                        ...current,
+                        cost: formatCurrencyInput(current.cost),
+                      }));
+                    }}
+                    onChangeText={(value) =>
+                      setLotForm((current) => ({ ...current, cost: value }))
+                    }
+                    onFocus={() => {
+                      setFocusedLotField('cost');
+                      scrollToLotFormStart();
+                    }}
+                    prefix="MXN"
+                    value={lotForm.cost}
+                  />
+                  <QualitySelector
+                    colors={colors}
+                    isFocused={focusedLotField === 'quality'}
+                    value={lotForm.quality}
+                    onChange={(quality) =>
+                      setLotForm((current) => ({ ...current, quality }))
+                    }
+                  />
+                </View>
+                {/* {(lotCostSummary.cost > 0 || lotCostSummary.baseQuantity > 0) && (
                 <View
                   style={[
                     styles.costPreviewPanel,
@@ -2163,11 +2257,6 @@ const InventoryDetailModal = ({
                   />
                   <InfoBlock
                     colors={colors}
-                    label={`Costo por ${lotCostSummary.unitLabel}`}
-                    value={formatMoney(lotCostSummary.unitCost)}
-                  />
-                  <InfoBlock
-                    colors={colors}
                     label="IVA"
                     value={
                       lotCostSummary.taxRate
@@ -2176,165 +2265,148 @@ const InventoryDetailModal = ({
                     }
                   />
                 </View>
-              )}
-              <Text
-                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
-              >
-                Caducidad e impuestos
-              </Text>
-              <View style={styles.formRow}>
-                <ExpirySelector
-                  colors={colors}
-                  datePickerIsVisible={datePickerIsVisible}
-                  expiryApplies={lotForm.expiryApplies}
-                  expiryDate={lotForm.expiryDate}
-                  isFocused={focusedLotField === 'expiry'}
-                  onApplyChange={(expiryApplies) => {
-                    Keyboard.dismiss();
-                    setFocusedLotField('expiry');
-                    if (!expiryApplies) {
+              )} */}
+                {/* <Text
+                  style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+                >
+                  Caducidad e impuestos
+                </Text> */}
+                <View style={styles.formRow}>
+                  <ExpirySelector
+                    colors={colors}
+                    datePickerIsVisible={datePickerIsVisible}
+                    expiryDate={lotForm.expiryDate}
+                    isFocused={focusedLotField === 'expiry'}
+                    onConfirm={(date) => {
+                      setLotForm((current) => ({
+                        ...current,
+                        expiryApplies: true,
+                        expiryDate: formatDateForApi(date),
+                      }));
+                      setDatePickerIsVisible(false);
+                    }}
+                    onHidePicker={() => setDatePickerIsVisible(false)}
+                    onClear={() => {
+                      Keyboard.dismiss();
                       setDatePickerIsVisible(false);
                       setLotForm((current) => ({
                         ...current,
                         expiryApplies: false,
                         expiryDate: '',
                       }));
-                      return;
+                    }}
+                    onShowPicker={() => {
+                      Keyboard.dismiss();
+                      setFocusedLotField('expiry');
+                      setLotForm((current) => ({
+                        ...current,
+                        expiryApplies: true,
+                      }));
+                      setDatePickerIsVisible(true);
+                    }}
+                  />
+                  <TaxSelector
+                    colors={colors}
+                    isFocused={focusedLotField === 'tax'}
+                    onRateChange={(taxRate) =>
+                      setLotForm((current) => ({
+                        ...current,
+                        taxApplies: Boolean(parseNumericInput(taxRate)),
+                        taxRate,
+                      }))
                     }
-
-                    setLotForm((current) => ({
-                      ...current,
-                      expiryApplies: true,
-                    }));
-                    setDatePickerIsVisible(true);
-                  }}
-                  onConfirm={(date) => {
-                    setLotForm((current) => ({
-                      ...current,
-                      expiryApplies: true,
-                      expiryDate: formatDateForApi(date),
-                    }));
-                    setDatePickerIsVisible(false);
-                  }}
-                  onHidePicker={() => setDatePickerIsVisible(false)}
-                  onShowPicker={() => {
-                    Keyboard.dismiss();
-                    setFocusedLotField('expiry');
-                    setLotForm((current) => ({
-                      ...current,
-                      expiryApplies: true,
-                    }));
-                    setDatePickerIsVisible(true);
-                  }}
-                />
-                <TaxSelector
+                    onRateBlur={() => {
+                      setFocusedLotField(null);
+                      setLotForm((current) => ({
+                        ...current,
+                        taxApplies: Boolean(parseNumericInput(current.taxRate)),
+                        taxRate: formatPercentageInput(current.taxRate),
+                      }));
+                    }}
+                    onRateFocus={() => {
+                      setFocusedLotField('tax');
+                      scrollToLotFormStart();
+                    }}
+                    rate={lotForm.taxRate}
+                  />
+                </View>
+                {/* <Text
+                  style={[styles.formGroupTitle, { color: colors.textPrimary }]}
+                >
+                  Proveedor
+                </Text> */}
+                <StoreSelector
                   colors={colors}
-                  applies={lotForm.taxApplies}
-                  isFocused={focusedLotField === 'tax'}
-                  onChange={(taxApplies) => {
-                    setFocusedLotField('tax');
-                    setLotForm((current) => ({
-                      ...current,
-                      taxApplies,
-                      taxRate: taxApplies ? current.taxRate : '',
-                    }));
+                  isFocused={focusedLotField === 'supplier'}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setFocusedLotField('supplier');
+                    setStorePickerIsVisible(true);
                   }}
-                  onRateChange={(taxRate) =>
-                    setLotForm((current) => ({ ...current, taxRate }))
-                  }
-                  onRateBlur={() => {
-                    setFocusedLotField(null);
-                    setLotForm((current) => ({
-                      ...current,
-                      taxRate: formatPercentageInput(current.taxRate),
-                    }));
-                  }}
-                  onRateFocus={() => {
-                    setFocusedLotField('tax');
-                    scrollToLotFormStart();
-                  }}
-                  rate={lotForm.taxRate}
+                  value={lotForm.supplier}
                 />
+                {renderLotFormActions(styles.lotFormActionsInline)}
               </View>
-              <Text
-                style={[styles.formGroupTitle, { color: colors.textPrimary }]}
-              >
-                Proveedor
-              </Text>
-              <StoreSelector
-                colors={colors}
-                isFocused={focusedLotField === 'supplier'}
+
+              <TouchableOpacity
+                accessibilityLabel={`Eliminar ingrediente ${item.name}`}
+                accessibilityRole="button"
+                activeOpacity={0.8}
                 onPress={() => {
                   Keyboard.dismiss();
-                  setFocusedLotField('supplier');
-                  setStorePickerIsVisible(true);
+                  onDeleteItem(item);
                 }}
-                value={lotForm.supplier}
-              />
-            </View>
-
-            <TouchableOpacity
-              accessibilityLabel={`Eliminar ingrediente ${item.name}`}
-              accessibilityRole="button"
-              activeOpacity={0.8}
-              onPress={() => {
+                style={[
+                  styles.deleteIngredientButton,
+                  { borderColor: colors.danger },
+                ]}
+              >
+                <Text
+                  style={[styles.dangerButtonText, { color: colors.danger }]}
+                >
+                  Eliminar ingrediente
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <UnitPickerModal
+              colors={colors}
+              isVisible={unitPickerIsVisible}
+              onClose={() => setUnitPickerIsVisible(false)}
+              onSelect={(unit) => {
                 Keyboard.dismiss();
-                onDeleteItem(item);
+                setLotForm((current) => ({ ...current, unit }));
+                setUnitPickerIsVisible(false);
               }}
-              style={[
-                styles.deleteIngredientButton,
-                { borderColor: colors.danger },
-              ]}
-            >
-              <Text style={[styles.dangerButtonText, { color: colors.danger }]}>
-                Eliminar ingrediente
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-          {renderLotFormActions([
-            styles.lotFormActionsFooter,
-            {
-              backgroundColor: colors.screenBackground,
-              borderTopColor: colors.border,
-            },
-          ])}
-          <UnitPickerModal
-            colors={colors}
-            isVisible={unitPickerIsVisible}
-            onClose={() => setUnitPickerIsVisible(false)}
-            onSelect={(unit) => {
-              Keyboard.dismiss();
-              setLotForm((current) => ({ ...current, unit }));
-              setUnitPickerIsVisible(false);
-            }}
-            selectedUnit={lotForm.unit}
-          />
-          <StorePickerModal
-            colors={colors}
-            isLoading={storesAreLoading}
-            isVisible={storePickerIsVisible}
-            onClose={() => setStorePickerIsVisible(false)}
-            onOpenStoreManager={() => {
-              Keyboard.dismiss();
-              setStorePickerIsVisible(false);
-              setTimeout(() => {
-                onOpenStoreManager?.();
-              }, 120);
-            }}
-            onSelect={(store) => {
-              Keyboard.dismiss();
-              setLotForm((current) => ({
-                ...current,
-                supplier:
-                  getStoreValue(store, 'Alias') || getStoreValue(store, 'Name'),
-                supplierId: store.storeId,
-              }));
-              setStorePickerIsVisible(false);
-            }}
-            selectedStoreId={lotForm.supplierId}
-            stores={stores}
-          />
-        </Animated.View>
+              selectedUnit={lotForm.unit}
+            />
+            <StorePickerModal
+              colors={colors}
+              isLoading={storesAreLoading}
+              isVisible={storePickerIsVisible}
+              onClose={() => setStorePickerIsVisible(false)}
+              onOpenStoreManager={() => {
+                Keyboard.dismiss();
+                setStorePickerIsVisible(false);
+                setTimeout(() => {
+                  onOpenStoreManager?.();
+                }, 120);
+              }}
+              onSelect={(store) => {
+                Keyboard.dismiss();
+                setLotForm((current) => ({
+                  ...current,
+                  supplier:
+                    getStoreValue(store, 'Alias') ||
+                    getStoreValue(store, 'Name'),
+                  supplierId: store.storeId,
+                }));
+                setStorePickerIsVisible(false);
+              }}
+              selectedStoreId={lotForm.supplierId}
+              stores={stores}
+            />
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -2540,10 +2612,9 @@ const QualitySelector = ({ colors, isFocused, onChange, value }) => (
 const ExpirySelector = ({
   colors,
   datePickerIsVisible,
-  expiryApplies,
   expiryDate,
   isFocused,
-  onApplyChange,
+  onClear,
   onConfirm,
   onHidePicker,
   onShowPicker,
@@ -2552,80 +2623,49 @@ const ExpirySelector = ({
     <Text style={[styles.formLabel, { color: colors.textMuted }]}>
       Caducidad
     </Text>
-    <View
+    <TouchableOpacity
+      accessibilityLabel="Seleccionar fecha de caducidad"
+      accessibilityRole="button"
+      activeOpacity={0.75}
+      onPress={onShowPicker}
       style={[
-        styles.taxSelector,
+        styles.optionalField,
         {
           backgroundColor: colors.fieldBackground,
           borderColor: isFocused ? colors.primary : colors.border,
         },
       ]}
     >
-      {[
-        { label: 'No', value: false },
-        { label: 'Sí', value: true },
-      ].map((option) => {
-        const isSelected = expiryApplies === option.value;
-
-        return (
-          <TouchableOpacity
-            accessibilityLabel={`Caducidad ${option.label}`}
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            key={option.label}
-            onPress={() => {
-              Keyboard.dismiss();
-              onApplyChange(option.value);
-            }}
-            style={[
-              styles.taxOption,
-              {
-                backgroundColor: isSelected
-                  ? colors.primaryMuted
-                  : 'transparent',
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.taxOptionText,
-                {
-                  color: isSelected ? colors.primaryText : colors.textSecondary,
-                },
-              ]}
-            >
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-    {expiryApplies && (
-      <TouchableOpacity
-        accessibilityLabel="Seleccionar fecha de caducidad"
-        accessibilityRole="button"
-        activeOpacity={0.75}
-        onPress={onShowPicker}
+      <Text
         style={[
-          styles.dateApplyField,
-          {
-            backgroundColor: colors.fieldBackground,
-            borderColor: isFocused ? colors.primary : colors.border,
-          },
+          styles.optionalFieldValue,
+          { color: expiryDate ? colors.textPrimary : colors.textMuted },
         ]}
       >
-        <Text
-          style={[
-            styles.dateApplyValue,
-            { color: expiryDate ? colors.textPrimary : colors.textMuted },
-          ]}
+        {expiryDate ? inventoryDateToSelected(expiryDate) : 'Selecciona fecha'}
+      </Text>
+      {!!expiryDate && (
+        <TouchableOpacity
+          accessibilityLabel="Quitar fecha de caducidad"
+          accessibilityRole="button"
+          activeOpacity={0.75}
+          onPress={(event) => {
+            event.stopPropagation();
+            onClear();
+          }}
+          style={styles.optionalFieldAction}
         >
-          {expiryDate
-            ? inventoryDateToSelected(expiryDate)
-            : 'Seleccionar fecha'}
-        </Text>
-      </TouchableOpacity>
-    )}
+          <Text
+            style={[
+              styles.optionalFieldActionText,
+              { color: colors.primaryText },
+            ]}
+          >
+            Quitar
+          </Text>
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
     <DatePickerComponent
       handleConfirm={onConfirm}
       hideDatePicker={onHidePicker}
@@ -2648,10 +2688,8 @@ const ExpirySelector = ({
 );
 
 const TaxSelector = ({
-  applies,
   colors,
   isFocused,
-  onChange,
   onRateBlur,
   onRateChange,
   onRateFocus,
@@ -2659,74 +2697,25 @@ const TaxSelector = ({
 }) => (
   <View style={styles.formField}>
     <Text style={[styles.formLabel, { color: colors.textMuted }]}>IVA</Text>
-    <View
+    <TextInput
+      accessibilityLabel="Porcentaje de IVA"
+      keyboardType="decimal-pad"
+      onBlur={onRateBlur}
+      onChangeText={onRateChange}
+      onFocus={onRateFocus}
+      placeholder="Ingresa porcentaje"
+      placeholderTextColor={colors.textMuted}
       style={[
-        styles.taxSelector,
+        styles.optionalField,
+        styles.optionalFieldInput,
         {
           backgroundColor: colors.fieldBackground,
           borderColor: isFocused ? colors.primary : colors.border,
+          color: colors.textPrimary,
         },
       ]}
-    >
-      {[
-        { label: 'No', value: false },
-        { label: 'Sí', value: true },
-      ].map((option) => {
-        const isSelected = applies === option.value;
-
-        return (
-          <TouchableOpacity
-            accessibilityLabel={`IVA ${option.label}`}
-            accessibilityRole="button"
-            activeOpacity={0.75}
-            key={option.label}
-            onPress={() => {
-              Keyboard.dismiss();
-              onChange(option.value);
-            }}
-            style={[
-              styles.taxOption,
-              {
-                backgroundColor: isSelected
-                  ? colors.primaryMuted
-                  : 'transparent',
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.taxOptionText,
-                {
-                  color: isSelected ? colors.primaryText : colors.textSecondary,
-                },
-              ]}
-            >
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-    {applies && (
-      <TextInput
-        accessibilityLabel="Porcentaje de IVA"
-        keyboardType="decimal-pad"
-        onBlur={onRateBlur}
-        onChangeText={onRateChange}
-        onFocus={onRateFocus}
-        placeholder="Porcentaje"
-        placeholderTextColor={colors.textMuted}
-        style={[
-          styles.taxRateInput,
-          {
-            backgroundColor: colors.fieldBackground,
-            borderColor: isFocused ? colors.primary : colors.border,
-            color: colors.textPrimary,
-          },
-        ]}
-        value={rate}
-      />
-    )}
+      value={rate}
+    />
   </View>
 );
 
@@ -2988,15 +2977,19 @@ const StorePickerModal = ({
 };
 
 const InventoryFormModal = ({
+  categoryOptions,
   colors,
   form,
   isVisible,
   onChange,
   onClose,
+  onDeleteCategory,
   onSave,
   title,
 }) => {
   const formSheet = useBottomSheet(isVisible, onClose);
+  const [categoryPickerIsVisible, setCategoryPickerIsVisible] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
 
   if (!isVisible) {
     return null;
@@ -3004,6 +2997,18 @@ const InventoryFormModal = ({
 
   const updateField = (field, value) => {
     onChange((current) => ({ ...current, [field]: value }));
+  };
+
+  const addCategory = () => {
+    const category = capitalizeFirstLetter(newCategory);
+
+    if (!category) {
+      return;
+    }
+
+    updateField('category', category);
+    setNewCategory('');
+    setCategoryPickerIsVisible(false);
   };
 
   return (
@@ -3030,7 +3035,7 @@ const InventoryFormModal = ({
           />
         </Animated.View>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           pointerEvents="box-none"
           style={styles.sheetRoot}
         >
@@ -3069,15 +3074,17 @@ const InventoryFormModal = ({
                 value={form.name}
               />
               <View style={styles.formRow}>
-                <FormInput
+                <CategorySelector
                   colors={colors}
-                  label="Categoría"
-                  onChangeText={(value) => updateField('category', value)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setCategoryPickerIsVisible(true);
+                  }}
                   value={form.category}
                 />
                 <FormInput
                   colors={colors}
-                  label="Almacén"
+                  label="Almacenamiento"
                   onChangeText={(value) => updateField('storage', value)}
                   value={form.storage}
                 />
@@ -3120,7 +3127,7 @@ const InventoryFormModal = ({
                     { color: colors.textPrimary },
                   ]}
                 >
-                  Cancelar
+                  Cancelar edición
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -3142,10 +3149,62 @@ const InventoryFormModal = ({
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
+        <ManagedOptionPickerModal
+          colors={colors}
+          deleteAccessibilityLabel={(category) =>
+            `Eliminar categoría ${category.name}`
+          }
+          emptyLabel="Sin categoría"
+          isVisible={categoryPickerIsVisible}
+          newValue={newCategory}
+          newValuePlaceholder="Nueva categoría"
+          onAdd={addCategory}
+          onChangeNewValue={setNewCategory}
+          onClose={() => setCategoryPickerIsVisible(false)}
+          onDelete={onDeleteCategory}
+          onSelect={(category) => {
+            updateField('category', category);
+            setCategoryPickerIsVisible(false);
+          }}
+          options={categoryOptions}
+          selectedValue={form.category}
+          title="Categoría"
+        />
       </View>
     </Modal>
   );
 };
+
+const CategorySelector = ({ colors, onPress, value }) => (
+  <View style={styles.formField}>
+    <Text style={[styles.formLabel, { color: colors.textMuted }]}>
+      Categoría
+    </Text>
+    <TouchableOpacity
+      accessibilityLabel="Seleccionar categoría"
+      accessibilityRole="button"
+      activeOpacity={0.75}
+      onPress={onPress}
+      style={[
+        styles.selectBox,
+        {
+          backgroundColor: colors.fieldBackground,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.selectValue,
+          { color: value ? colors.textPrimary : colors.textMuted },
+        ]}
+      >
+        {value || 'Seleccionar categoría'}
+      </Text>
+    </TouchableOpacity>
+  </View>
+);
 
 const FormInput = ({
   colors,
@@ -3218,6 +3277,18 @@ const Edit3Icon = ({ color }) => (
 );
 
 const styles = StyleSheet.create({
+  activeFilterBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    marginHorizontal: 15,
+  },
+  activeFilterText: {
+    flex: 1,
+    fontSize: typography.sizes.caption,
+    paddingRight: 12,
+  },
   addButton: {
     alignItems: 'center',
     borderRadius: 25,
@@ -3317,15 +3388,32 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
   },
-  dateApplyField: {
+  optionalField: {
+    alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    justifyContent: 'center',
-    marginTop: 8,
-    minHeight: 38,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 46,
     paddingHorizontal: 12,
   },
-  dateApplyValue: {
+  optionalFieldAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -4,
+    minHeight: 34,
+    paddingHorizontal: 6,
+  },
+  optionalFieldActionText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+  },
+  optionalFieldInput: {
+    fontSize: typography.sizes.label,
+    paddingVertical: 9,
+  },
+  optionalFieldValue: {
+    flex: 1,
     fontSize: typography.sizes.label,
     fontWeight: typography.weights.semibold,
   },
@@ -3344,7 +3432,7 @@ const styles = StyleSheet.create({
   detailSheet: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    maxHeight: '94%',
+    maxHeight: '98%',
     padding: 18,
     paddingTop: 0,
     width: '100%',
@@ -3536,11 +3624,9 @@ const styles = StyleSheet.create({
   },
   formField: {
     flex: 1,
-    marginBottom: 12,
     minWidth: 0,
   },
   formFieldFull: {
-    marginBottom: 12,
     minWidth: 0,
   },
   formInput: {
@@ -3613,6 +3699,7 @@ const styles = StyleSheet.create({
   formPanel: {
     borderRadius: 8,
     borderWidth: 1,
+    gap: 14,
     padding: 12,
   },
   formPanelEditing: {
@@ -3633,7 +3720,7 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -3665,6 +3752,11 @@ const styles = StyleSheet.create({
   ingredientName: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+  },
+  keyboardSheetWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    width: '100%',
   },
   infoBlock: {
     flex: 1,
@@ -3704,19 +3796,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginBottom: 10,
-    minHeight: 90,
+    minHeight: 50,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   inventoryCardHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-  },
-  inventoryBadgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
   },
   inventoryFilterScroll: {
     marginBottom: 1,
@@ -3734,14 +3820,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginLeft: 60,
     marginTop: 6,
-  },
-  inventoryStatusBadge: {
-    borderRadius: 999,
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
-    overflow: 'hidden',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
   },
   inventoryList: {
     paddingBottom: 92,
@@ -3797,20 +3875,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   lotFormActions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
-    marginTop: 2,
+    marginTop: 12,
   },
-  lotFormActionsFooter: {
-    borderTopWidth: 1,
-    marginHorizontal: -18,
-    marginTop: 0,
-    paddingBottom: 4,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-  },
+  lotFormActionsInline: {},
   lotFormPrimaryAction: {
-    flex: 1,
+    width: '100%',
+  },
+  lotFormSecondaryAction: {
+    flex: 0,
+    width: '100%',
   },
   lotHeader: {
     alignItems: 'flex-start',
@@ -3928,6 +4003,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingRight: 48,
   },
+  resetText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+  },
   secondaryButton: {
     alignItems: 'center',
     borderRadius: 8,
@@ -4020,35 +4099,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     minHeight: 42,
     paddingHorizontal: 12,
-  },
-  taxOption: {
-    alignItems: 'center',
-    borderRadius: 7,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 8,
-  },
-  taxOptionText: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
-  },
-  taxRateInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    fontSize: typography.sizes.label,
-    height: 38,
-    marginTop: 8,
-    paddingHorizontal: 12,
-  },
-  taxSelector: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 4,
-    height: 46,
-    padding: 5,
   },
   summaryPanel: {
     borderRadius: 8,

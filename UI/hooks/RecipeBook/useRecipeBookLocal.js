@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { recipeRepository } from '../../data/repositories';
+import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 
 const formatRecipeCost = (cost) => {
   if (typeof cost === 'string' && cost.trim().startsWith('$')) {
@@ -97,6 +98,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
       const recipe = normalizeRecipe(
         await recipeRepository.create(toApiRecipe(data), options),
       );
+      requestLocalChangeSync();
       await refreshRecipes();
       return recipe;
     },
@@ -116,6 +118,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
       }
 
       const normalizedRecipe = normalizeRecipe(recipe);
+      requestLocalChangeSync();
       await refreshRecipes();
       return normalizedRecipe;
     },
@@ -130,6 +133,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
         throw new Error('Receta no encontrada');
       }
 
+      requestLocalChangeSync();
       await refreshRecipes();
       return normalizeRecipe(recipe);
     },

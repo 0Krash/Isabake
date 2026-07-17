@@ -4,6 +4,7 @@ import {
   recipeRepository,
   transactionRepository,
 } from '../repositories';
+import { requireCurrentGroupId } from '../workspace/currentWorkspace';
 import { applyInventoryLotAdjustment } from './inventoryStockService';
 
 const number = (value) =>
@@ -144,6 +145,8 @@ export const createLocalRecipeSale = async (
       throw new Error('La receta local no tiene ingredientes.');
     }
 
+    const groupId =
+      options.groupId || localRecipe.groupId || (await requireCurrentGroupId({ db }));
     const deductionIngredients = getDeductionIngredients(localRecipe, saleQuantity);
 
     if (!deductionIngredients.length) {
@@ -163,7 +166,7 @@ export const createLocalRecipeSale = async (
         transactionType: 'Ventas',
         uomId: 'pza',
       }),
-      { ...options, db },
+      { ...options, db, groupId },
     );
 
     if (!transaction || typeof transaction !== 'object') {
@@ -264,7 +267,7 @@ export const createLocalRecipeSale = async (
             type: 'sale_usage',
             unit: lot.unit,
           },
-          { ...options, db },
+          { ...options, db, groupId },
         );
 
         if (adjustmentResult?.stockMovement) {

@@ -1,9 +1,8 @@
 const http = require('http');
 const mongoose = require('mongoose');
-const socketio = require('socket.io');
 
 const app = require('./app');
-const socketHandlers = require('./socket/handlers');
+const { isLegacySocketIoEnabled } = require('./services/legacySocketConfig');
 
 //DB Connection
 const DB = process.env.DATABASE;
@@ -19,13 +18,17 @@ mongoose
 
 //Create Server
 const server = http.createServer(app);
-const io = socketio(server);
 
-//Events
-io.on('connection', (socket) => {
-  console.log(`New client connected as: ${socket.id}`);
-  socketHandlers(io, socket);
-});
+if (isLegacySocketIoEnabled()) {
+  const socketio = require('socket.io');
+  const socketHandlers = require('./socket/handlers');
+  const io = socketio(server);
+
+  io.on('connection', (socket) => {
+    console.log(`New client connected as: ${socket.id}`);
+    socketHandlers(io, socket);
+  });
+}
 
 const port = process.env.PORT;
 server.listen(port, () => {
