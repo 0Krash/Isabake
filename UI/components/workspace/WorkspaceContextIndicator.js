@@ -92,6 +92,13 @@ export default function WorkspaceContextIndicator({
         style={[styles.accent, { backgroundColor: colors.primary }]}
       />
       <View style={styles.headerRow}>
+        <TransactionMenuButton
+          isOpen={menuIsVisible}
+          onPress={() => {
+            Keyboard.dismiss();
+            onOpenMenu?.();
+          }}
+        />
         <Pressable
           accessibilityLabel="Abrir administrador de workspaces"
           accessibilityRole={onOpenWorkspace ? 'button' : undefined}
@@ -126,39 +133,34 @@ export default function WorkspaceContextIndicator({
             ) : null}
           </View>
         </Pressable>
-        {backupStatus?.showInMainScreens ? (
-          <Pressable
-            accessibilityLabel={`Abrir centro de sincronización. ${backupStatus.title}`}
-            accessibilityRole={onOpenSync ? 'button' : undefined}
-            disabled={!onOpenSync}
-            onPress={onOpenSync}
-            style={[
-              styles.status,
-              {
-                backgroundColor: colors.surfaceMuted,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {backupIsLoading ? (
-              <ActivityIndicator color={backupColor} size="small" />
-            ) : (
-              <AppIcon
-                color={backupColor}
-                decorative
-                name={backupIconName}
-                size={20}
-              />
-            )}
-          </Pressable>
-        ) : null}
-        <TransactionMenuButton
-          isOpen={menuIsVisible}
-          onPress={() => {
-            Keyboard.dismiss();
-            onOpenMenu?.();
-          }}
-        />
+        <View style={styles.statusSlot}>
+          {backupStatus?.showInMainScreens ? (
+            <Pressable
+              accessibilityLabel={`Abrir centro de sincronización. ${backupStatus.title}`}
+              accessibilityRole={onOpenSync ? 'button' : undefined}
+              disabled={!onOpenSync}
+              onPress={onOpenSync}
+              style={[
+                styles.status,
+                {
+                  backgroundColor: colors.surfaceMuted,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              {backupIsLoading ? (
+                <ActivityIndicator color={backupColor} size="small" />
+              ) : (
+                <AppIcon
+                  color={backupColor}
+                  decorative
+                  name={backupIconName}
+                  size={20}
+                />
+              )}
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -167,10 +169,10 @@ export default function WorkspaceContextIndicator({
 const styles = StyleSheet.create({
   accent: {
     borderRadius: 2,
-    bottom: 10,
+    bottom: 8,
     left: 0,
     position: 'absolute',
-    top: 10,
+    top: 8,
     width: 3,
   },
   attention: {
@@ -185,11 +187,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginHorizontal: 12,
-    marginTop: 6,
-    minHeight: 46,
+    marginTop: 4,
+    minHeight: 42,
     overflow: 'hidden',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
   copy: {
     alignItems: 'center',
@@ -209,6 +211,10 @@ const styles = StyleSheet.create({
     height: 34,
     justifyContent: 'center',
     width: 34,
+  },
+  statusSlot: {
+    alignItems: 'center',
+    width: 44,
   },
   title: {
     flexShrink: 1,
