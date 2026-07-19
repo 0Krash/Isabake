@@ -1,19 +1,19 @@
 import React from 'react';
 import {
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 import typography from '../../constants/TransactionBalance/Typography';
+import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
 import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const ManagedOptionPickerModal = ({
@@ -34,6 +34,9 @@ const ManagedOptionPickerModal = ({
   selectedValue,
   title,
 }) => {
+  const { height: windowHeight } = useWindowDimensions();
+  const keyboardBottomInset = useKeyboardBottomInset();
+
   if (!isVisible) {
     return null;
   }
@@ -50,14 +53,14 @@ const ManagedOptionPickerModal = ({
   return (
     <Modal
       animationType="fade"
+      hardwareAccelerated
+      navigationBarTranslucent
       onRequestClose={onClose}
+      statusBarTranslucent
       transparent
       visible={isVisible}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
-      >
+      <View style={styles.overlay}>
         <Pressable
           onPress={() => {
             Keyboard.dismiss();
@@ -71,6 +74,8 @@ const ManagedOptionPickerModal = ({
             {
               backgroundColor: colors.screenBackground,
               borderColor: colors.border,
+              marginBottom: keyboardBottomInset,
+              maxHeight: windowHeight - keyboardBottomInset - 48,
             },
           ]}
         >
@@ -145,51 +150,53 @@ const ManagedOptionPickerModal = ({
             })}
           </ScrollView>
           {canManage ? (
-          <View style={styles.newOptionContainer}>
-            <TextInput
-              onChangeText={(value) =>
-                onChangeNewValue(capitalizeUserEntry(value))
-              }
-              placeholder={newValuePlaceholder}
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.newOptionInput,
-                {
-                  backgroundColor: colors.fieldBackground,
-                  color: colors.textPrimary,
-                },
-              ]}
-              value={newValue}
-            />
-            <TouchableOpacity
-              activeOpacity={0.75}
-              disabled={!canAdd}
-              onPress={() => {
-                Keyboard.dismiss();
-                onAdd();
-              }}
-              style={[
-                styles.newOptionButton,
-                {
-                  backgroundColor: canAdd ? colors.primary : colors.surfaceMuted,
-                },
-              ]}
-            >
-              <Text
+            <View style={styles.newOptionContainer}>
+              <TextInput
+                onChangeText={(value) =>
+                  onChangeNewValue(capitalizeUserEntry(value))
+                }
+                placeholder={newValuePlaceholder}
+                placeholderTextColor={colors.textMuted}
                 style={[
-                  styles.newOptionButtonText,
+                  styles.newOptionInput,
                   {
-                    color: canAdd ? colors.textInverse : colors.inactiveText,
+                    backgroundColor: colors.fieldBackground,
+                    color: colors.textPrimary,
+                  },
+                ]}
+                value={newValue}
+              />
+              <TouchableOpacity
+                activeOpacity={0.75}
+                disabled={!canAdd}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  onAdd();
+                }}
+                style={[
+                  styles.newOptionButton,
+                  {
+                    backgroundColor: canAdd
+                      ? colors.primary
+                      : colors.surfaceMuted,
                   },
                 ]}
               >
-                {addLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Text
+                  style={[
+                    styles.newOptionButtonText,
+                    {
+                      color: canAdd ? colors.textInverse : colors.inactiveText,
+                    },
+                  ]}
+                >
+                  {addLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 };

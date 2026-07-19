@@ -48,6 +48,7 @@ import useRecipeSectionsData from '../../hooks/RecipeBook/useRecipeSectionsData'
 import useRecipeTypesData from '../../hooks/RecipeBook/useRecipeTypesData';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
+import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { calculateRecipeCost } from '../../utils/recipeCost';
 import { idsMatch } from '../../utils/idUtils';
@@ -304,6 +305,7 @@ export default function RecipeBookScreen({
   const { colors } = useTransactionBalanceTheme();
   const { canWrite, groupId } = useCurrentWorkspaceScope();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const sheetBottomInset = useKeyboardBottomInset();
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const {
@@ -2141,15 +2143,18 @@ export default function RecipeBookScreen({
             style={styles.sheetBackdrop}
           />
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             pointerEvents="box-none"
-            style={styles.keyboardSheetWrapper}
+            style={[
+              styles.keyboardSheetWrapper,
+              { paddingBottom: sheetBottomInset },
+            ]}
           >
             <Animated.View
               {...createRecipeSheet.sheetPanHandlers}
               style={[
                 styles.recipeModal,
                 { backgroundColor: colors.screenBackground },
+                { maxHeight: windowHeight - sheetBottomInset - 24 },
                 createRecipeSheet.sheetStyle,
               ]}
             >
@@ -2164,108 +2169,118 @@ export default function RecipeBookScreen({
                   ]}
                 />
               </View>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-                Nueva receta
-              </Text>
-              <TextInput
-                ref={newRecipeNameInputRef}
-                onBlur={() => setRecipeNameIsFocused(false)}
-                onChangeText={(value) =>
-                  setRecipeName(capitalizeUserEntry(value))
-                }
-                onFocus={() => setRecipeNameIsFocused(true)}
-                placeholder="Nombre del producto"
-                placeholderTextColor={colors.textMuted}
-                style={[
-                  styles.modalInput,
-                  {
-                    backgroundColor: colors.fieldBackground,
-                    borderColor: recipeNameIsFocused
-                      ? colors.primary
-                      : colors.border,
-                    color: colors.textPrimary,
-                  },
-                ]}
-                value={recipeName}
-              />
-              <Text
-                style={[styles.modalFieldLabel, { color: colors.textMuted }]}
-              >
-                Tipo de receta
-              </Text>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setRecipeTypePickerIsVisible(true);
-                }}
-                style={[
-                  styles.modalSelect,
-                  {
-                    backgroundColor: colors.fieldBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
+              <ScrollView
+                contentContainerStyle={styles.createRecipeContent}
+                keyboardShouldPersistTaps="handled"
+                onScroll={createRecipeSheet.onScroll}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
               >
                 <Text
-                  style={[
-                    styles.modalSelectText,
-                    { color: colors.textPrimary },
-                  ]}
+                  style={[styles.modalTitle, { color: colors.textPrimary }]}
                 >
-                  {recipeType || 'Sin tipo'}
+                  Nueva receta
                 </Text>
+                <TextInput
+                  ref={newRecipeNameInputRef}
+                  onBlur={() => setRecipeNameIsFocused(false)}
+                  onChangeText={(value) =>
+                    setRecipeName(capitalizeUserEntry(value))
+                  }
+                  onFocus={() => setRecipeNameIsFocused(true)}
+                  placeholder="Nombre del producto"
+                  placeholderTextColor={colors.textMuted}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: recipeNameIsFocused
+                        ? colors.primary
+                        : colors.border,
+                      color: colors.textPrimary,
+                    },
+                  ]}
+                  value={recipeName}
+                />
                 <Text
-                  style={[
-                    styles.sectionToggleText,
-                    { color: colors.primaryText },
-                  ]}
+                  style={[styles.modalFieldLabel, { color: colors.textMuted }]}
                 >
-                  Cambiar
+                  Tipo de receta
                 </Text>
-              </TouchableOpacity>
-              <View style={styles.modalActions}>
                 <TouchableOpacity
                   activeOpacity={0.75}
                   onPress={() => {
                     Keyboard.dismiss();
-                    createRecipeSheet.closeBottomSheet();
+                    setRecipeTypePickerIsVisible(true);
                   }}
                   style={[
-                    styles.modalSecondaryButton,
-                    { borderColor: colors.border },
+                    styles.modalSelect,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: colors.border,
+                    },
                   ]}
                 >
                   <Text
                     style={[
-                      styles.modalSecondaryText,
-                      { color: colors.textSecondary },
+                      styles.modalSelectText,
+                      { color: colors.textPrimary },
                     ]}
                   >
-                    Cancelar
+                    {recipeType || 'Sin tipo'}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    createRecipe();
-                  }}
-                  style={[
-                    styles.modalPrimaryButton,
-                    { backgroundColor: colors.primary },
-                  ]}
-                >
                   <Text
                     style={[
-                      styles.modalPrimaryText,
-                      { color: colors.textInverse },
+                      styles.sectionToggleText,
+                      { color: colors.primaryText },
                     ]}
                   >
-                    Crear
+                    Cambiar
                   </Text>
                 </TouchableOpacity>
-              </View>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      createRecipeSheet.closeBottomSheet();
+                    }}
+                    style={[
+                      styles.modalSecondaryButton,
+                      { borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.modalSecondaryText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Cancelar
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      createRecipe();
+                    }}
+                    style={[
+                      styles.modalPrimaryButton,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.modalPrimaryText,
+                        { color: colors.textInverse },
+                      ]}
+                    >
+                      Crear
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </Animated.View>
           </KeyboardAvoidingView>
           <ManagedOptionPickerModal
@@ -2320,15 +2335,18 @@ export default function RecipeBookScreen({
             style={styles.sheetBackdrop}
           />
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             pointerEvents="box-none"
-            style={styles.keyboardSheetWrapper}
+            style={[
+              styles.keyboardSheetWrapper,
+              { paddingBottom: sheetBottomInset },
+            ]}
           >
             <Animated.View
               {...recipeDetailSheet.sheetPanHandlers}
               style={[
                 styles.recipeDetailModal,
                 { backgroundColor: colors.screenBackground },
+                { maxHeight: windowHeight - sheetBottomInset - 24 },
                 recipeDetailSheet.sheetStyle,
               ]}
             >
@@ -4112,6 +4130,9 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.bold,
     lineHeight: 20,
+  },
+  createRecipeContent: {
+    paddingBottom: 26,
   },
   cancelIngredientButton: {
     alignItems: 'center',

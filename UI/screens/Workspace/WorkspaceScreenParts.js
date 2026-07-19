@@ -34,6 +34,7 @@ import {
   sanitizeInvitationForDisplay,
 } from './workspaceUiModel';
 import AppIcon from '../../components/icons/AppIcon';
+import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
 
 const invitationRoleOptions = ['admin', 'member', 'viewer'];
 const memberRoleOptions = ['owner', 'admin', 'member', 'viewer'];
@@ -1633,18 +1634,11 @@ function CreateWorkspaceDialog({
   const inputRef = useRef(null);
   const focusTimersRef = useRef([]);
   const [hasEditedName, setHasEditedName] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardBottomInset = useKeyboardBottomInset();
   const disabled = loading || !String(name || '').trim();
   const showNameMissing = hasEditedName && !String(name || '').trim();
-  const hasKeyboard = keyboardHeight > 0;
   const showInlineAccountRequired =
     Platform.OS === 'ios' && accountRequiredOpen;
-  const modalPositionStyle = hasKeyboard
-    ? {
-        bottom: Platform.OS === 'ios' ? keyboardHeight + 10 : 24,
-        position: 'absolute',
-      }
-    : null;
 
   const focusNameInput = () => {
     const input = inputRef.current;
@@ -1688,38 +1682,9 @@ function CreateWorkspaceDialog({
   useEffect(() => {
     scheduleFocus();
 
-    const syncKeyboardHeight = (event) => {
-      const windowHeight = Dimensions.get('window').height;
-      const reportedHeight = event.endCoordinates?.height || 0;
-      const screenY = event.endCoordinates?.screenY || 0;
-      const measuredHeight =
-        screenY > 0 ? windowHeight - screenY : reportedHeight;
-      const maxKeyboardHeight = Math.round(windowHeight * 0.48);
-      const nextHeight = Math.max(
-        0,
-        Math.min(measuredHeight || reportedHeight, maxKeyboardHeight),
-      );
-
-      setKeyboardHeight(nextHeight);
-    };
-    const keyboardWillShow = Keyboard.addListener(
-      'keyboardWillShow',
-      syncKeyboardHeight,
-    );
-    const keyboardShow = Keyboard.addListener(
-      'keyboardDidShow',
-      syncKeyboardHeight,
-    );
-    const keyboardHide = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(0);
-    });
-
     return () => {
       focusTimersRef.current.forEach(clearTimeout);
       focusTimersRef.current = [];
-      keyboardWillShow.remove();
-      keyboardShow.remove();
-      keyboardHide.remove();
     };
   }, []);
 
@@ -1733,7 +1698,12 @@ function CreateWorkspaceDialog({
       transparent
       visible
     >
-      <View style={styles.projectNameModalRoot}>
+      <View
+        style={[
+          styles.projectNameModalRoot,
+          { paddingBottom: keyboardBottomInset },
+        ]}
+      >
         <Pressable
           disabled={loading}
           onPress={onClose}
@@ -1742,139 +1712,146 @@ function CreateWorkspaceDialog({
         <View
           style={[
             styles.modalCard,
-            modalPositionStyle,
+            styles.projectNameModalCard,
             {
               backgroundColor: colors.screenBackground || colors.surface,
               borderColor: colors.border,
+              maxHeight: Dimensions.get('window').height - keyboardBottomInset - 24,
             },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            {title}
-          </Text>
-          <TextInput
-            autoFocus={Platform.OS !== 'android'}
-            onChangeText={(value) => {
-              setHasEditedName(true);
-              onChangeName(capitalizeUserEntry(value));
-            }}
-            onFocus={handleNameInputFocus}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            ref={inputRef}
-            selectTextOnFocus
-            showSoftInputOnFocus
-            style={[
-              styles.input,
-              {
-                borderColor: showNameMissing ? colors.danger : colors.border,
-                color: colors.textPrimary,
-              },
-            ]}
-            value={name}
-          />
-          {showNameMissing ? (
-            <Text style={[styles.error, { color: colors.danger }]}>
-              Agrega un nombre para el negocio.
+          <ScrollView
+            contentContainerStyle={styles.projectNameModalContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              {title}
             </Text>
-          ) : null}
-          {error && !showNameMissing ? (
-            <Text style={[styles.error, { color: colors.danger }]}>
-              {error}
-            </Text>
-          ) : null}
-          {showWorkspaceTypePicker ? (
-            <View style={styles.workspaceTypePicker}>
-              {[
+            <TextInput
+              autoFocus={Platform.OS !== 'android'}
+              onChangeText={(value) => {
+                setHasEditedName(true);
+                onChangeName(capitalizeUserEntry(value));
+              }}
+              onFocus={handleNameInputFocus}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              ref={inputRef}
+              selectTextOnFocus
+              showSoftInputOnFocus
+              style={[
+                styles.input,
                 {
-                  description: 'Solo en este dispositivo',
-                  icon: 'project-private',
-                  label: 'Privado',
-                  value: 'private',
+                  borderColor: showNameMissing ? colors.danger : colors.border,
+                  color: colors.textPrimary,
                 },
-                {
-                  description: 'Con equipo y respaldo en la nube',
-                  icon: 'project-shared',
-                  label: 'Compartido',
-                  value: 'shared',
-                },
-              ].map((option) => {
-                const active = workspaceType === option.value;
+              ]}
+              value={name}
+            />
+            {showNameMissing ? (
+              <Text style={[styles.error, { color: colors.danger }]}>
+                Agrega un nombre para el negocio.
+              </Text>
+            ) : null}
+            {error && !showNameMissing ? (
+              <Text style={[styles.error, { color: colors.danger }]}>
+                {error}
+              </Text>
+            ) : null}
+            {showWorkspaceTypePicker ? (
+              <View style={styles.workspaceTypePicker}>
+                {[
+                  {
+                    description: 'Solo en este dispositivo',
+                    icon: 'project-private',
+                    label: 'Privado',
+                    value: 'private',
+                  },
+                  {
+                    description: 'Con equipo y respaldo en la nube',
+                    icon: 'project-shared',
+                    label: 'Compartido',
+                    value: 'shared',
+                  },
+                ].map((option) => {
+                  const active = workspaceType === option.value;
 
-                return (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => {
-                      onSetWorkspaceType?.(option.value);
-                    }}
-                    style={[
-                      styles.workspaceTypeOption,
-                      {
-                        backgroundColor: active
-                          ? colors.primaryMuted
-                          : colors.surface,
-                        borderColor: active ? colors.primary : colors.border,
-                      },
-                    ]}
-                  >
-                    <AppIcon
-                      color={active ? colors.primaryText : colors.textMuted}
-                      name={option.icon}
-                      size={22}
-                    />
-                    <View style={styles.rowText}>
-                      <Text
-                        style={[
-                          styles.secondaryText,
-                          { color: colors.textPrimary },
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.meta, { color: colors.textMuted }]}
-                      >
-                        {option.description}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-          <View style={styles.modalActions}>
-            <Pressable
-              disabled={loading}
-              onPress={onClose}
-              style={[
-                styles.secondaryButton,
-                styles.modalButton,
-                { borderColor: colors.border },
-              ]}
-            >
-              <Text
-                style={[styles.secondaryText, { color: colors.textPrimary }]}
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => {
+                        onSetWorkspaceType?.(option.value);
+                      }}
+                      style={[
+                        styles.workspaceTypeOption,
+                        {
+                          backgroundColor: active
+                            ? colors.primaryMuted
+                            : colors.surface,
+                          borderColor: active ? colors.primary : colors.border,
+                        },
+                      ]}
+                    >
+                      <AppIcon
+                        color={active ? colors.primaryText : colors.textMuted}
+                        name={option.icon}
+                        size={22}
+                      />
+                      <View style={styles.rowText}>
+                        <Text
+                          style={[
+                            styles.secondaryText,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.meta, { color: colors.textMuted }]}
+                        >
+                          {option.description}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+            <View style={styles.modalActions}>
+              <Pressable
+                disabled={loading}
+                onPress={onClose}
+                style={[
+                  styles.secondaryButton,
+                  styles.modalButton,
+                  { borderColor: colors.border },
+                ]}
               >
-                Cancelar
-              </Text>
-            </Pressable>
-            <Pressable
-              disabled={disabled}
-              onPress={onConfirm}
-              style={[
-                styles.primaryButton,
-                styles.modalButton,
-                {
-                  backgroundColor: disabled ? colors.border : colors.primary,
-                },
-              ]}
-            >
-              <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-                {confirmLabel}
-              </Text>
-            </Pressable>
-          </View>
+                <Text
+                  style={[styles.secondaryText, { color: colors.textPrimary }]}
+                >
+                  Cancelar
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={disabled}
+                onPress={onConfirm}
+                style={[
+                  styles.primaryButton,
+                  styles.modalButton,
+                  {
+                    backgroundColor: disabled ? colors.border : colors.primary,
+                  },
+                ]}
+              >
+                <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+                  {confirmLabel}
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
         </View>
         {showInlineAccountRequired ? (
           <AccountRequiredOverlay
@@ -2577,6 +2554,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 24,
+  },
+  projectNameModalCard: {
+    gap: 0,
+  },
+  projectNameModalContent: {
+    gap: 14,
+    paddingBottom: 4,
   },
   workspaceTypeOption: {
     alignItems: 'center',

@@ -44,6 +44,7 @@ import { refreshNetworkStatus } from '../../data/network/networkStatusService';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import useStoresLocal from '../../hooks/Stores/useStoresLocal';
 import { runManualSyncAction } from '../../hooks/sync/useSyncCenter';
+import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import { createLocalId } from '../../data/db/localIds';
 import { idsMatch } from '../../utils/idUtils';
@@ -1531,6 +1532,8 @@ const InventoryDetailModal = ({
   onOpenStoreManager,
   storeRefreshKey,
 }) => {
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetBottomInset = useKeyboardBottomInset();
   const [lotForm, setLotForm] = useState(emptyLotForm);
   const detailScrollRef = useRef(null);
   const lotFormY = useRef(0);
@@ -2139,14 +2142,17 @@ const InventoryDetailModal = ({
           />
         </Animated.View>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           pointerEvents="box-none"
-          style={styles.keyboardSheetWrapper}
+          style={[
+            styles.keyboardSheetWrapper,
+            { paddingBottom: sheetBottomInset },
+          ]}
         >
           <Animated.View
             style={[
               styles.detailSheet,
               { backgroundColor: colors.screenBackground },
+              { maxHeight: windowHeight - sheetBottomInset - 24 },
               detailSheet.sheetStyle,
             ]}
             {...detailSheet.sheetPanHandlers}
@@ -3116,7 +3122,9 @@ const InventoryFormModal = ({
   onSave,
   title,
 }) => {
+  const { height: windowHeight } = useWindowDimensions();
   const formSheet = useBottomSheet(isVisible, onClose);
+  const sheetBottomInset = useKeyboardBottomInset();
   const [categoryPickerIsVisible, setCategoryPickerIsVisible] = useState(false);
   const [newCategory, setNewCategory] = useState('');
 
@@ -3164,14 +3172,14 @@ const InventoryFormModal = ({
           />
         </Animated.View>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           pointerEvents="box-none"
-          style={styles.sheetRoot}
+          style={[styles.sheetRoot, { paddingBottom: sheetBottomInset }]}
         >
           <Animated.View
             style={[
               styles.inventoryFormSheet,
               { backgroundColor: colors.screenBackground },
+              { maxHeight: windowHeight - sheetBottomInset - 24 },
               formSheet.sheetStyle,
             ]}
             {...formSheet.sheetPanHandlers}
@@ -3244,44 +3252,47 @@ const InventoryFormModal = ({
                 }
                 value={form.notes}
               />
-            </ScrollView>
-            <View style={styles.formModalActions}>
-              <TouchableOpacity
-                accessibilityLabel="Cancelar edición de ingrediente"
-                accessibilityRole="button"
-                activeOpacity={0.8}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  formSheet.closeBottomSheet();
-                }}
-                style={[styles.secondaryButton, { borderColor: colors.border }]}
-              >
-                <Text
+              <View style={styles.formModalActions}>
+                <TouchableOpacity
+                  accessibilityLabel="Cancelar edición de ingrediente"
+                  accessibilityRole="button"
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    formSheet.closeBottomSheet();
+                  }}
                   style={[
-                    styles.secondaryButtonText,
-                    { color: colors.textPrimary },
+                    styles.secondaryButton,
+                    { borderColor: colors.border },
                   ]}
                 >
-                  Cancelar edición
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityLabel="Guardar ingrediente"
-                accessibilityRole="button"
-                activeOpacity={0.8}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  onSave();
-                }}
-                style={[
-                  styles.primaryButton,
-                  styles.formModalPrimaryButton,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    Cancelar edición
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityLabel="Guardar ingrediente"
+                  accessibilityRole="button"
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    onSave();
+                  }}
+                  style={[
+                    styles.primaryButton,
+                    styles.formModalPrimaryButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
         <ManagedOptionPickerModal
@@ -3918,7 +3929,7 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
   },
   inventoryFormContent: {
-    paddingBottom: 4,
+    paddingBottom: 26,
   },
   inventoryFormSheet: {
     borderTopLeftRadius: 30,
