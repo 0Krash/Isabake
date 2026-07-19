@@ -19,6 +19,10 @@
       "**/*"
     ],
     "ios": {
+      "bundleIdentifier": "com.isabake.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
       "supportsTablet": true
     },
     "android": {
