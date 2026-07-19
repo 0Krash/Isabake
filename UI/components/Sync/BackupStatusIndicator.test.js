@@ -144,6 +144,7 @@ describe('BackupStatusIndicator integration', () => {
     expect(recipeHookSource).toContain('RECIPES_PAGE_SIZE');
     expect(recipeHookSource).toContain('loadMoreRecipes');
     expect(recipeHookSource).toContain('hasMoreRecipes: pagination.hasMore');
+    expect(recipeHookSource).toContain('const visibleRecipes = await refreshRecipes()');
     expect(recipesSource).toContain('onEndReached={hasMoreRecipes ? loadMoreRecipes : null}');
     expect(recipesSource).toContain('isLoadingMoreRecipes');
     expect(recipesSource).toContain('useInventoryData({ paginated: false })');
@@ -152,6 +153,9 @@ describe('BackupStatusIndicator integration', () => {
     expect(inventoryHookSource).toContain('loadMoreInventory');
     expect(inventoryHookSource).toContain(
       'hasMoreInventory: pagination.hasMore',
+    );
+    expect(inventoryHookSource).toContain(
+      'const visibleInventoryItems = await refreshInventory()',
     );
     expect(inventorySource).toContain(
       'onEndReached={hasMoreInventory ? loadMoreInventory : null}',

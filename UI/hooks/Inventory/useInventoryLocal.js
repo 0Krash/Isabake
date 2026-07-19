@@ -275,7 +275,19 @@ export default function useInventoryLocal({
         }),
       );
       requestLocalChangeSync();
-      await refreshInventory();
+      const visibleInventoryItems = await refreshInventory();
+
+      if (
+        !visibleInventoryItems.some(
+          (currentItem) =>
+            getInventoryIdentity(currentItem) === getInventoryIdentity(item),
+        )
+      ) {
+        setInventoryItems((currentInventoryItems) =>
+          sortInventoryItems([...currentInventoryItems, item]),
+        );
+      }
+
       return item;
     },
     [groupId, refreshInventory],

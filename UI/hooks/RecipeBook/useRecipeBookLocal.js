@@ -208,7 +208,16 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
         }),
       );
       requestLocalChangeSync();
-      await refreshRecipes();
+      const visibleRecipes = await refreshRecipes();
+
+      if (
+        !visibleRecipes.some(
+          (item) => getRecipeIdentity(item) === getRecipeIdentity(recipe),
+        )
+      ) {
+        setRecipes((currentRecipes) => sortRecipes([...currentRecipes, recipe]));
+      }
+
       return recipe;
     },
     [groupId, refreshRecipes],
