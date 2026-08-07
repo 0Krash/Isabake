@@ -39,9 +39,13 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withCleartextTraffic"
     ],
     "extra": {
+      "apiUrl": "http://104.236.207.54:3000",
+      "enableDevTools": true,
+      "syncApiUrl": "http://104.236.207.54:3000",
       "eas": {
         "projectId": "730d90dd-9970-44ed-9c0a-1db120b73ebe"
       }
