@@ -1,7 +1,6 @@
 import {
   AppState,
   Linking,
-  Platform,
   SafeAreaView,
   StyleSheet,
   StatusBar,
@@ -21,6 +20,7 @@ import SyncHistoryScreen from './screens/Sync/SyncHistoryScreen';
 import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
 import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
+import SettingsScreen from './screens/Settings/SettingsScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
 import {
@@ -29,7 +29,6 @@ import {
   stopNetworkMonitoring,
 } from './data/network/networkStatusService';
 import AppBottomNavigation from './components/AppBottomNavigation';
-import AppSecondaryMenu from './components/AppSecondaryMenu';
 import { TransactionBalanceThemeContext } from './context/TransactionBalanceThemeContext';
 import themes from './constants/TransactionBalance/Theme';
 import { initDatabase } from './data/db/database';
@@ -50,10 +49,9 @@ export default function App() {
   const [dbError, setDbError] = useState(null);
   const [dbReady, setDbReady] = useState(false);
   const [inviteToken, setInviteToken] = useState(null);
-  const [pendingSecondaryTab, setPendingSecondaryTab] = useState(null);
-  const [secondaryMenuVisible, setSecondaryMenuVisible] = useState(false);
   const [saleRecipe, setSaleRecipe] = useState(null);
   const [accountStatus, setAccountStatus] = useState('checking');
+  const [settingsBackTab, setSettingsBackTab] = useState('home');
   const [workspaceBackTab, setWorkspaceBackTab] = useState('home');
   const [mountedPrimaryTabs, setMountedPrimaryTabs] = useState(
     () => new Set(['home']),
@@ -143,7 +141,6 @@ export default function App() {
       }
 
       setInviteToken(navigationState.inviteToken);
-      setSecondaryMenuVisible(false);
       setSaleRecipe(null);
       setActiveTab('invite');
     };
@@ -170,6 +167,11 @@ export default function App() {
     setActiveTab('workspace');
   };
 
+  const openSettingsFrom = (tabKey) => {
+    setSettingsBackTab(tabKey || activeTab || 'home');
+    setActiveTab('settings');
+  };
+
   const renderScreen = () => {
     if (saleRecipe) {
       return (
@@ -186,7 +188,7 @@ export default function App() {
           accountStatus={accountStatus}
           onOpenAccount={() => setActiveTab('account')}
           onOpenInventory={() => setActiveTab('inventory')}
-          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenAppMenu={() => openSettingsFrom('recipes')}
           onOpenSync={() => setActiveTab('sync')}
           onOpenWorkspace={() => openWorkspaceFrom('recipes')}
           onOpenRecipeSale={setSaleRecipe}
@@ -199,7 +201,7 @@ export default function App() {
         <InventoryScreen
           accountStatus={accountStatus}
           onOpenAccount={() => setActiveTab('account')}
-          onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+          onOpenAppMenu={() => openSettingsFrom('inventory')}
           onOpenSync={() => setActiveTab('sync')}
           onOpenWorkspace={() => openWorkspaceFrom('inventory')}
         />
@@ -225,6 +227,18 @@ export default function App() {
 
     if (activeTab === 'account') {
       return <AuthStatusScreen onOpenWorkspaces={() => openWorkspaceFrom('account')} />;
+    }
+
+    if (activeTab === 'settings') {
+      return (
+        <SettingsScreen
+          devToolsEnabled={devSyncDiagnosticsEnabled}
+          onBack={() => setActiveTab(settingsBackTab || 'home')}
+          onOpenAccount={() => setActiveTab('account')}
+          onOpenDevTools={() => setActiveTab('dev-sync')}
+          onOpenWorkspace={() => openWorkspaceFrom('settings')}
+        />
+      );
     }
 
     if (activeTab === 'workspace') {
@@ -254,7 +268,7 @@ export default function App() {
       <TransactionBalanceScreen
         accountStatus={accountStatus}
         onOpenAccount={() => setActiveTab('account')}
-        onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+        onOpenAppMenu={() => openSettingsFrom('home')}
         onOpenSync={() => setActiveTab('sync')}
         onOpenWorkspace={() => openWorkspaceFrom('home')}
       />
@@ -273,7 +287,7 @@ export default function App() {
           <TransactionBalanceScreen
             accountStatus={accountStatus}
             onOpenAccount={() => setActiveTab('account')}
-            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenAppMenu={() => openSettingsFrom('home')}
             onOpenSync={() => setActiveTab('sync')}
             onOpenWorkspace={() => openWorkspaceFrom('home')}
           />
@@ -292,7 +306,7 @@ export default function App() {
             accountStatus={accountStatus}
             onOpenAccount={() => setActiveTab('account')}
             onOpenInventory={() => setActiveTab('inventory')}
-            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenAppMenu={() => openSettingsFrom('recipes')}
             onOpenSync={() => setActiveTab('sync')}
             onOpenWorkspace={() => openWorkspaceFrom('recipes')}
             onOpenRecipeSale={setSaleRecipe}
@@ -311,7 +325,7 @@ export default function App() {
           <InventoryScreen
             accountStatus={accountStatus}
             onOpenAccount={() => setActiveTab('account')}
-            onOpenAppMenu={() => setSecondaryMenuVisible(true)}
+            onOpenAppMenu={() => openSettingsFrom('inventory')}
             onOpenSync={() => setActiveTab('sync')}
             onOpenWorkspace={() => openWorkspaceFrom('inventory')}
           />
@@ -319,34 +333,6 @@ export default function App() {
       ) : null}
     </>
   );
-
-  const openSecondaryScreen = (tabKey) => {
-    setSaleRecipe(null);
-
-    if (Platform.OS !== 'ios') {
-      setSecondaryMenuVisible(false);
-      if (tabKey === 'workspace') {
-        openWorkspaceFrom(activeTab);
-      } else {
-        setActiveTab(tabKey);
-      }
-      return;
-    }
-
-    setPendingSecondaryTab(tabKey);
-    setSecondaryMenuVisible(false);
-  };
-
-  const handleSecondaryMenuDismiss = () => {
-    if (pendingSecondaryTab) {
-      if (pendingSecondaryTab === 'workspace') {
-        openWorkspaceFrom(activeTab);
-      } else {
-        setActiveTab(pendingSecondaryTab);
-      }
-      setPendingSecondaryTab(null);
-    }
-  };
 
   if (!dbReady || dbError) {
     return (
@@ -390,13 +376,6 @@ export default function App() {
           backgroundColor={theme.colors.appBackground}
           barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
           translucent={false}
-        />
-        <AppSecondaryMenu
-          devToolsEnabled={devSyncDiagnosticsEnabled}
-          onClose={() => setSecondaryMenuVisible(false)}
-          onDismiss={handleSecondaryMenuDismiss}
-          onSelect={openSecondaryScreen}
-          visible={secondaryMenuVisible && !saleRecipe}
         />
         <View style={styles.screenContainer}>
           {!saleRecipe && primaryTabs.has(activeTab)

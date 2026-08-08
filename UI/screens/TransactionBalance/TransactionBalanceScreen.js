@@ -163,7 +163,7 @@ const TransactionBalanceScreen = ({
     >
       <WorkspaceContextIndicator
         menuIsVisible={transactionMenuIsVisible}
-        onOpenMenu={() => setTransactionMenuIsVisible(true)}
+        onOpenMenu={onOpenAppMenu}
         onOpenSync={onOpenSync}
         onOpenWorkspace={onOpenWorkspace}
         refreshKey={refreshKey}

@@ -1081,7 +1081,7 @@ export default function InventoryScreen({
     >
       <WorkspaceContextIndicator
         menuIsVisible={menuIsVisible}
-        onOpenMenu={() => setMenuIsVisible(true)}
+        onOpenMenu={onOpenAppMenu}
         onOpenSync={onOpenSync}
         onOpenWorkspace={onOpenWorkspace}
         refreshKey={refreshKey}

@@ -9,11 +9,11 @@ import {
 } from 'react-native';
 
 import AppIcon from '../icons/AppIcon';
-import { TransactionMenuButton } from '../TransactionBalance/TransactionMenu';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import { getBackupStatusIconName } from '../Sync/backupStatusModel';
 import useBackupStatus from '../../hooks/sync/useBackupStatus';
+import useAuthSession from '../../hooks/auth/useAuthSession';
 import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceScope';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
@@ -50,6 +50,7 @@ export default function WorkspaceContextIndicator({
   refreshKey = 0,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
+  const auth = useAuthSession();
   const { backupStatus, loading: backupStatusLoading } = useBackupStatus({
     refreshKey,
   });
@@ -60,6 +61,10 @@ export default function WorkspaceContextIndicator({
   const backupIconName = getBackupStatusIconName(backupStatus?.statusKey);
   const backupIsLoading =
     backupStatusLoading || backupStatus?.statusKey === 'syncing';
+  const accountColor = auth.session ? colors.primary : colors.textMuted;
+  const accountLabel = auth.session
+    ? 'Abrir configuracion. Sesion activa.'
+    : 'Abrir configuracion. Cuenta requerida para compartir.';
   const workspaceName = workspace
     ? formatWorkspaceName(workspace)
     : 'Cargando negocio';
@@ -92,13 +97,28 @@ export default function WorkspaceContextIndicator({
         style={[styles.accent, { backgroundColor: colors.primary }]}
       />
       <View style={styles.headerRow}>
-        <TransactionMenuButton
-          isOpen={menuIsVisible}
-          onPress={() => {
-            Keyboard.dismiss();
-            onOpenMenu?.();
-          }}
-        />
+        <View style={styles.leftSlot}>
+          {backupStatus?.showInMainScreens ? (
+            <Pressable
+              accessibilityLabel={`Abrir centro de sincronización. ${backupStatus.title}`}
+              accessibilityRole={onOpenSync ? 'button' : undefined}
+              disabled={!onOpenSync}
+              onPress={onOpenSync}
+              style={styles.status}
+            >
+              {backupIsLoading ? (
+                <ActivityIndicator color={backupColor} size="small" />
+              ) : (
+                <AppIcon
+                  color={backupColor}
+                  decorative
+                  name={backupIconName}
+                  size={20}
+                />
+              )}
+            </Pressable>
+          ) : null}
+        </View>
         <Pressable
           accessibilityLabel="Abrir administrador de workspaces"
           accessibilityRole={onOpenWorkspace ? 'button' : undefined}
@@ -134,32 +154,23 @@ export default function WorkspaceContextIndicator({
           </View>
         </Pressable>
         <View style={styles.statusSlot}>
-          {backupStatus?.showInMainScreens ? (
-            <Pressable
-              accessibilityLabel={`Abrir centro de sincronización. ${backupStatus.title}`}
-              accessibilityRole={onOpenSync ? 'button' : undefined}
-              disabled={!onOpenSync}
-              onPress={onOpenSync}
-              style={[
-                styles.status,
-                {
-                  backgroundColor: colors.surfaceMuted,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              {backupIsLoading ? (
-                <ActivityIndicator color={backupColor} size="small" />
-              ) : (
-                <AppIcon
-                  color={backupColor}
-                  decorative
-                  name={backupIconName}
-                  size={20}
-                />
-              )}
-            </Pressable>
-          ) : null}
+          <Pressable
+            accessibilityLabel={accountLabel}
+            accessibilityRole={onOpenMenu ? 'button' : undefined}
+            disabled={!onOpenMenu}
+            onPress={() => {
+              Keyboard.dismiss();
+              onOpenMenu?.();
+            }}
+            style={styles.account}
+          >
+            <AppIcon
+              color={accountColor}
+              decorative
+              name="account-user"
+              size={24}
+            />
+          </Pressable>
         </View>
       </View>
     </View>
@@ -183,15 +194,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 20,
   },
+  account: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
   container: {
     borderRadius: 8,
     borderWidth: 1,
-    marginHorizontal: 12,
+    marginHorizontal: 8,
     marginTop: 4,
-    minHeight: 42,
+    minHeight: 38,
     overflow: 'hidden',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 2,
   },
   copy: {
     alignItems: 'center',
@@ -201,20 +218,24 @@ const styles = StyleSheet.create({
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 8,
-    minHeight: 30,
+    minHeight: 44,
+  },
+  leftSlot: {
+    alignItems: 'flex-start',
+    width: 72,
   },
   status: {
     alignItems: 'center',
     borderRadius: 8,
-    borderWidth: 1,
     height: 34,
     justifyContent: 'center',
     width: 34,
   },
   statusSlot: {
     alignItems: 'center',
-    width: 44,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: 72,
   },
   title: {
     flexShrink: 1,
