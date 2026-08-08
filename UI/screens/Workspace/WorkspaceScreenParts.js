@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -1634,7 +1635,23 @@ function CreateWorkspaceDialog({
   const inputRef = useRef(null);
   const focusTimersRef = useRef([]);
   const [hasEditedName, setHasEditedName] = useState(false);
+  const [keyboardIsVisible, setKeyboardIsVisible] = useState(false);
+  const [modalRootHeight, setModalRootHeight] = useState(0);
   const keyboardBottomInset = useKeyboardBottomInset();
+  const screenHeight = Dimensions.get('screen').height;
+  const { height: windowHeight } = useWindowDimensions();
+  const availableModalHeight = modalRootHeight || windowHeight;
+  const modalWasResized =
+    keyboardIsVisible && screenHeight - availableModalHeight > 120;
+  const modalBottomInset = keyboardIsVisible
+    ? modalWasResized
+      ? 12
+      : keyboardBottomInset + 12
+    : 24;
+  const dialogMaxHeight = Math.max(
+    320,
+    availableModalHeight - modalBottomInset - 24,
+  );
   const disabled = loading || !String(name || '').trim();
   const showNameMissing = hasEditedName && !String(name || '').trim();
   const showInlineAccountRequired =
@@ -1688,6 +1705,24 @@ function CreateWorkspaceDialog({
     };
   }, []);
 
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showListener = Keyboard.addListener(showEvent, () => {
+      setKeyboardIsVisible(true);
+    });
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      setKeyboardIsVisible(false);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
+
   return (
     <Modal
       animationType="fade"
@@ -1699,9 +1734,13 @@ function CreateWorkspaceDialog({
       visible
     >
       <View
+        onLayout={(event) => {
+          setModalRootHeight(event.nativeEvent.layout.height);
+        }}
         style={[
           styles.projectNameModalRoot,
-          { paddingBottom: keyboardBottomInset },
+          keyboardIsVisible ? styles.projectNameModalRootWithKeyboard : null,
+          { paddingBottom: modalBottomInset },
         ]}
       >
         <Pressable
@@ -1716,7 +1755,7 @@ function CreateWorkspaceDialog({
             {
               backgroundColor: colors.screenBackground || colors.surface,
               borderColor: colors.border,
-              maxHeight: Dimensions.get('window').height - keyboardBottomInset - 24,
+              maxHeight: dialogMaxHeight,
             },
           ]}
         >
@@ -1724,6 +1763,7 @@ function CreateWorkspaceDialog({
             contentContainerStyle={styles.projectNameModalContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            style={styles.projectNameModalScroll}
           >
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
               {title}
@@ -1819,39 +1859,39 @@ function CreateWorkspaceDialog({
                 })}
               </View>
             ) : null}
-            <View style={styles.modalActions}>
-              <Pressable
-                disabled={loading}
-                onPress={onClose}
-                style={[
-                  styles.secondaryButton,
-                  styles.modalButton,
-                  { borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[styles.secondaryText, { color: colors.textPrimary }]}
-                >
-                  Cancelar
-                </Text>
-              </Pressable>
-              <Pressable
-                disabled={disabled}
-                onPress={onConfirm}
-                style={[
-                  styles.primaryButton,
-                  styles.modalButton,
-                  {
-                    backgroundColor: disabled ? colors.border : colors.primary,
-                  },
-                ]}
-              >
-                <Text style={[styles.buttonText, { color: colors.textInverse }]}>
-                  {confirmLabel}
-                </Text>
-              </Pressable>
-            </View>
           </ScrollView>
+          <View style={[styles.modalActions, styles.projectNameModalActions]}>
+            <Pressable
+              disabled={loading}
+              onPress={onClose}
+              style={[
+                styles.secondaryButton,
+                styles.modalButton,
+                { borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[styles.secondaryText, { color: colors.textPrimary }]}
+              >
+                Cancelar
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={disabled}
+              onPress={onConfirm}
+              style={[
+                styles.primaryButton,
+                styles.modalButton,
+                {
+                  backgroundColor: disabled ? colors.border : colors.primary,
+                },
+              ]}
+            >
+              <Text style={[styles.buttonText, { color: colors.textInverse }]}>
+                {confirmLabel}
+              </Text>
+            </Pressable>
+          </View>
         </View>
         {showInlineAccountRequired ? (
           <AccountRequiredOverlay
@@ -2555,12 +2595,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
   },
+  projectNameModalRootWithKeyboard: {
+    justifyContent: 'flex-end',
+  },
   projectNameModalCard: {
     gap: 0,
+  },
+  projectNameModalActions: {
+    marginTop: 14,
   },
   projectNameModalContent: {
     gap: 14,
     paddingBottom: 4,
+  },
+  projectNameModalScroll: {
+    flexShrink: 1,
   },
   workspaceTypeOption: {
     alignItems: 'center',

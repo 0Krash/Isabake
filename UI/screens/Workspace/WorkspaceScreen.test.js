@@ -807,4 +807,15 @@ describe('WorkspaceScreen model helpers', () => {
     expect(createWorkspaceSource).toContain('AccountRequiredOverlay');
     expect(createWorkspaceSource).not.toContain('AccountRequiredDialog');
   });
+
+  test('workspace action success messages are development-only', () => {
+    const workspaceScreenSource = fs.readFileSync(
+      path.join(__dirname, 'WorkspaceScreen.js'),
+      'utf8',
+    );
+
+    expect(workspaceScreenSource).toContain('const showActionMessages = __DEV__');
+    expect(workspaceScreenSource).toContain('if (showActionMessages)');
+    expect(workspaceScreenSource).toContain('setMessage(nextMessage)');
+  });
 });

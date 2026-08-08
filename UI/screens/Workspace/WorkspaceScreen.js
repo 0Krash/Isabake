@@ -62,6 +62,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
   const [visitedInvitationAttentionKey, setVisitedInvitationAttentionKey] =
     useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const showActionMessages = __DEV__;
   const currentWorkspace = workspaceState.currentWorkspace;
   const currentRole = currentWorkspace?.workspaceRole || 'local';
   const canAdminWorkspace = adminRoles.has(currentRole);
@@ -187,7 +188,9 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
 
     try {
       const result = await action();
-      setMessage(successMessage);
+      if (showActionMessages) {
+        setMessage(successMessage);
+      }
       return { ok: true, result };
     } catch (error) {
       const nextMessage = formatWorkspaceError(error);
@@ -215,7 +218,9 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
         ]);
       }
 
-      setMessage('Negocios actualizados.');
+      if (showActionMessages) {
+        setMessage('Negocios actualizados.');
+      }
     } catch (error) {
       setMessage(formatWorkspaceError(error));
     } finally {
