@@ -231,6 +231,23 @@ export const hardDeleteDocument = async (collection, id, options = {}) => {
   );
 };
 
+export const hardDeleteDocumentsByGroupId = async (groupId, options = {}) => {
+  if (!groupId) {
+    return 0;
+  }
+
+  const db = options.db || (await initDatabase());
+  const result = await db.runAsync(
+    `
+      DELETE FROM documents
+      WHERE groupId = ?;
+    `,
+    [groupId],
+  );
+
+  return Number(result?.changes || 0);
+};
+
 export const updateSyncStatus = async (collection, id, syncStatus, options = {}) => {
   const db = options.db || (await initDatabase());
 
@@ -392,6 +409,12 @@ export const getDocumentsMissingGroupId = async (options = {}) => {
   const db = options.db || (await initDatabase());
   const sharedCollections = options.sharedCollections || SHARED_SYNC_COLLECTIONS;
   const placeholders = sharedCollections.map(() => '?').join(', ');
+  const hasGroupScope = Object.prototype.hasOwnProperty.call(options, 'groupId');
+
+  if (hasGroupScope) {
+    return [];
+  }
+
   const rows = await db.getAllAsync(
     `
       SELECT *
@@ -411,6 +434,16 @@ export const getDocumentsReadyToSync = async (options = {}) => {
   const db = options.db || (await initDatabase());
   const sharedCollections = options.sharedCollections || SHARED_SYNC_COLLECTIONS;
   const placeholders = sharedCollections.map(() => '?').join(', ');
+  const hasGroupScope = Object.prototype.hasOwnProperty.call(options, 'groupId');
+
+  if (hasGroupScope && !options.groupId) {
+    return [];
+  }
+
+  const groupFilter = hasGroupScope ? 'AND groupId = ?' : '';
+  const params = hasGroupScope
+    ? [...sharedCollections, options.groupId]
+    : sharedCollections;
   const rows = await db.getAllAsync(
     `
       SELECT *
@@ -418,9 +451,11 @@ export const getDocumentsReadyToSync = async (options = {}) => {
       WHERE collection IN (${placeholders})
         AND groupId IS NOT NULL
         AND groupId != ''
+        ${groupFilter}
+        AND syncStatus = 'pending'
       ORDER BY collection ASC, updatedAt ASC;
     `,
-    sharedCollections,
+    params,
   );
 
   return rows.map(parseDocument);
@@ -488,19 +523,28 @@ export const getDocumentsBySyncStatuses = async (
   const db = options.db || (await initDatabase());
   const statuses = Array.isArray(syncStatuses) ? syncStatuses : [syncStatuses];
   const placeholders = statuses.map(() => '?').join(', ');
+  const hasGroupScope = Object.prototype.hasOwnProperty.call(options, 'groupId');
 
   if (!statuses.length) {
     return [];
   }
+
+  if (hasGroupScope && !options.groupId) {
+    return [];
+  }
+
+  const groupFilter = hasGroupScope ? 'AND groupId = ?' : '';
+  const params = hasGroupScope ? [...statuses, options.groupId] : statuses;
 
   const rows = await db.getAllAsync(
     `
       SELECT *
       FROM documents
       WHERE syncStatus IN (${placeholders})
+        ${groupFilter}
       ORDER BY collection ASC, updatedAt ASC;
     `,
-    statuses,
+    params,
   );
 
   return rows.map(parseDocument);

@@ -6,6 +6,10 @@ import {
   saveAuthSession,
 } from './authTokenStore';
 import { requestPostLoginSyncBootstrap } from '../sync/postLoginSyncBootstrapRequest';
+import {
+  getOrCreatePersonalWorkspace,
+  setCurrentWorkspace,
+} from '../workspace/workspaceRepository';
 
 const REFRESH_LEEWAY_MS = 60 * 1000;
 
@@ -201,6 +205,14 @@ export const logout = async ({ client, session } = {}) => {
 
   await clearStoredAuthSession();
   await clearAuthSession();
+  const personalWorkspace = await getOrCreatePersonalWorkspace().catch(
+    () => null,
+  );
+
+  if (personalWorkspace) {
+    await setCurrentWorkspace(personalWorkspace).catch(() => {});
+  }
+
   return null;
 };
 

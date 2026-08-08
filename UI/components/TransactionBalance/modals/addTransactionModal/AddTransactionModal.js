@@ -26,6 +26,7 @@ import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 import InsertTransactionButton from './InsertTransactionButton';
 import { useTransactionBalanceTheme } from '../../../../context/TransactionBalanceThemeContext';
 import typography from '../../../../constants/TransactionBalance/Typography';
+import useKeyboardBottomInset from '../../../../hooks/useKeyboardBottomInset';
 
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
@@ -34,6 +35,7 @@ export default function AddTransactionModal({
 }) {
   const { colors } = useTransactionBalanceTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const sheetBottomInset = useKeyboardBottomInset();
   const amountInputRef = useRef(null);
   const quantityInputRef = useRef(null);
   const itemQuantityInputRef = useRef(null);
@@ -64,6 +66,10 @@ export default function AddTransactionModal({
   const sheetHeight = showCategoryInput
     ? windowHeight * 0.88
     : windowHeight * 0.74;
+  const visibleSheetHeight = Math.min(
+    sheetHeight,
+    windowHeight - sheetBottomInset - 24
+  );
 
   const handleModalOnClose = () => {
     setAddTransactionModalIsVisible(false);
@@ -211,7 +217,7 @@ export default function AddTransactionModal({
       visible={AddTransactionModalIsVisible}
       onRequestClose={closeBottomSheet}
     >
-      <KeyboardAvoidingView style={styles.keyboardView} behavior="height">
+      <KeyboardAvoidingView style={styles.keyboardView}>
         <View style={styles.mainContainer}>
           <Animated.View
             pointerEvents="none"
@@ -230,7 +236,8 @@ export default function AddTransactionModal({
               styles.modalView,
               {
                 backgroundColor: colors.screenBackground,
-                height: sheetHeight,
+                height: visibleSheetHeight,
+                marginBottom: sheetBottomInset,
               },
               { transform: [{ translateY: sheetTranslateY }] },
             ]}
@@ -338,36 +345,36 @@ export default function AddTransactionModal({
                     />
                   </View>
                 </View>
+                <InsertTransactionButton
+                  validationError={
+                    transactionType === 'Gastos' && category === '1'
+                      ? validationErrorDescription &&
+                        validationErrorQuantity &&
+                        validationErrorAmount &&
+                        validationErrorItemQuantity &&
+                        validationErrorStore
+                      : transactionType === 'Gastos' && category === '2'
+                      ? validationErrorDescription &&
+                        validationErrorQuantity &&
+                        validationErrorAmount &&
+                        validationErrorStore
+                      : validationErrorDescription &&
+                        validationErrorQuantity &&
+                        validationErrorAmount
+                  }
+                  itemQuantity={transactionType === 'Gastos' ? itemQuantity : ''}
+                  unitValue={transactionType === 'Gastos' ? unitValue : ''}
+                  category={transactionType === 'Gastos' ? category : ''}
+                  selected={transactionType === 'Gastos' ? selected : ''} //store
+                  transactionType={transactionType}
+                  selectedDate={selectedDate}
+                  description={description}
+                  quantity={quantity}
+                  amount={amount}
+                  handleModalOnClose={closeBottomSheet}
+                  onTransactionCreated={onTransactionCreated}
+                />
               </ScrollView>
-              <InsertTransactionButton
-                validationError={
-                  transactionType === 'Gastos' && category === '1'
-                    ? validationErrorDescription &&
-                      validationErrorQuantity &&
-                      validationErrorAmount &&
-                      validationErrorItemQuantity &&
-                      validationErrorStore
-                    : transactionType === 'Gastos' && category === '2'
-                    ? validationErrorDescription &&
-                      validationErrorQuantity &&
-                      validationErrorAmount &&
-                      validationErrorStore
-                    : validationErrorDescription &&
-                      validationErrorQuantity &&
-                      validationErrorAmount
-                }
-                itemQuantity={transactionType === 'Gastos' ? itemQuantity : ''}
-                unitValue={transactionType === 'Gastos' ? unitValue : ''}
-                category={transactionType === 'Gastos' ? category : ''}
-                selected={transactionType === 'Gastos' ? selected : ''} //store
-                transactionType={transactionType}
-                selectedDate={selectedDate}
-                description={description}
-                quantity={quantity}
-                amount={amount}
-                handleModalOnClose={closeBottomSheet}
-                onTransactionCreated={onTransactionCreated}
-              />
             </View>
           </Animated.View>
         </View>

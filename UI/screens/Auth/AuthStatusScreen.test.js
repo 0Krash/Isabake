@@ -71,7 +71,9 @@ describe('AuthStatusScreen helpers', () => {
     expect(getAuthActionMessage('logout')).toBe(
       'Sesion cerrada. No se elimino ningun dato local.',
     );
-    expect(getAuthActionMessage('login')).toContain('sigue siendo manual');
+    expect(getAuthActionMessage('login')).toBe(
+      'Sesion iniciada. El sync compartido queda disponible.',
+    );
   });
 
   test('session display does not expose token hashes', () => {

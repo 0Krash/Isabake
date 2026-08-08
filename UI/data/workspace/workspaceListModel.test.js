@@ -44,7 +44,7 @@ describe('workspaceListModel', () => {
     ]);
   });
 
-  test('dedupes duplicate local workspaces and keeps local-only visible', () => {
+  test('keeps different personal projects as separate local entries', () => {
     const result = dedupeWorkspaces([
       {
         groupId: 'local_1',
@@ -66,6 +66,35 @@ describe('workspaceListModel', () => {
     expect(result).toEqual([
       expect.objectContaining({ groupId: 'local_1', name: 'Local B' }),
       expect.objectContaining({ groupId: 'local_2', name: 'Local only' }),
+    ]);
+  });
+
+  test('applies current metadata to the selected personal project', () => {
+    const result = dedupeWorkspaces(
+      [
+        {
+          groupId: 'local_1',
+          isRemote: false,
+          name: 'Old local',
+        },
+        {
+          groupId: 'local_2',
+          isRemote: false,
+          name: 'Current local',
+        },
+      ],
+      {
+        currentWorkspace: {
+          groupId: 'local_2',
+          isRemote: false,
+          name: 'Current local',
+        },
+      },
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({ groupId: 'local_1', name: 'Old local' }),
+      expect.objectContaining({ groupId: 'local_2', name: 'Current local' }),
     ]);
   });
 

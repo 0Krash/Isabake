@@ -17,12 +17,26 @@ jest.mock('../sync/postLoginSyncBootstrapRequest', () => ({
   requestPostLoginSyncBootstrap: jest.fn(),
 }));
 
+jest.mock('../workspace/workspaceRepository', () => ({
+  getOrCreatePersonalWorkspace: jest.fn(async () => ({
+    groupId: 'workspace_personal',
+    isRemote: false,
+    name: 'Negocio personal',
+    workspaceId: 'workspace_personal',
+  })),
+  setCurrentWorkspace: jest.fn(async (workspace) => workspace),
+}));
+
 import {
   clearStoredAuthSession,
   loadAuthSession,
   saveAuthSession,
 } from './authTokenStore';
 import { requestPostLoginSyncBootstrap } from '../sync/postLoginSyncBootstrapRequest';
+import {
+  getOrCreatePersonalWorkspace,
+  setCurrentWorkspace,
+} from '../workspace/workspaceRepository';
 import {
   getFreshAuthHeaders,
   getAuthHeaders,
@@ -69,6 +83,12 @@ describe('authService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await clearStoredAuthSession();
+    getOrCreatePersonalWorkspace.mockResolvedValue({
+      groupId: 'workspace_personal',
+      isRemote: false,
+      name: 'Negocio personal',
+      workspaceId: 'workspace_personal',
+    });
   });
 
   test('register stores real JWT session', async () => {
@@ -145,6 +165,12 @@ describe('authService', () => {
 
     await logout();
     await expect(getCurrentSession()).resolves.toBeNull();
+    expect(setCurrentWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'workspace_personal',
+        isRemote: false,
+      }),
+    );
   });
 
   test('logout calls backend when possible and still clears tokens when request fails', async () => {
@@ -174,6 +200,28 @@ describe('authService', () => {
       sessionId: 'session_1',
     });
     expect(clearStoredAuthSession).toHaveBeenCalled();
+    expect(setCurrentWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'workspace_personal',
+      }),
+    );
+  });
+
+  test('logout still clears tokens when personal workspace fallback fails', async () => {
+    getOrCreatePersonalWorkspace.mockRejectedValueOnce(new Error('db_error'));
+
+    await logout({
+      session: {
+        accessToken: 'jwt_access',
+        authProvider: 'password',
+        refreshToken: 'jwt_refresh',
+        temporary: false,
+        userId: 'user_1',
+      },
+    });
+
+    expect(clearStoredAuthSession).toHaveBeenCalled();
+    expect(setCurrentWorkspace).not.toHaveBeenCalled();
   });
 
   test('detects near-expired access tokens', () => {

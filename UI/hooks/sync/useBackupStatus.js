@@ -3,17 +3,30 @@ import { useEffect, useState } from 'react';
 import { getBackupStatusForIndicator } from '../../components/Sync/backupStatusModel';
 import { getNetworkStatus } from '../../data/network/networkStatusService';
 import { getAutoSyncState } from '../../data/sync/autoSyncService';
+import { subscribeToAutoSyncState } from '../../data/sync/autoSyncStateRepository';
 import { getLatestSyncHistory } from '../../data/sync/syncHistoryService';
 import { loadSyncCenterStatus } from './useSyncCenter';
 
 export default function useBackupStatus({
   autoLoad = true,
   loadStatus = loadSyncCenterStatus,
+  refreshKey = 0,
 } = {}) {
   const [backupStatus, setBackupStatus] = useState(() =>
     getBackupStatusForIndicator(),
   );
   const [loading, setLoading] = useState(Boolean(autoLoad));
+  const [autoSyncRefreshKey, setAutoSyncRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!autoLoad) {
+      return undefined;
+    }
+
+    return subscribeToAutoSyncState(() => {
+      setAutoSyncRefreshKey((currentKey) => currentKey + 1);
+    });
+  }, [autoLoad]);
 
   useEffect(() => {
     if (!autoLoad) {
@@ -47,7 +60,7 @@ export default function useBackupStatus({
             latestSyncHistory,
             lastSyncState: syncStatus.lastSyncState,
             networkStatus: getNetworkStatus(),
-            pendingCount: syncStatus.pendingCount,
+            pendingCount: syncStatus.summary?.pendingCount ?? syncStatus.pendingCount,
           }),
         );
       } catch (error) {
@@ -74,7 +87,7 @@ export default function useBackupStatus({
     return () => {
       isMounted = false;
     };
-  }, [autoLoad, loadStatus]);
+  }, [autoLoad, autoSyncRefreshKey, loadStatus, refreshKey]);
 
   return {
     backupStatus,

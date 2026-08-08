@@ -27,6 +27,7 @@ ios/.xcode.env.local
 # Android/IntelliJ
 #
 build/
+UI/android.local-backup-*/
 .idea
 .gradle
 local.properties
@@ -56,6 +57,7 @@ yarn-error.log
 
 # Bundle artifact
 *.jsbundle
+*.apk
 UI/dist/
 
 # Ruby / CocoaPods
@@ -251,3 +253,4 @@ UI/android/.gradle/
 UI/android/build/
 UI/android/app/build/
 UI/.expo/
+backups

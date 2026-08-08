@@ -3,10 +3,16 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   acceptWorkspaceInvitation,
   addWorkspaceMember,
+  createPrivateWorkspace,
   createRemoteWorkspace,
   createWorkspaceInvitation,
+  deletePrivateWorkspace,
+  deleteRemoteWorkspace,
   declineWorkspaceInvitation,
   disconnectLocalWorkspace,
+  loadCachedWorkspaceDetails,
+  loadCachedWorkspaceState,
+  loadCachedMyWorkspaceInvitations,
   loadMyWorkspaceInvitations,
   loadWorkspaceInvitations,
   loadWorkspaceMembers,
@@ -15,10 +21,29 @@ import {
   removeWorkspaceMember,
   revokeWorkspaceInvitation,
   selectWorkspace as selectWorkspaceService,
+  updatePrivateWorkspace,
+  updateRemoteWorkspace,
   updateWorkspaceMember,
 } from '../../data/workspace/workspaceService';
 
-export default function useWorkspaces({ autoLoad = true, client, session } = {}) {
+const canManageWorkspaceInvitations = (workspace = {}) =>
+  ['owner', 'admin'].includes(workspace?.workspaceRole);
+
+const getAuthRequiredError = (error) => {
+  const message = String(error?.message || error || '');
+
+  return message === 'auth_required' || message.includes('session_expired')
+    ? message
+    : null;
+};
+
+export default function useWorkspaces({
+  autoLoad = true,
+  autoLoadRemote = true,
+  client,
+  includeRemoteWithoutSession = true,
+  session,
+} = {}) {
   const [authRequired, setAuthRequired] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState(null);
   const [error, setError] = useState(null);
@@ -34,9 +59,14 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     setError(null);
 
     try {
-      const result = await refreshWorkspaceState({ client, session });
+      const result = await refreshWorkspaceState({
+        client,
+        includeRemoteWithoutSession,
+        session,
+      });
       setAuthRequired(Boolean(result.authRequired));
       setCurrentWorkspace(result.currentWorkspace);
+      setMyInvitations(result.myInvitations || []);
       setRemoteWorkspaces(result.remoteWorkspaces || []);
       setWorkspaces(result.workspaces || []);
 
@@ -52,18 +82,74 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     } finally {
       setLoading(false);
     }
-  }, [client, session]);
+  }, [client, includeRemoteWithoutSession, session]);
+
+  const loadCachedWorkspaces = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await loadCachedWorkspaceState({
+        includeRemoteWithoutSession,
+        session,
+      });
+      setAuthRequired(Boolean(result.authRequired));
+      setCurrentWorkspace(result.currentWorkspace);
+      setMyInvitations(result.myInvitations || []);
+      setRemoteWorkspaces(result.remoteWorkspaces || []);
+      setWorkspaces(result.workspaces || []);
+
+      const details = await loadCachedWorkspaceDetails(result.currentWorkspace);
+      setMembers(details.members);
+      setInvitations(details.invitations);
+      return result;
+    } catch (nextError) {
+      const message = String(nextError?.message || nextError);
+      setError(message);
+      throw nextError;
+    } finally {
+      setLoading(false);
+    }
+  }, [includeRemoteWithoutSession, session]);
 
   const createWorkspace = useCallback(
-    async ({ name } = {}) => {
+    async ({ name, type = 'shared' } = {}) => {
       setLoading(true);
       setError(null);
 
       try {
-        const workspace = await createRemoteWorkspace({ client, name, session });
+        const workspace =
+          type === 'private'
+            ? await createPrivateWorkspace({ name })
+            : await createRemoteWorkspace({ client, name, session });
         setCurrentWorkspace(workspace);
-        await refreshWorkspaces();
-        return workspace;
+        setMembers([]);
+        setInvitations([]);
+        const result = await refreshWorkspaces();
+        const selected =
+          result.currentWorkspace?.groupId === workspace.groupId
+            ? result.currentWorkspace
+            : workspace;
+        setCurrentWorkspace(selected);
+
+        if (selected?.isRemote && selected.groupId) {
+          const [nextMembers, nextInvitations] = await Promise.all([
+            loadWorkspaceMembers({
+              client,
+              groupId: selected.groupId,
+              session,
+            }),
+            loadWorkspaceInvitations({
+              client,
+              groupId: selected.groupId,
+              session,
+            }),
+          ]);
+          setMembers(nextMembers);
+          setInvitations(nextInvitations);
+        }
+
+        return selected;
       } catch (nextError) {
         const message = String(nextError?.message || nextError);
         setAuthRequired(message === 'auth_required');
@@ -76,22 +162,29 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     [client, refreshWorkspaces, session],
   );
 
-  const selectWorkspace = useCallback(async (workspace) => {
-    setLoading(true);
-    setError(null);
+  const selectWorkspace = useCallback(
+    async (workspace) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const selected = await selectWorkspaceService(workspace);
-      setCurrentWorkspace(selected);
-      return selected;
-    } catch (nextError) {
-      const message = String(nextError?.message || nextError);
-      setError(message);
-      throw nextError;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      try {
+        const selected = await selectWorkspaceService(workspace);
+        setCurrentWorkspace(selected);
+        const details = await loadCachedWorkspaceDetails(selected);
+        setMembers(details.members);
+        setInvitations(details.invitations);
+        return selected;
+      } catch (nextError) {
+        const message = String(nextError?.message || nextError);
+        setAuthRequired(message === 'auth_required');
+        setError(message);
+        throw nextError;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client, session],
+  );
 
   const refreshMembers = useCallback(
     async (workspace = currentWorkspace) => {
@@ -112,10 +205,12 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
         setMembers(nextMembers);
         return nextMembers;
       } catch (nextError) {
-        const message = String(nextError?.message || nextError);
-        setAuthRequired(message === 'auth_required');
-        setError(message);
-        throw nextError;
+        const cachedMembers = await loadCachedWorkspaceDetails(workspace);
+        setMembers(cachedMembers.members);
+        const authError = getAuthRequiredError(nextError);
+        setAuthRequired(Boolean(authError));
+        setError(authError);
+        return cachedMembers.members;
       } finally {
         setLoading(false);
       }
@@ -126,6 +221,11 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
   const refreshInvitations = useCallback(
     async (workspace = currentWorkspace) => {
       if (!workspace?.isRemote || !workspace.groupId) {
+        setInvitations([]);
+        return [];
+      }
+
+      if (!canManageWorkspaceInvitations(workspace)) {
         setInvitations([]);
         return [];
       }
@@ -142,10 +242,12 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
         setInvitations(nextInvitations);
         return nextInvitations;
       } catch (nextError) {
-        const message = String(nextError?.message || nextError);
-        setAuthRequired(message === 'auth_required');
-        setError(message);
-        throw nextError;
+        const cachedDetails = await loadCachedWorkspaceDetails(workspace);
+        setInvitations(cachedDetails.invitations);
+        const authError = getAuthRequiredError(nextError);
+        setAuthRequired(Boolean(authError));
+        setError(authError);
+        return cachedDetails.invitations;
       } finally {
         setLoading(false);
       }
@@ -165,10 +267,12 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
       setMyInvitations(nextInvitations);
       return nextInvitations;
     } catch (nextError) {
-      const message = String(nextError?.message || nextError);
-      setAuthRequired(message === 'auth_required');
-      setError(message);
-      throw nextError;
+      const cachedInvitations = await loadCachedMyWorkspaceInvitations();
+      setMyInvitations(cachedInvitations);
+      const authError = getAuthRequiredError(nextError);
+      setAuthRequired(Boolean(authError));
+      setError(authError);
+      return cachedInvitations;
     } finally {
       setLoading(false);
     }
@@ -206,6 +310,53 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
       return refreshInvitations(currentWorkspace);
     },
     [client, currentWorkspace, refreshInvitations, session],
+  );
+
+  const updateWorkspaceName = useCallback(
+    async ({ name, workspace = currentWorkspace } = {}) => {
+      const groupId = workspace?.groupId || workspace?.workspaceId;
+
+      if (!groupId) {
+        throw new Error('workspace_required');
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const shouldSelectAfterRename =
+          workspace?.isRemote ||
+          currentWorkspace?.groupId === groupId ||
+          currentWorkspace?.workspaceId === groupId;
+        const nextWorkspace = workspace?.isRemote
+          ? await updateRemoteWorkspace({
+              client,
+              groupId,
+              name,
+              session,
+            })
+          : await updatePrivateWorkspace({
+              name,
+              workspace,
+            });
+        const refreshedState = await refreshWorkspaces();
+
+        if (shouldSelectAfterRename) {
+          setCurrentWorkspace(nextWorkspace);
+          return nextWorkspace;
+        }
+
+        return refreshedState.currentWorkspace || currentWorkspace;
+      } catch (nextError) {
+        const message = String(nextError?.message || nextError);
+        setAuthRequired(message === 'auth_required');
+        setError(message);
+        throw nextError;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client, currentWorkspace, refreshWorkspaces, session],
   );
 
   const revokeInvitation = useCallback(
@@ -248,11 +399,32 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
 
   const acceptInvitation = useCallback(
     async (invitationId) => {
-      await acceptWorkspaceInvitation({ client, invitationId, session });
+      const response = await acceptWorkspaceInvitation({
+        client,
+        invitationId,
+        session,
+      });
+      const acceptedInvitation = response?.invitation || response || {};
+      const acceptedGroupId =
+        acceptedInvitation.groupId || acceptedInvitation.workspaceId || null;
+
       await refreshMyInvitations();
-      return refreshWorkspaces();
+      const workspaceState = await refreshWorkspaces();
+      const acceptedWorkspace = acceptedGroupId
+        ? (workspaceState.workspaces || []).find(
+            (workspace) =>
+              workspace?.groupId === acceptedGroupId ||
+              workspace?.workspaceId === acceptedGroupId,
+          )
+        : null;
+
+      if (acceptedWorkspace) {
+        return selectWorkspace(acceptedWorkspace);
+      }
+
+      return workspaceState;
     },
-    [client, refreshMyInvitations, refreshWorkspaces, session],
+    [client, refreshMyInvitations, refreshWorkspaces, selectWorkspace, session],
   );
 
   const declineInvitation = useCallback(
@@ -299,21 +471,21 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
   );
 
   const leaveWorkspace = useCallback(
-    async ({ leaveRemote = true } = {}) => {
+    async ({ leaveRemote = true, workspace = currentWorkspace } = {}) => {
       setLoading(true);
       setError(null);
 
       try {
-        const workspace = await disconnectLocalWorkspace({
+        const nextWorkspace = await disconnectLocalWorkspace({
           client,
           leaveRemote,
           session,
-          workspace: currentWorkspace,
+          workspace,
         });
-        setCurrentWorkspace(workspace);
+        setCurrentWorkspace(nextWorkspace);
         setMembers([]);
         await refreshWorkspaces();
-        return workspace;
+        return nextWorkspace;
       } catch (nextError) {
         const message = String(nextError?.message || nextError);
         setAuthRequired(message === 'auth_required');
@@ -326,11 +498,47 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     [client, currentWorkspace, refreshWorkspaces, session],
   );
 
+  const deleteWorkspace = useCallback(async (workspace = currentWorkspace) => {
+    const groupId = workspace?.groupId;
+
+    if (!groupId) {
+      throw new Error('workspace_required');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const nextWorkspace = workspace?.isRemote
+        ? await deleteRemoteWorkspace({
+            client,
+            groupId,
+            session,
+            workspace,
+          })
+        : await deletePrivateWorkspace(workspace);
+      setCurrentWorkspace(nextWorkspace);
+      setMembers([]);
+      setInvitations([]);
+      await refreshWorkspaces();
+      return nextWorkspace;
+    } catch (nextError) {
+      const message = String(nextError?.message || nextError);
+      setAuthRequired(message === 'auth_required');
+      setError(message);
+      throw nextError;
+    } finally {
+      setLoading(false);
+    }
+  }, [client, currentWorkspace, refreshWorkspaces, session]);
+
   useEffect(() => {
     if (autoLoad) {
-      refreshWorkspaces().catch(() => {});
+      const load = autoLoadRemote ? refreshWorkspaces : loadCachedWorkspaces;
+
+      load().catch(() => {});
     }
-  }, [autoLoad, refreshWorkspaces]);
+  }, [autoLoad, autoLoadRemote, loadCachedWorkspaces, refreshWorkspaces]);
 
   return {
     addMember,
@@ -339,10 +547,13 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     createInvitation,
     createWorkspace,
     currentWorkspace,
+    deleteWorkspace,
+    declineInvitation,
     disconnectLocalWorkspace: leaveWorkspace,
     error,
     invitations,
     leaveWorkspace,
+    loadCachedWorkspaces,
     loading,
     members,
     myInvitations,
@@ -355,6 +566,7 @@ export default function useWorkspaces({ autoLoad = true, client, session } = {})
     removeMember,
     revokeInvitation,
     selectWorkspace,
+    updateWorkspaceName,
     updateMemberRole,
     updateMemberStatus: updateMemberRole,
     workspaces,

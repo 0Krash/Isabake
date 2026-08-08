@@ -14,6 +14,7 @@ const inventoryRouter = require('./routes/inventoryRoutes');
 const syncRouter = require('./routes/syncRoutes');
 const workspaceRouter = require('./routes/workspaceRoutes');
 const authRouter = require('./routes/authRoutes');
+const devRouter = require('./routes/devRoutes');
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/v1/inventory', inventoryRouter);
 app.use('/auth', authRouter);
 app.use('/workspaces', workspaceRouter);
 app.use('/sync', syncRouter);
+app.use('/dev', devRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

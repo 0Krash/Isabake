@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { recipeRepository } from '../../data/repositories';
 import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
+
+export const RECIPES_PAGE_SIZE = 20;
+const recipeCache = new Map();
 
 const formatRecipeCost = (cost) => {
   if (typeof cost === 'string' && cost.trim().startsWith('$')) {
@@ -71,38 +76,151 @@ const sortRecipes = (recipes) =>
     }),
   );
 
+const getRecipeIdentity = (recipe) =>
+  recipe.recipeId || recipe.id || recipe.localId || recipe.name;
+
 export default function useRecipeBookLocal({ autoLoad = true } = {}) {
-  const [recipes, setRecipes] = useState([]);
-  const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
+  const { groupId, loading: workspaceLoading } = useCurrentWorkspaceScope({
+    autoLoad,
+  });
+  const waitingForWorkspace = Boolean(autoLoad && workspaceLoading && !groupId);
+  const cachedRecipeState = recipeCache.get(groupId);
+  const [recipes, setRecipes] = useState(
+    () => cachedRecipeState?.recipes || [],
+  );
+  const [pagination, setPagination] = useState(
+    () =>
+      cachedRecipeState?.pagination || {
+        hasMore: false,
+        page: 0,
+      },
+  );
+  const [isLoadingRecipes, setIsLoadingRecipes] =
+    useState(() => Boolean(autoLoad) && !cachedRecipeState);
+  const [isLoadingMoreRecipes, setIsLoadingMoreRecipes] = useState(false);
   const [error, setError] = useState(null);
+  const isLoadingMoreRecipesRef = useRef(false);
+
+  const fetchRecipesPage = useCallback(
+    async (page) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const response = await recipeRepository.getPage({
+        groupId: effectiveGroupId,
+        limit: RECIPES_PAGE_SIZE,
+        page,
+      });
+
+      return {
+        data: sortRecipes((response.data || []).map(normalizeRecipe)),
+        pagination: response.pagination || {
+          hasMore: false,
+          page,
+        },
+      };
+    },
+    [groupId],
+  );
 
   const refreshRecipes = useCallback(async () => {
     setIsLoadingRecipes(true);
     setError(null);
 
     try {
-      const localRecipes = await recipeRepository.getAll();
-      const normalizedRecipes = sortRecipes(localRecipes.map(normalizeRecipe));
-      setRecipes(normalizedRecipes);
-      return normalizedRecipes;
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const recipesResponse = await fetchRecipesPage(1);
+      const nextState = {
+        pagination: recipesResponse.pagination,
+        recipes: recipesResponse.data,
+      };
+
+      recipeCache.set(effectiveGroupId, nextState);
+      setPagination(nextState.pagination);
+      setRecipes(nextState.recipes);
+      return nextState.recipes;
     } catch (requestError) {
       setError(requestError);
       throw requestError;
     } finally {
       setIsLoadingRecipes(false);
+      isLoadingMoreRecipesRef.current = false;
     }
-  }, []);
+  }, [fetchRecipesPage, groupId]);
+
+  const loadMoreRecipes = useCallback(async () => {
+    if (
+      isLoadingRecipes ||
+      isLoadingMoreRecipesRef.current ||
+      !pagination.hasMore
+    ) {
+      return;
+    }
+
+    isLoadingMoreRecipesRef.current = true;
+    setIsLoadingMoreRecipes(true);
+    setError(null);
+
+    try {
+      const nextPage = (pagination.page || 1) + 1;
+      const recipesResponse = await fetchRecipesPage(nextPage);
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+
+      setRecipes((currentRecipes) => {
+        const loadedRecipeIds = new Set(currentRecipes.map(getRecipeIdentity));
+        const nextRecipes = recipesResponse.data.filter((recipe) => {
+          const recipeId = getRecipeIdentity(recipe);
+
+          if (loadedRecipeIds.has(recipeId)) {
+            return false;
+          }
+
+          loadedRecipeIds.add(recipeId);
+          return true;
+        });
+        const updatedRecipes = [...currentRecipes, ...nextRecipes];
+
+        recipeCache.set(effectiveGroupId, {
+          pagination: recipesResponse.pagination,
+          recipes: updatedRecipes,
+        });
+
+        return updatedRecipes;
+      });
+      setPagination(recipesResponse.pagination);
+    } finally {
+      isLoadingMoreRecipesRef.current = false;
+      setIsLoadingMoreRecipes(false);
+    }
+  }, [
+    fetchRecipesPage,
+    groupId,
+    isLoadingRecipes,
+    pagination.hasMore,
+    pagination.page,
+  ]);
 
   const createRecipe = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const recipe = normalizeRecipe(
-        await recipeRepository.create(toApiRecipe(data), options),
+        await recipeRepository.create(toApiRecipe(data), {
+          groupId: effectiveGroupId,
+          ...options,
+        }),
       );
       requestLocalChangeSync();
-      await refreshRecipes();
+      const visibleRecipes = await refreshRecipes();
+
+      if (
+        !visibleRecipes.some(
+          (item) => getRecipeIdentity(item) === getRecipeIdentity(recipe),
+        )
+      ) {
+        setRecipes((currentRecipes) => sortRecipes([...currentRecipes, recipe]));
+      }
+
       return recipe;
     },
-    [refreshRecipes],
+    [groupId, refreshRecipes],
   );
 
   const updateRecipe = useCallback(
@@ -141,20 +259,32 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
   );
 
   useEffect(() => {
-    if (!autoLoad) {
+    if (!autoLoad || waitingForWorkspace) {
       return;
+    }
+
+    if (recipeCache.has(groupId)) {
+      const cached = recipeCache.get(groupId);
+      setPagination(cached.pagination);
+      setRecipes(cached.recipes);
+    } else {
+      setPagination({ hasMore: false, page: 0 });
+      setRecipes([]);
     }
 
     refreshRecipes().catch((requestError) => {
       console.warn('Error al cargar recetas locales:', requestError);
     });
-  }, [autoLoad, refreshRecipes]);
+  }, [autoLoad, groupId, refreshRecipes, waitingForWorkspace]);
 
   return {
     createRecipe,
     deleteRecipe,
     error,
+    hasMoreRecipes: pagination.hasMore,
     isLoadingRecipes,
+    isLoadingMoreRecipes,
+    loadMoreRecipes,
     recipes,
     refreshRecipes,
     setRecipes,

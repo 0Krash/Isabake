@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { recipeSectionRepository } from '../../data/repositories';
+import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
+import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
+
+const recipeSectionCache = new Map();
 
 export const normalizeRecipeSection = (section = {}) => ({
   id: `${section.recipeSectionId || section.id || section.localId || ''}`,
@@ -22,8 +26,17 @@ const sortRecipeSections = (recipeSections) =>
   );
 
 export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
-  const [recipeSections, setRecipeSections] = useState([]);
-  const [isLoadingRecipeSections, setIsLoadingRecipeSections] = useState(false);
+  const { groupId, loading: workspaceLoading } = useCurrentWorkspaceScope({
+    autoLoad,
+  });
+  const waitingForWorkspace = Boolean(autoLoad && workspaceLoading && !groupId);
+  const cachedRecipeSections = recipeSectionCache.get(groupId);
+  const [recipeSections, setRecipeSections] = useState(
+    () => cachedRecipeSections || [],
+  );
+  const [isLoadingRecipeSections, setIsLoadingRecipeSections] = useState(
+    () => Boolean(autoLoad) && !cachedRecipeSections,
+  );
   const [error, setError] = useState(null);
 
   const refreshRecipeSections = useCallback(async () => {
@@ -31,10 +44,14 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     setError(null);
 
     try {
-      const localRecipeSections = await recipeSectionRepository.getAll();
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
+      const localRecipeSections = await recipeSectionRepository.getAll({
+        groupId: effectiveGroupId,
+      });
       const normalizedSections = sortRecipeSections(
         localRecipeSections.map(normalizeRecipeSection),
       );
+      recipeSectionCache.set(effectiveGroupId, normalizedSections);
       setRecipeSections(normalizedSections);
       return normalizedSections;
     } catch (requestError) {
@@ -43,17 +60,21 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     } finally {
       setIsLoadingRecipeSections(false);
     }
-  }, []);
+  }, [groupId]);
 
   const createRecipeSection = useCallback(
     async (data, options = {}) => {
+      const effectiveGroupId = groupId || (await getCurrentGroupId());
       const recipeSection = normalizeRecipeSection(
-        await recipeSectionRepository.createIfMissing(data, options),
+        await recipeSectionRepository.createIfMissing(data, {
+          groupId: effectiveGroupId,
+          ...options,
+        }),
       );
       await refreshRecipeSections();
       return recipeSection;
     },
-    [refreshRecipeSections],
+    [groupId, refreshRecipeSections],
   );
 
   const deleteRecipeSection = useCallback(
@@ -82,14 +103,20 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
   );
 
   useEffect(() => {
-    if (!autoLoad) {
+    if (!autoLoad || waitingForWorkspace) {
       return;
+    }
+
+    if (recipeSectionCache.has(groupId)) {
+      setRecipeSections(recipeSectionCache.get(groupId));
+    } else {
+      setRecipeSections([]);
     }
 
     refreshRecipeSections().catch((requestError) => {
       console.warn('Error al cargar secciones de receta locales:', requestError);
     });
-  }, [autoLoad, refreshRecipeSections]);
+  }, [autoLoad, groupId, refreshRecipeSections, waitingForWorkspace]);
 
   return {
     createRecipeSection,

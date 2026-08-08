@@ -56,6 +56,23 @@ export const storeLastSyncCursor = async (groupId, cursor, options = {}) => {
   return getSyncState(groupId, { db });
 };
 
+export const deleteSyncState = async (groupId, options = {}) => {
+  if (!groupId) {
+    return 0;
+  }
+
+  const db = options.db || (await initDatabase());
+  const result = await db.runAsync(
+    `
+      DELETE FROM sync_state
+      WHERE groupId = ?;
+    `,
+    [groupId],
+  );
+
+  return Number(result?.changes || 0);
+};
+
 export const getAllSyncStates = async (options = {}) => {
   const db = options.db || (await initDatabase());
   const rows = await db.getAllAsync(
@@ -70,6 +87,7 @@ export const getAllSyncStates = async (options = {}) => {
 };
 
 export default {
+  deleteSyncState,
   getAllSyncStates,
   getLastSyncCursor,
   getSyncState,

@@ -2,6 +2,7 @@ import {
   formatRelativeBackupTime,
   getBackupStatus,
   getBackupStatusForIndicator,
+  getBackupStatusIconName,
 } from './backupStatusModel';
 
 describe('backupStatusModel', () => {
@@ -17,7 +18,7 @@ describe('backupStatusModel', () => {
       expect.objectContaining({
         description: 'Inicia sesión solo si quieres respaldar o compartir.',
         statusKey: 'local_only',
-        title: 'Guardado en este dispositivo',
+        title: 'Privado',
         tone: 'neutral',
       }),
     );
@@ -55,6 +56,38 @@ describe('backupStatusModel', () => {
         statusKey: 'backed_up',
         title: 'Todo respaldado',
         tone: 'success',
+      }),
+    );
+  });
+
+  test('maps backup states to compact status icons', () => {
+    expect(getBackupStatusIconName('backed_up')).toBe('status-check-circle');
+    expect(getBackupStatusIconName('pending')).toBe('status-sync');
+    expect(getBackupStatusIconName('syncing')).toBe('status-sync');
+    expect(getBackupStatusIconName('offline')).toBe('status-cloud-off');
+    expect(getBackupStatusIconName('backend_unreachable')).toBe(
+      'status-cloud-off',
+    );
+    expect(getBackupStatusIconName('conflicts')).toBe(
+      'status-alert-circle',
+    );
+    expect(getBackupStatusIconName('failed')).toBe('status-alert-circle');
+    expect(getBackupStatusIconName('local_only')).toBe('project-private');
+    expect(getBackupStatusIconName('unknown_status')).toBe('status-sync');
+  });
+
+  test('ignores stale auto-sync pending state when there are no user-facing pending changes', () => {
+    expect(
+      getBackupStatus({
+        autoSyncState: { autoSyncState: 'scheduled', autoSyncEnabled: true },
+        authStatus: 'authenticated',
+        currentWorkspace: sharedWorkspace,
+        pendingCount: 0,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        statusKey: 'backed_up',
+        title: 'Todo respaldado',
       }),
     );
   });

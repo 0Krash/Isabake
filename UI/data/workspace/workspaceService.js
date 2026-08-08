@@ -5,26 +5,101 @@ import {
 } from '../auth/authService';
 import {
   createLocalWorkspace,
+  deleteWorkspaceMetadata,
   getCurrentWorkspace,
-  getFirstLocalOnlyWorkspace,
   getLocalWorkspaces,
   getOrCreateDefaultLocalWorkspace,
+  getOrCreatePersonalWorkspace,
+  saveWorkspace,
   setCurrentWorkspace,
 } from './workspaceRepository';
 import { dedupeWorkspaces } from './workspaceListModel';
+import {
+  getDocument,
+  hardDeleteDocumentsByGroupId,
+  saveDocument,
+} from '../db/documentStore';
+import { deleteOutboxEventsByGroupId } from '../sync/syncOutbox';
+import { deleteSyncState } from '../sync/syncStateRepository';
 
-export const toRemoteWorkspaceMetadata = (workspace = {}) => ({
-  groupId: workspace.groupId || workspace.workspaceId,
-  isRemote: true,
-  name: workspace.name || 'Workspace compartido',
-  ownerUserId: workspace.ownerUserId || null,
-  remoteGroupId: workspace.groupId || workspace.workspaceId,
-  syncStatus: 'remote',
-  workspaceId: workspace.workspaceId || workspace.groupId,
-  workspaceRole: workspace.membership?.role || workspace.workspaceRole || null,
-  workspaceStatus:
-    workspace.membership?.status || workspace.workspaceStatus || null,
-});
+const isSameRemoteWorkspace = (left = {}, right = {}) => {
+  const leftId = left.groupId || left.remoteGroupId || left.workspaceId;
+  const rightId = right.groupId || right.remoteGroupId || right.workspaceId;
+
+  return Boolean(leftId && rightId && leftId === rightId);
+};
+
+const getWorkspaceIdentity = (workspace = {}) =>
+  workspace.groupId || workspace.remoteGroupId || workspace.workspaceId || null;
+
+const purgeRemovedRemoteWorkspace = async (workspace = {}) => {
+  const groupId = getWorkspaceIdentity(workspace);
+
+  if (!groupId) {
+    return;
+  }
+
+  await deleteOutboxEventsByGroupId(groupId);
+  await deleteSyncState(groupId);
+  await hardDeleteDocumentsByGroupId(groupId);
+  await deleteWorkspaceMetadata({
+    ...workspace,
+    groupId,
+    isRemote: true,
+    workspaceId: groupId,
+  });
+};
+
+const getSessionUserId = (session = {}) =>
+  session?.userId || session?.user?.userId || session?.user?.id || null;
+
+const isAuthRequiredError = (error) => {
+  const message = String(error?.message || error || '');
+
+  return (
+    message.includes('auth_required') || message.includes('session_expired')
+  );
+};
+
+const isWorkspaceVisibleForSession = (
+  workspace = {},
+  sessionUserId,
+  { includeRemoteWithoutSession = true } = {},
+) => {
+  if (!workspace?.isRemote) {
+    return true;
+  }
+
+  if (!sessionUserId) {
+    return includeRemoteWithoutSession;
+  }
+
+  return workspace.accountUserId === sessionUserId;
+};
+
+const filterWorkspacesForSession = (workspaces = [], sessionUserId, options) =>
+  workspaces.filter((workspace) =>
+    isWorkspaceVisibleForSession(workspace, sessionUserId, options),
+  );
+
+export const toRemoteWorkspaceMetadata = (workspace = {}, options = {}) => {
+  const groupId =
+    workspace.groupId || workspace.remoteGroupId || workspace.workspaceId;
+
+  return {
+    accountUserId: options.accountUserId || workspace.accountUserId || null,
+    groupId,
+    isRemote: true,
+    name: workspace.name || 'Negocio compartido',
+    ownerUserId: workspace.ownerUserId || null,
+    remoteGroupId: groupId,
+    syncStatus: 'remote',
+    workspaceId: groupId,
+    workspaceRole: workspace.membership?.role || workspace.workspaceRole || null,
+    workspaceStatus:
+      workspace.membership?.status || workspace.workspaceStatus || null,
+  };
+};
 
 const getClientAndHeaders = async ({ client, session } = {}) => {
   const currentSession = await getFreshAuthSession({ client, session });
@@ -41,45 +116,227 @@ const getClientAndHeaders = async ({ client, session } = {}) => {
   };
 };
 
-export const refreshWorkspaceState = async ({ client, session } = {}) => {
+const getPendingInvitations = (invitations = []) =>
+  invitations.filter(
+    (invitation) => (invitation.status || 'invited') === 'invited',
+  );
+const WORKSPACE_MEMBERS_CACHE_COLLECTION = '__workspace_members_cache';
+const WORKSPACE_INVITATIONS_CACHE_COLLECTION = '__workspace_invitations_cache';
+const MY_INVITATIONS_CACHE_ID = 'mine';
+
+const getWorkspaceCacheId = (groupId) => String(groupId || '').trim();
+
+const saveWorkspaceCache = async (collection, id, data) => {
+  if (!id) {
+    return data;
+  }
+
+  await saveDocument(collection, id, { items: data || [] }, {
+    groupId: id === MY_INVITATIONS_CACHE_ID ? null : id,
+    skipOutbox: true,
+    syncStatus: 'local',
+  });
+
+  return data;
+};
+
+const loadWorkspaceCache = async (collection, id) => {
+  if (!id) {
+    return [];
+  }
+
+  const document = await getDocument(collection, id, { includeDeleted: true });
+  return Array.isArray(document?.data?.items) ? document.data.items : [];
+};
+
+export const loadCachedWorkspaceMembers = async (groupId) =>
+  loadWorkspaceCache(
+    WORKSPACE_MEMBERS_CACHE_COLLECTION,
+    getWorkspaceCacheId(groupId),
+  );
+
+export const loadCachedWorkspaceInvitations = async (groupId) =>
+  loadWorkspaceCache(
+    WORKSPACE_INVITATIONS_CACHE_COLLECTION,
+    getWorkspaceCacheId(groupId),
+  );
+
+export const loadCachedMyWorkspaceInvitations = async () =>
+  loadWorkspaceCache(
+    WORKSPACE_INVITATIONS_CACHE_COLLECTION,
+    MY_INVITATIONS_CACHE_ID,
+  );
+
+export const loadCachedWorkspaceDetails = async (workspace = {}) => {
+  const groupId = workspace?.groupId || workspace?.workspaceId;
+
+  if (!workspace?.isRemote || !groupId) {
+    return { invitations: [], members: [] };
+  }
+
+  const [members, invitations] = await Promise.all([
+    loadCachedWorkspaceMembers(groupId),
+    loadCachedWorkspaceInvitations(groupId),
+  ]);
+
+  return { invitations, members };
+};
+
+export const refreshWorkspaceState = async ({
+  client,
+  includeRemoteWithoutSession = true,
+  session,
+} = {}) => {
   const currentWorkspace =
     (await getCurrentWorkspace()) || (await getOrCreateDefaultLocalWorkspace());
-  const localWorkspaces = await getLocalWorkspaces();
+  const sessionUserId = getSessionUserId(session);
+  const storedWorkspaces = filterWorkspacesForSession(
+    await getLocalWorkspaces(),
+    sessionUserId,
+    { includeRemoteWithoutSession },
+  );
+  const localOnlyWorkspaces = storedWorkspaces.filter(
+    (workspace) => !workspace.isRemote,
+  );
+  const visibleCurrentWorkspace = isWorkspaceVisibleForSession(
+    currentWorkspace,
+    sessionUserId,
+    { includeRemoteWithoutSession },
+  )
+    ? currentWorkspace
+    : localOnlyWorkspaces[0] || currentWorkspace;
 
   try {
-    const { authClient, authHeaders } = await getClientAndHeaders({
+    const {
+      authClient,
+      authHeaders,
+      session: freshSession,
+    } = await getClientAndHeaders({
       client,
       session,
     });
+    const accountUserId = getSessionUserId(freshSession);
     const response = await authClient.listWorkspaces({ authHeaders });
-    const remoteWorkspaces = (response.workspaces || []).map(
-      toRemoteWorkspaceMetadata,
+    const myInvitationsResponse = authClient.listMyWorkspaceInvitations
+      ? await authClient.listMyWorkspaceInvitations({ authHeaders })
+      : { invitations: [] };
+    const remoteWorkspaces = (response.workspaces || []).map((workspace) =>
+      toRemoteWorkspaceMetadata(workspace, { accountUserId }),
     );
-    const workspaces = dedupeWorkspaces([...localWorkspaces, ...remoteWorkspaces], {
-      currentWorkspace,
+    await Promise.all(remoteWorkspaces.map((workspace) => saveWorkspace(workspace)));
+    const remoteGroupIds = new Set(
+      remoteWorkspaces.map((workspace) => workspace.groupId).filter(Boolean),
+    );
+    const removedRemoteWorkspaces = storedWorkspaces.filter(
+      (workspace) =>
+        workspace?.isRemote &&
+        getWorkspaceIdentity(workspace) &&
+        !remoteGroupIds.has(getWorkspaceIdentity(workspace)),
+    );
+    await Promise.all(removedRemoteWorkspaces.map(purgeRemovedRemoteWorkspace));
+    const currentWorkspaceWasRemoved =
+      currentWorkspace?.isRemote &&
+      !remoteGroupIds.has(getWorkspaceIdentity(currentWorkspace));
+    const fallbackLocalWorkspace = currentWorkspaceWasRemoved
+      ? await getOrCreatePersonalWorkspace()
+      : null;
+    let nextCurrentWorkspace = fallbackLocalWorkspace
+      ? await setCurrentWorkspace(fallbackLocalWorkspace)
+      : currentWorkspace;
+    const currentRemoteMetadata = nextCurrentWorkspace?.isRemote
+      ? remoteWorkspaces.find((workspace) =>
+          isSameRemoteWorkspace(workspace, nextCurrentWorkspace),
+        )
+      : null;
+
+    if (currentRemoteMetadata) {
+      nextCurrentWorkspace = await setCurrentWorkspace({
+        ...nextCurrentWorkspace,
+        ...currentRemoteMetadata,
+        isRemote: true,
+        workspaceRole:
+          currentRemoteMetadata.workspaceRole ||
+          nextCurrentWorkspace.workspaceRole,
+        workspaceStatus:
+          currentRemoteMetadata.workspaceStatus ||
+          nextCurrentWorkspace.workspaceStatus,
+      });
+    }
+    const workspaces = dedupeWorkspaces([...localOnlyWorkspaces, ...remoteWorkspaces], {
+      currentWorkspace: nextCurrentWorkspace,
     });
 
     return {
       authRequired: false,
-      currentWorkspace,
-      localWorkspaces,
-      remoteWorkspaces: dedupeWorkspaces(remoteWorkspaces, { currentWorkspace }),
+      currentWorkspace: nextCurrentWorkspace,
+      localWorkspaces: localOnlyWorkspaces,
+      myInvitations: getPendingInvitations(
+        myInvitationsResponse.invitations || [],
+      ),
+      remoteWorkspaces: dedupeWorkspaces(remoteWorkspaces, {
+        currentWorkspace: nextCurrentWorkspace,
+      }),
       workspaces,
     };
   } catch (error) {
+    const authRequired = isAuthRequiredError(error);
+
     return {
-      authRequired: true,
-      currentWorkspace,
+      authRequired,
+      currentWorkspace: visibleCurrentWorkspace,
       error: String(error?.message || error),
-      localWorkspaces,
+      localWorkspaces: localOnlyWorkspaces,
+      myInvitations: [],
       remoteWorkspaces: [],
-      workspaces: dedupeWorkspaces(localWorkspaces, { currentWorkspace }),
+      workspaces: dedupeWorkspaces(storedWorkspaces, {
+        currentWorkspace: visibleCurrentWorkspace,
+      }),
     };
   }
 };
 
+export const loadCachedWorkspaceState = async ({
+  includeRemoteWithoutSession = true,
+  session,
+} = {}) => {
+  const sessionUserId = getSessionUserId(session);
+  const currentWorkspace =
+    (await getCurrentWorkspace()) || (await getOrCreateDefaultLocalWorkspace());
+  const localWorkspaces = filterWorkspacesForSession(
+    await getLocalWorkspaces(),
+    sessionUserId,
+    { includeRemoteWithoutSession },
+  );
+  const nextCurrentWorkspace = isWorkspaceVisibleForSession(
+    currentWorkspace,
+    sessionUserId,
+    { includeRemoteWithoutSession },
+  )
+    ? currentWorkspace
+    : await setCurrentWorkspace(
+        localWorkspaces.find((workspace) => !workspace.isRemote) ||
+          (await getOrCreateDefaultLocalWorkspace()),
+      );
+  const workspaces = dedupeWorkspaces(localWorkspaces, {
+    currentWorkspace: nextCurrentWorkspace,
+  });
+
+  return {
+    authRequired: false,
+    currentWorkspace: nextCurrentWorkspace,
+    localWorkspaces: localWorkspaces.filter((workspace) => !workspace.isRemote),
+    myInvitations: await loadCachedMyWorkspaceInvitations(),
+    remoteWorkspaces: localWorkspaces.filter((workspace) => workspace.isRemote),
+    workspaces,
+  };
+};
+
 export const createRemoteWorkspace = async ({ client, name, session } = {}) => {
-  const { authClient, authHeaders } = await getClientAndHeaders({
+  const {
+    authClient,
+    authHeaders,
+    session: freshSession,
+  } = await getClientAndHeaders({
     client,
     session,
   });
@@ -87,10 +344,15 @@ export const createRemoteWorkspace = async ({ client, name, session } = {}) => {
     authHeaders,
     name,
   });
-  const workspace = toRemoteWorkspaceMetadata(response.workspace);
+  const workspace = toRemoteWorkspaceMetadata(response.workspace, {
+    accountUserId: getSessionUserId(freshSession),
+  });
 
   return setCurrentWorkspace(workspace);
 };
+
+export const createPrivateWorkspace = async ({ name } = {}) =>
+  createLocalWorkspace({ name: name || 'Negocio personal' });
 
 export const selectRemoteWorkspace = async (workspace) =>
   setCurrentWorkspace(toRemoteWorkspaceMetadata(workspace));
@@ -114,7 +376,11 @@ export const loadWorkspaceMembers = async ({
     groupId,
   });
 
-  return response.members || [];
+  return saveWorkspaceCache(
+    WORKSPACE_MEMBERS_CACHE_COLLECTION,
+    getWorkspaceCacheId(groupId),
+    response.members || [],
+  );
 };
 
 export const addWorkspaceMember = async ({
@@ -195,6 +461,124 @@ export const createWorkspaceInvitation = async ({
   });
 };
 
+export const updateRemoteWorkspace = async ({
+  client,
+  groupId,
+  name,
+  session,
+} = {}) => {
+  const {
+    authClient,
+    authHeaders,
+    session: freshSession,
+  } = await getClientAndHeaders({
+    client,
+    session,
+  });
+  const response = await authClient.updateWorkspace({
+    authHeaders,
+    groupId,
+    name,
+  });
+  const workspace = toRemoteWorkspaceMetadata(response.workspace, {
+    accountUserId: getSessionUserId(freshSession),
+  });
+
+  return setCurrentWorkspace(workspace);
+};
+
+export const updatePrivateWorkspace = async ({ name, workspace } = {}) => {
+  const targetId = workspace?.workspaceId || workspace?.groupId;
+
+  if (!targetId || workspace?.isRemote) {
+    throw new Error('workspace_required');
+  }
+
+  const localWorkspaces = await getLocalWorkspaces();
+  const existingWorkspace = localWorkspaces.find((localWorkspace) => {
+    const localId = localWorkspace.workspaceId || localWorkspace.groupId;
+    const localGroupId = localWorkspace.groupId || localWorkspace.workspaceId;
+
+    return (
+      !localWorkspace.isRemote &&
+      (localId === targetId || localGroupId === targetId)
+    );
+  });
+
+  if (!existingWorkspace) {
+    throw new Error('workspace_required');
+  }
+
+  const groupId = existingWorkspace.groupId || existingWorkspace.workspaceId;
+  const workspaceId = existingWorkspace.workspaceId || groupId;
+  const nextWorkspace = {
+    ...existingWorkspace,
+    groupId,
+    name,
+    syncStatus: 'local',
+    workspaceId,
+  };
+  const currentWorkspace = await getCurrentWorkspace();
+
+  return currentWorkspace?.groupId === groupId ||
+    currentWorkspace?.workspaceId === workspaceId
+    ? setCurrentWorkspace(nextWorkspace)
+    : saveWorkspace(nextWorkspace);
+};
+
+export const deleteRemoteWorkspace = async ({
+  client,
+  groupId,
+  session,
+  workspace,
+} = {}) => {
+  const { authClient, authHeaders } = await getClientAndHeaders({
+    client,
+    session,
+  });
+
+  await authClient.deleteWorkspace({
+    authHeaders,
+    groupId,
+  });
+
+  await deleteOutboxEventsByGroupId(groupId);
+  await deleteSyncState(groupId);
+  await hardDeleteDocumentsByGroupId(groupId);
+  await deleteWorkspaceMetadata(workspace || { groupId, workspaceId: groupId });
+
+  const localWorkspace =
+    await getOrCreatePersonalWorkspace();
+
+  return setCurrentWorkspace(localWorkspace);
+};
+
+export const deletePrivateWorkspace = async (workspace = {}) => {
+  const groupId = workspace?.groupId || workspace?.workspaceId;
+
+  if (!groupId || workspace?.isRemote) {
+    throw new Error('workspace_required');
+  }
+
+  await deleteOutboxEventsByGroupId(groupId);
+  await deleteSyncState(groupId);
+  await hardDeleteDocumentsByGroupId(groupId);
+
+  const currentWorkspace = await getCurrentWorkspace();
+  const remainingLocalWorkspace = (await getLocalWorkspaces()).find(
+    (localWorkspace) =>
+      !localWorkspace.isRemote &&
+      (localWorkspace.groupId || localWorkspace.workspaceId) !== groupId,
+  );
+  const fallbackWorkspace =
+    remainingLocalWorkspace || (await getOrCreatePersonalWorkspace());
+
+  return currentWorkspace?.groupId === groupId ||
+    currentWorkspace?.workspaceId === groupId
+    ? setCurrentWorkspace(fallbackWorkspace)
+    : currentWorkspace || fallbackWorkspace;
+};
+
 export const loadWorkspaceInvitationPreviewByToken = async ({
   client,
   token,
@@ -221,7 +605,11 @@ export const loadWorkspaceInvitations = async ({
     groupId,
   });
 
-  return response.invitations || [];
+  return saveWorkspaceCache(
+    WORKSPACE_INVITATIONS_CACHE_COLLECTION,
+    getWorkspaceCacheId(groupId),
+    getPendingInvitations(response.invitations || []),
+  );
 };
 
 export const loadMyWorkspaceInvitations = async ({ client, session } = {}) => {
@@ -233,7 +621,11 @@ export const loadMyWorkspaceInvitations = async ({ client, session } = {}) => {
     authHeaders,
   });
 
-  return response.invitations || [];
+  return saveWorkspaceCache(
+    WORKSPACE_INVITATIONS_CACHE_COLLECTION,
+    MY_INVITATIONS_CACHE_ID,
+    getPendingInvitations(response.invitations || []),
+  );
 };
 
 export const acceptWorkspaceInvitation = async ({
@@ -241,15 +633,38 @@ export const acceptWorkspaceInvitation = async ({
   invitationId,
   session,
 } = {}) => {
-  const { authClient, authHeaders } = await getClientAndHeaders({
+  const {
+    authClient,
+    authHeaders,
+    session: freshSession,
+  } = await getClientAndHeaders({
     client,
     session,
   });
 
-  return authClient.acceptWorkspaceInvitation({
+  const response = await authClient.acceptWorkspaceInvitation({
     authHeaders,
     invitationId,
   });
+  const invitation = response?.invitation || {};
+  const groupId = invitation.groupId || invitation.workspaceId || null;
+
+  if (groupId) {
+    await setCurrentWorkspace(
+      toRemoteWorkspaceMetadata({
+        accountUserId: getSessionUserId(freshSession),
+        groupId,
+        membership: {
+          role: invitation.role || 'member',
+          status: 'active',
+        },
+        name: invitation.workspace?.name || invitation.workspaceName,
+        workspaceId: invitation.workspaceId || groupId,
+      }),
+    );
+  }
+
+  return response;
 };
 
 export const acceptWorkspaceInvitationByToken = async ({
@@ -355,8 +770,7 @@ export const disconnectLocalWorkspace = async ({
   }
 
   const localWorkspace =
-    (await getFirstLocalOnlyWorkspace()) ||
-    (await createLocalWorkspace({ name: 'Workspace local' }));
+    await getOrCreatePersonalWorkspace();
 
   return setCurrentWorkspace(localWorkspace);
 };
@@ -366,7 +780,10 @@ export default {
   acceptWorkspaceInvitation,
   acceptWorkspaceInvitationByToken,
   createRemoteWorkspace,
+  createPrivateWorkspace,
   createWorkspaceInvitation,
+  deletePrivateWorkspace,
+  deleteRemoteWorkspace,
   declineWorkspaceInvitation,
   declineWorkspaceInvitationByToken,
   disconnectLocalWorkspace,
@@ -381,5 +798,7 @@ export default {
   selectRemoteWorkspace,
   selectWorkspace,
   toRemoteWorkspaceMetadata,
+  updatePrivateWorkspace,
+  updateRemoteWorkspace,
   updateWorkspaceMember,
 };

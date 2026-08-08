@@ -1,4 +1,5 @@
 import { API_HOST, URL_Sync } from '@env';
+import Constants from 'expo-constants';
 
 export const DEFAULT_SYNC_REQUEST_TIMEOUT_MS = 25 * 1000;
 
@@ -6,6 +7,9 @@ const trimTrailingSlash = (value) => String(value || '').trim().replace(/\/+$/, 
 
 const getEnv = () =>
   typeof process !== 'undefined' && process.env ? process.env : {};
+
+const getExpoExtra = () =>
+  Constants?.expoConfig?.extra || Constants?.manifest?.extra || {};
 
 export const getSyncBaseUrl = (options = {}) => {
   if (
@@ -16,9 +20,12 @@ export const getSyncBaseUrl = (options = {}) => {
   }
 
   const environment = getEnv();
+  const extra = getExpoExtra();
 
   return trimTrailingSlash(
-    environment.EXPO_PUBLIC_SYNC_API_URL ||
+    extra.syncApiUrl ||
+      extra.apiUrl ||
+      environment.EXPO_PUBLIC_SYNC_API_URL ||
       environment.EXPO_PUBLIC_API_URL ||
       URL_Sync ||
       API_HOST ||

@@ -4,6 +4,12 @@ const sumCounts = (counts = {}) =>
     0,
   );
 
+export const getUserFacingPendingCount = ({
+  fallbackPendingCount = 0,
+  readiness = null,
+} = {}) =>
+  readiness?.readyToSyncCount ?? Number(fallbackPendingCount || 0);
+
 export const getSyncCenterModeLabel = (workspace) =>
   workspace?.isRemote ? 'Compartido' : 'Solo local';
 
@@ -105,9 +111,13 @@ export const createSyncCenterSummary = ({
   session = null,
 } = {}) => {
   const isSharedWorkspace = Boolean(currentWorkspace?.isRemote);
-  const pendingCount =
+  const pendingOutboxCount =
     readiness?.pendingOutboxCount ??
     sumCounts(readiness?.pendingOutboxByCollection);
+  const pendingCount = getUserFacingPendingCount({
+    fallbackPendingCount: pendingOutboxCount,
+    readiness,
+  });
   const failedCount =
     readiness?.failedOutboxCount ?? sumCounts(readiness?.failedOutboxByCollection);
   const conflictDocumentCount = readiness?.conflictDocumentCount || 0;
@@ -169,6 +179,7 @@ export default {
   getAuthStatusLabel,
   getSyncCenterModeLabel,
   getSyncWarningMessage,
+  getUserFacingPendingCount,
   getUserSafeSyncStatus,
   getUserSafeSyncError,
 };

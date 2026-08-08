@@ -40,6 +40,31 @@ exports.getWorkspace = asyncHandler(async (req, res) => {
   });
 });
 
+exports.updateWorkspace = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.updateWorkspace({
+    groupId: req.params.groupId,
+    name: req.body?.name,
+    requesterUserId: req.user.userId,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    workspace,
+  });
+});
+
+exports.deleteWorkspace = asyncHandler(async (req, res) => {
+  const workspace = await workspaceService.deleteWorkspace({
+    groupId: req.params.groupId,
+    requesterUserId: req.user.userId,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    workspace,
+  });
+});
+
 exports.getMembers = asyncHandler(async (req, res) => {
   const members = await workspaceService.getMembers({
     groupId: req.params.groupId,

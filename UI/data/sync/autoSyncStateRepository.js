@@ -9,6 +9,17 @@ import {
 } from './autoSyncConfig';
 
 const nowIso = () => new Date().toISOString();
+const listeners = new Set();
+
+const notifyListeners = (state) => {
+  listeners.forEach((listener) => {
+    try {
+      listener(state);
+    } catch (error) {
+      // Listener failures must not break sync state persistence.
+    }
+  });
+};
 
 const saveLocalAutoSyncDocument = (id, data) =>
   saveDocument(AUTO_SYNC_COLLECTION, id, data, {
@@ -60,7 +71,16 @@ export const setAutoSyncState = async (state = {}) => {
   };
 
   await saveLocalAutoSyncDocument(AUTO_SYNC_STATE_ID, nextState);
+  notifyListeners(nextState);
   return nextState;
+};
+
+export const subscribeToAutoSyncState = (listener) => {
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
 };
 
 export default {
@@ -68,4 +88,5 @@ export default {
   getAutoSyncState,
   setAutoSyncEnabled,
   setAutoSyncState,
+  subscribeToAutoSyncState,
 };

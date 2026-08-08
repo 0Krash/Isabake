@@ -37,6 +37,105 @@ report it clearly, run focused service/non-listener tests when possible, and sta
 
 ## Manual Validation Checklists
 
+### Phase 40 Workspace Screen Tabs
+
+Expected state:
+
+- `Compartir negocio` has a compact header and current workspace context card.
+- Internal tabs are `Equipo`, `Invitaciones`, and `Negocios`.
+- Switching internal tabs is UI-only and must not trigger push, pull, full sync,
+  workspace selection, invitation accept, or login.
+- Equipo shows active users with safe name/email labels, role, status, and `Tu`
+  when the backend marks the current member.
+- Removed users are not listed as active users.
+- Invitaciones validates email inline, defaults role to `Miembro`, and never
+  shows raw invite links, invite tokens, hashes, or backend payloads.
+- Negocios shows the current workspace with `Actual`, hides `Seleccionar` for
+  the current workspace, and keeps workspace creation compact.
+- Revocar invitacion, Desconectar localmente, and Salir del negocio compartido
+  require confirmation.
+- This phase does not change sync architecture, add WebSockets, add background
+  sync, perform release/build work, force login, delete local data, or
+  auto-resolve conflicts.
+
+Manual checks:
+
+- Open Compartir negocio.
+- Confirm header hierarchy and safe area on Android and iOS.
+- Confirm current workspace card is compact and does not show raw groupId.
+- Switch Equipo / Invitaciones / Negocios and confirm backend logs show no sync
+  push/pull/full sync from tab switching.
+- In Equipo, confirm users show name/email where available, `Usuario sin nombre`
+  when needed, and no raw user IDs when safe identity exists.
+- Confirm the current user row shows `Tu` when member data includes
+  `isCurrentUser`.
+- Confirm removed users do not show as active with Remover.
+- Confirm member/viewer roles cannot manage users.
+- In Invitaciones, type an invalid email and confirm the send button remains
+  disabled with inline validation.
+- Confirm duplicate pending invited email shows a clear inline message.
+- Confirm sent invitations show role, expiration, status badge, and no
+  `Email: sin estado de envio`.
+- Confirm Revocar displays confirmation before calling the action.
+- In Negocios, confirm current workspace shows `Actual` and no Seleccionar.
+- Confirm other workspaces show Seleccionar and switching does not run sync.
+- Confirm Crear negocio compartido opens a compact inline form and validates an
+  empty name.
+- Confirm advanced shared-workspace actions are separated and require
+  confirmation.
+- Confirm bottom navigation still works.
+- Confirm no token/hash/raw invite link/raw payload appears in normal UI.
+
+### Phase 39 Workspace-First UX
+
+Expected state:
+
+- Workspace is the primary business context for Transacciones, Recetas, and
+  Inventario.
+- Every workspace is local-capable.
+- Local-only is shown as a local business state, not a separate fake
+  "Workspace local" option in normal UI.
+- Account verification may run after local DB startup, but it must not block
+  local use, force login, delete local data, or run sync.
+- The left header button opens the app/business menu, and the right header
+  button opens Cuenta/Login.
+- Release/build work remains intentionally paused.
+
+Manual checks:
+
+- Open app logged out and confirm local-first still works.
+- Confirm account verification updates the account indicator when possible and
+  safely stays local/offline when auth cannot be verified.
+- Confirm left header button opens the menu and right header button opens
+  Cuenta.
+- Confirm Transacciones, Recetas, and Inventario show `Negocio:` with a
+  friendly active workspace label and shared/local metadata.
+- Create a recipe in Workspace A, switch to Workspace B, and confirm A's recipe
+  is not visible.
+- Create inventory in Workspace B, switch back to Workspace A, and confirm B's
+  inventory is not visible.
+- Create transactions in each workspace and confirm the lists/totals are scoped
+  to the active workspace.
+- Confirm new recipe/inventory/transaction outbox work uses the active
+  workspace group.
+- Confirm collaborator list shows display name/email when available, uses
+  `Usuario sin nombre` when not available, hides removed members from the
+  active list, and does not show remove actions for removed members.
+- Confirm member/viewer roles cannot manage collaborators and the last active
+  owner still cannot be removed or demoted.
+- Confirm manual sync still runs only when pressed and guarded auto-sync still
+  uses the existing guarded path.
+
+Release blockers:
+
+- Any cross-workspace recipe, inventory, or transaction leakage.
+- Any new forced login or startup sync.
+- Any local data deletion on auth failure, logout, workspace switch, disconnect,
+  or leave.
+- Raw user IDs shown in normal collaborator UI when name/email is available.
+- Tokens, hashes, headers, raw sync payloads, group IDs, or backend internals
+  shown in normal UI.
+
 ### Phase 36 QA And Release Readiness
 
 Overall expected state:

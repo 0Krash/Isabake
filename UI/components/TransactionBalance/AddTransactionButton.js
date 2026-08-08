@@ -1,6 +1,6 @@
-import { Keyboard, StyleSheet, TouchableOpacity, Text, View } from 'react-native';
-import typography from '../../constants/TransactionBalance/Typography';
+import { Keyboard, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
+import AppIcon from '../icons/AppIcon';
 
 export default function AddTransactionButton({
   setAddTransactionModalIsVisible,
@@ -16,7 +16,12 @@ export default function AddTransactionButton({
       }}
     >
       <View style={styles.iconContainer}>
-        <Text style={[styles.iconText, { color: colors.textInverse }]}>+</Text>
+        <AppIcon
+          accessibilityLabel="Agregar transacción"
+          color={colors.textInverse}
+          name="plus"
+          size={30}
+        />
       </View>
     </TouchableOpacity>
   );
@@ -36,10 +41,5 @@ const styles = StyleSheet.create({
   iconContainer: {
     height: 48,
     justifyContent: 'center',
-  },
-  iconText: {
-    fontSize: typography.sizes.displayAmount,
-    fontWeight: '300',
-    lineHeight: 46,
   },
 });

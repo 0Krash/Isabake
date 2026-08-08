@@ -9,7 +9,7 @@
 
 ## Current Next Phase
 
-- Phase 36: QA hardening and release readiness validation.
+- Next phase: pending definition after Phase 39.
 
 ## Latest Cleanup
 
@@ -79,6 +79,26 @@
   features, redesign UI, change sync architecture, add WebSockets/background
   sync, force login, delete local data, expose tokens/hashes, or auto-resolve
   conflicts.
+- Phase 39: workspace-first UX and workspace-scoped business data. Account
+  verification runs automatically after local DB startup without blocking local
+  use or forcing login. The main business header separates menu access on the
+  left from account access on the right, and Transacciones, Recetas, and
+  Inventario show the active business context. Recipes, inventory, and
+  transactions read and create under the active workspace group. Collaborator
+  UI shows safe name/email labels, hides removed members from the active list,
+  and avoids raw user IDs in normal UI. Release/build work remains paused; no
+  WebSockets, background sync, startup sync, forced login, local-data deletion,
+  token/hash exposure, or conflict auto-resolution was added.
+- Phase 40: Compartir negocio workspace screen UI/UX relayout. The screen now
+  uses a compact header/context card plus internal Equipo, Invitaciones, and
+  Negocios tabs. Equipo owns collaborator display and invite entry. Invitaciones
+  owns invite creation, received invitations, and sent invitations. Negocios
+  owns workspace switching, compact shared-workspace creation, and advanced
+  shared-workspace actions. Revoking invitations, disconnecting locally, and
+  leaving a shared workspace require confirmation. This was not a sync
+  architecture phase; no release/build work, WebSockets, background sync,
+  startup sync, forced login, local-data deletion, token/hash exposure, or
+  conflict auto-resolution was added.
 
 ## Likely Future Phases
 

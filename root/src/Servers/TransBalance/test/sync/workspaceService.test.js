@@ -75,6 +75,10 @@ describe('WorkspaceService', () => {
     expect(workspace).toEqual(
       expect.objectContaining({
         groupId: 'group_a',
+        membership: {
+          role: 'owner',
+          status: 'active',
+        },
         ownerUserId: 'user_owner',
         workspaceId: 'group_a',
       }),
@@ -87,6 +91,59 @@ describe('WorkspaceService', () => {
         userId: 'user_owner',
       }),
     );
+  });
+
+  test('owner cannot create another active workspace with same name', async () => {
+    const { service } = createService();
+
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'Panaderia Norte',
+      ownerUserId: 'owner',
+    });
+
+    await expect(
+      service.createWorkspace({
+        groupId: 'group_b',
+        name: '  panaderia norte ',
+        ownerUserId: 'owner',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_name_already_exists',
+      statusCode: 409,
+    });
+  });
+
+  test('owner can rename workspace and duplicate names are rejected', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'Panaderia Norte',
+      ownerUserId: 'owner',
+    });
+    await service.createWorkspace({
+      groupId: 'group_b',
+      name: 'Panaderia Sur',
+      ownerUserId: 'owner',
+    });
+
+    await expect(
+      service.updateWorkspace({
+        groupId: 'group_a',
+        name: 'Panaderia Centro',
+        requesterUserId: 'owner',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ name: 'Panaderia Centro' }));
+    await expect(
+      service.updateWorkspace({
+        groupId: 'group_a',
+        name: 'panaderia sur',
+        requesterUserId: 'owner',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_name_already_exists',
+      statusCode: 409,
+    });
   });
 
   test('invite link builder supports default scheme and configured https base URL', () => {
@@ -137,6 +194,34 @@ describe('WorkspaceService', () => {
     });
     expect(admin.role).toBe('admin');
     expect(member.role).toBe('member');
+  });
+
+  test('cannot invite an active workspace member again', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'Panaderia',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      email: 'member@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+      userId: 'member',
+    });
+
+    await expect(
+      service.createInvitation({
+        email: 'member@example.test',
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+        role: 'member',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_member_already_exists',
+      statusCode: 409,
+    });
   });
 
   test.each(['owner', 'admin', 'member'])(
@@ -317,6 +402,63 @@ describe('WorkspaceService', () => {
     ).resolves.toEqual(expect.objectContaining({ status: 'removed' }));
   });
 
+  test('any active member can list safe team identity labels', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      displayName: 'Ana Admin',
+      email: 'ana@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'admin',
+      userId: 'admin',
+    });
+    await service.addMember({
+      displayName: 'Beto Member',
+      email: 'beto@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+      userId: 'member',
+    });
+
+    const members = await service.getMembers({
+      groupId: 'group_a',
+      requesterUserId: 'member',
+    });
+
+    expect(members).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          isCurrentUser: false,
+          role: 'owner',
+          userId: 'owner',
+        }),
+        expect.objectContaining({
+          displayName: 'Ana Admin',
+          email: 'ana@example.test',
+          isCurrentUser: false,
+          role: 'admin',
+          status: 'active',
+          userId: 'admin',
+        }),
+        expect.objectContaining({
+          displayName: 'Beto Member',
+          email: 'beto@example.test',
+          isCurrentUser: true,
+          role: 'member',
+          status: 'active',
+          userId: 'member',
+        }),
+      ]),
+    );
+    expect(JSON.stringify(members)).not.toContain('passwordHash');
+  });
+
   test('member/viewer cannot manage members', async () => {
     const { service } = createService();
     await service.createWorkspace({
@@ -372,6 +514,100 @@ describe('WorkspaceService', () => {
     ).rejects.toMatchObject({
       message: 'last_owner_required',
       statusCode: 409,
+    });
+  });
+
+  test('admin cannot remove or change another owner', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner_a',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner_a',
+      role: 'owner',
+      userId: 'owner_b',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner_a',
+      role: 'admin',
+      userId: 'admin',
+    });
+
+    await expect(
+      service.updateMember({
+        groupId: 'group_a',
+        requesterUserId: 'admin',
+        role: 'member',
+        userId: 'owner_b',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_owner_self_required',
+      statusCode: 403,
+    });
+    await expect(
+      service.removeMember({
+        groupId: 'group_a',
+        requesterUserId: 'admin',
+        userId: 'owner_b',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_owner_self_required',
+      statusCode: 403,
+    });
+  });
+
+  test('owner can hard delete workspace and related data', async () => {
+    const { repository, service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.createInvitation({
+      email: 'invitee@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+    });
+
+    await expect(
+      service.deleteWorkspace({
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ deletedAt: expect.any(String) }));
+    await expect(service.listWorkspacesForUser('owner')).resolves.toEqual([]);
+    expect(repository.workspaces).toEqual([]);
+    expect(repository.memberships).toEqual([]);
+    expect(repository.invitations).toEqual([]);
+  });
+
+  test('non-owner cannot delete workspace', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    await service.addMember({
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'admin',
+      userId: 'admin',
+    });
+
+    await expect(
+      service.deleteWorkspace({
+        groupId: 'group_a',
+        requesterUserId: 'admin',
+      }),
+    ).rejects.toMatchObject({
+      message: 'workspace_owner_required',
+      statusCode: 403,
     });
   });
 
@@ -440,6 +676,46 @@ describe('WorkspaceService', () => {
     });
     expect(JSON.stringify(first)).not.toContain('isabake://invite/');
     expect(emailService.sendWorkspaceInvitationEmail).toHaveBeenCalledTimes(2);
+  });
+
+  test('owner invitation list hides invitations after they are accepted', async () => {
+    const { service } = createService();
+    await service.createWorkspace({
+      groupId: 'group_a',
+      name: 'A',
+      ownerUserId: 'owner',
+    });
+    const accepted = await service.createInvitation({
+      email: 'accepted@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'member',
+    });
+    const pending = await service.createInvitation({
+      email: 'pending@example.test',
+      groupId: 'group_a',
+      requesterUserId: 'owner',
+      role: 'viewer',
+    });
+
+    await service.acceptInvitation({
+      email: 'accepted@example.test',
+      invitationId: accepted.invitationId,
+      userId: 'accepted_user',
+    });
+
+    await expect(
+      service.listWorkspaceInvitations({
+        groupId: 'group_a',
+        requesterUserId: 'owner',
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        email: 'pending@example.test',
+        invitationId: pending.invitationId,
+        status: 'invited',
+      }),
+    ]);
   });
 
   test('development NODE_ENV alone does not expose devInviteLink', async () => {
@@ -524,9 +800,14 @@ describe('WorkspaceService', () => {
 
   test('token accept requires matching email and activates membership', async () => {
     const { emailService, repository, service } = createService();
+    await service.upsertDevUser({
+      displayName: 'Duenia',
+      email: 'owner@example.test',
+      userId: 'owner',
+    });
     await service.createWorkspace({
       groupId: 'group_a',
-      name: 'A',
+      name: 'Panaderia Norte',
       ownerUserId: 'owner',
     });
     const invitation = await service.createInvitation({
@@ -537,6 +818,24 @@ describe('WorkspaceService', () => {
     });
     const token = getInviteTokenFromEmail(emailService);
 
+    await expect(
+      service.listMyInvitations({
+        email: 'invitee@example.test',
+        userId: 'invitee',
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        invitedBy: {
+          displayName: 'Duenia',
+          email: 'owner@example.test',
+        },
+        invitationId: invitation.invitationId,
+        workspace: {
+          groupId: 'group_a',
+          name: 'Panaderia Norte',
+        },
+      }),
+    ]);
     await expect(
       service.acceptInvitationByToken({
         email: 'wrong@example.test',
@@ -566,6 +865,12 @@ describe('WorkspaceService', () => {
         }),
       ]),
     );
+    await expect(
+      service.listMyInvitations({
+        email: 'invitee@example.test',
+        userId: 'invitee',
+      }),
+    ).resolves.toEqual([]);
   });
 
   test('regenerate invitation link replaces token and keeps raw link default-deny', async () => {

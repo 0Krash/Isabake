@@ -3,6 +3,8 @@ const AuthSession = require('../models/authSessionModel');
 const Workspace = require('../models/workspaceModel');
 const WorkspaceInvitation = require('../models/workspaceInvitationModel');
 const WorkspaceMembership = require('../models/workspaceMembershipModel');
+const SyncDocument = require('../models/syncDocumentModel');
+const SyncEvent = require('../models/syncEventModel');
 
 const toPlainObject = (document) =>
   typeof document?.toObject === 'function' ? document.toObject() : document;
@@ -88,6 +90,50 @@ class MongooseWorkspaceRepository {
     );
   }
 
+  async updateWorkspace(groupId, update) {
+    return toPlainObject(
+      await Workspace.findOneAndUpdate(
+        { groupId, deletedAt: null },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        },
+      ),
+    );
+  }
+
+  async softDeleteWorkspace(groupId, update) {
+    return toPlainObject(
+      await Workspace.findOneAndUpdate(
+        { groupId, deletedAt: null },
+        update,
+        {
+          new: true,
+          runValidators: true,
+        },
+      ),
+    );
+  }
+
+  async hardDeleteWorkspaceData(groupId) {
+    const workspace = await Workspace.findOne({ groupId, deletedAt: null });
+
+    if (!workspace) {
+      return null;
+    }
+
+    await Promise.all([
+      Workspace.deleteOne({ groupId }),
+      WorkspaceMembership.deleteMany({ groupId }),
+      WorkspaceInvitation.deleteMany({ groupId }),
+      SyncDocument.deleteMany({ groupId }),
+      SyncEvent.deleteMany({ groupId }),
+    ]);
+
+    return toPlainObject(workspace);
+  }
+
   async upsertMembership(membership) {
     return toPlainObject(
       await WorkspaceMembership.findOneAndUpdate(
@@ -137,6 +183,10 @@ class MongooseWorkspaceRepository {
         },
       ),
     );
+  }
+
+  async updateMembershipsByGroupId(groupId, update) {
+    return WorkspaceMembership.updateMany({ groupId }, update);
   }
 
   async findActiveMembershipsByUserId(userId) {
@@ -197,6 +247,10 @@ class MongooseWorkspaceRepository {
         },
       ),
     );
+  }
+
+  async updateInvitationsByGroupId(groupId, update) {
+    return WorkspaceInvitation.updateMany({ groupId }, update);
   }
 }
 

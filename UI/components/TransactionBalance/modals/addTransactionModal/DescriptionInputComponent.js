@@ -3,6 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 
 import useTransactionBalanceStyles from '../../../../hooks/TransactionBalance/useTransactionBalanceStyles';
 import InputValidation from '../../../../utils/InputValidation';
+import { capitalizeUserEntry } from '../../../../utils/textEntryFormat';
 
 export default function DescriptionInputComponent({
   category,
@@ -45,8 +46,9 @@ export default function DescriptionInputComponent({
             : quantityInputRef.current.focus();
         }}
         onChangeText={(text) => {
-          setInputValue(text);
-          setDescription(text);
+          const nextText = capitalizeUserEntry(text);
+          setInputValue(nextText);
+          setDescription(nextText);
           setValidationErrorDescription(false);
         }}
         multiline={true}

@@ -126,6 +126,12 @@ describe('authApiClient', () => {
 
     await client.listWorkspaces({ authHeaders });
     await client.createWorkspace({ authHeaders, name: 'Panaderia' });
+    await client.updateWorkspace({
+      authHeaders,
+      groupId: 'group_1',
+      name: 'Panaderia Norte',
+    });
+    await client.deleteWorkspace({ authHeaders, groupId: 'group_1' });
     await client.listWorkspaceMembers({ authHeaders, groupId: 'group_1' });
     await client.addWorkspaceMember({
       authHeaders,
@@ -197,6 +203,19 @@ describe('authApiClient', () => {
         }),
         method: 'POST',
       }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1',
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'Panaderia Norte',
+        }),
+        method: 'PATCH',
+      }),
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://api.example.test/workspaces/group_1',
+      expect.objectContaining({ method: 'DELETE' }),
     );
     expect(fetchImpl).toHaveBeenCalledWith(
       'http://api.example.test/workspaces/group_1/members',

@@ -25,6 +25,7 @@ import {
   safelyRecordSyncHistory,
   startSyncHistoryRun,
 } from '../../data/sync/syncHistoryService';
+import { setAutoSyncState } from '../../data/sync/autoSyncStateRepository';
 import { getSyncState } from '../../data/sync/syncStateRepository';
 
 export const loadSyncCenterStatus = async ({
@@ -35,9 +36,16 @@ export const loadSyncCenterStatus = async ({
 } = {}) => {
   const currentWorkspace =
     (await getWorkspace()) || (await getOrCreateDefaultLocalWorkspace());
-  const [session, readiness, lastSyncState] = await Promise.all([
-    getSession().catch(() => null),
-    runReadiness(),
+  const session = await getSession().catch(() => null);
+  const canUseSharedWorkspace =
+    currentWorkspace?.isRemote &&
+    (!currentWorkspace.accountUserId ||
+      currentWorkspace.accountUserId === session?.userId);
+  const syncGroupId = canUseSharedWorkspace
+    ? currentWorkspace.groupId
+    : null;
+  const [readiness, lastSyncState] = await Promise.all([
+    runReadiness({ groupId: syncGroupId }),
     currentWorkspace?.groupId
       ? getState(currentWorkspace.groupId).catch(() => null)
       : Promise.resolve(null),
@@ -79,6 +87,13 @@ const requireSharedSyncReady = ({ currentWorkspace, session } = {}) => {
     throw new Error('session_expired');
   }
 
+  if (
+    currentWorkspace.accountUserId &&
+    currentWorkspace.accountUserId !== session.userId
+  ) {
+    throw new Error('workspace_account_mismatch');
+  }
+
   return currentWorkspace.groupId;
 };
 
@@ -99,6 +114,20 @@ const getHistoryContext = (status = {}) => ({
 
 const getSyncResultError = (result = {}) =>
   result.error || result.push?.error || result.pull?.error || null;
+
+const recordManualSyncState = ({
+  actionType,
+  pendingCount = 0,
+  status = 'success',
+} = {}) =>
+  setAutoSyncState({
+    autoSyncState: 'idle',
+    lastFinishedAt: new Date().toISOString(),
+    lastReason: `manual_${actionType || 'sync'}`,
+    lastStatus: status,
+    pendingOutboxCount: Number(pendingCount || 0),
+    syncInFlight: false,
+  }).catch(() => null);
 
 export const runManualSyncAction = async ({
   action,
@@ -158,6 +187,11 @@ export const runManualSyncAction = async ({
         status: 'failed',
       }),
     );
+    await recordManualSyncState({
+      actionType,
+      pendingCount: before.pendingCount,
+      status: 'failed',
+    });
     throw error;
   }
 
@@ -176,8 +210,19 @@ export const runManualSyncAction = async ({
   );
 
   if (syncResultError) {
+    await recordManualSyncState({
+      actionType,
+      pendingCount: after.pendingCount,
+      status: 'failed',
+    });
     throw new Error(syncResultError);
   }
+
+  await recordManualSyncState({
+    actionType,
+    pendingCount: after.pendingCount,
+    status: 'success',
+  });
 
   return {
     after,

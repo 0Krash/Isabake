@@ -22,6 +22,8 @@ const normalizeStatus = (status = ACTIVE_STATUS) =>
   VALID_STATUSES.has(status) ? status : ACTIVE_STATUS;
 
 const normalizeEmail = (email = '') => String(email || '').trim().toLowerCase();
+const normalizeWorkspaceName = (name = '') =>
+  String(name || '').trim().toLowerCase();
 
 const normalizeInvitationRole = (role = 'member') =>
   VALID_INVITATION_ROLES.has(role) ? role : 'member';
@@ -101,6 +103,20 @@ const sanitizeInvitation = (invitation = {}, extra = {}) => {
     workspaceId: invitation.workspaceId || null,
   };
 
+  if (extra.inviter) {
+    safe.invitedBy = {
+      displayName: extra.inviter.displayName || null,
+      email: extra.inviter.email || null,
+    };
+  }
+
+  if (extra.workspace) {
+    safe.workspace = {
+      groupId: extra.workspace.groupId || null,
+      name: extra.workspace.name || 'Workspace compartido',
+    };
+  }
+
   if (extra.devInviteLink && isDevInviteLinkAllowed()) {
     safe.devInviteLink = extra.devInviteLink;
   }
@@ -160,6 +176,7 @@ class WorkspaceService {
     }
 
     const id = groupId || workspaceId || createGroupId();
+    const workspaceName = name || 'Workspace compartido';
     const existingWorkspace = await this.repository.findWorkspaceByGroupId(id);
 
     if (existingWorkspace) {
@@ -169,20 +186,37 @@ class WorkspaceService {
       });
 
       if (membership?.status === ACTIVE_STATUS) {
-        return existingWorkspace;
+        return {
+          ...existingWorkspace,
+          membership: {
+            role: membership.role,
+            status: membership.status,
+          },
+        };
       }
 
       throw createHttpError(409, 'workspace_already_exists');
     }
 
+    const existingOwnerWorkspaces = await this.listWorkspacesForUser(ownerUserId);
+    const duplicatedName = existingOwnerWorkspaces.some(
+      (workspace) =>
+        normalizeWorkspaceName(workspace.name) ===
+        normalizeWorkspaceName(workspaceName),
+    );
+
+    if (duplicatedName) {
+      throw createHttpError(409, 'workspace_name_already_exists');
+    }
+
     const workspace = await this.repository.createWorkspace({
       groupId: id,
-      name: name || 'Workspace compartido',
+      name: workspaceName,
       ownerUserId,
       workspaceId: workspaceId || id,
     });
 
-    await this.repository.upsertMembership({
+    const membership = await this.repository.upsertMembership({
       groupId: workspace.groupId,
       role: 'owner',
       status: ACTIVE_STATUS,
@@ -190,7 +224,13 @@ class WorkspaceService {
       workspaceId: workspace.workspaceId,
     });
 
-    return workspace;
+    return {
+      ...workspace,
+      membership: {
+        role: membership.role,
+        status: membership.status,
+      },
+    };
   }
 
   async listWorkspacesForUser(userId) {
@@ -223,7 +263,7 @@ class WorkspaceService {
     return this.repository.findWorkspaceByGroupId(groupId);
   }
 
-  async getMembers({ groupId, requesterUserId }) {
+  async updateWorkspace({ groupId, name, requesterUserId }) {
     const requesterRole = await this.getUserWorkspaceRole(
       groupId,
       requesterUserId,
@@ -233,7 +273,87 @@ class WorkspaceService {
       throw createHttpError(403, 'workspace_admin_required');
     }
 
-    return this.repository.findMembershipsByGroupId(groupId);
+    const workspace = await this.repository.findWorkspaceByGroupId(groupId);
+
+    if (!workspace) {
+      throw createHttpError(404, 'workspace_not_found');
+    }
+
+    const workspaceName = String(name || '').trim();
+
+    if (!workspaceName) {
+      throw createHttpError(400, 'workspace_name_required');
+    }
+
+    const existingOwnerWorkspaces = await this.listWorkspacesForUser(
+      workspace.ownerUserId,
+    );
+    const duplicatedName = existingOwnerWorkspaces.some(
+      (currentWorkspace) =>
+        currentWorkspace.groupId !== groupId &&
+        normalizeWorkspaceName(currentWorkspace.name) ===
+          normalizeWorkspaceName(workspaceName),
+    );
+
+    if (duplicatedName) {
+      throw createHttpError(409, 'workspace_name_already_exists');
+    }
+
+    return this.repository.updateWorkspace(groupId, {
+      ...workspace,
+      name: workspaceName,
+    });
+  }
+
+  async deleteWorkspace({ groupId, requesterUserId }) {
+    const requesterRole = await this.getUserWorkspaceRole(
+      groupId,
+      requesterUserId,
+    );
+
+    if (requesterRole !== 'owner') {
+      throw createHttpError(403, 'workspace_owner_required');
+    }
+
+    const workspace = await this.repository.findWorkspaceByGroupId(groupId);
+
+    if (!workspace) {
+      throw createHttpError(404, 'workspace_not_found');
+    }
+
+    const deletedAt = nowIso();
+    const deletedWorkspace = await this.repository.hardDeleteWorkspaceData(
+      groupId,
+    );
+
+    return {
+      ...deletedWorkspace,
+      deletedAt,
+      updatedAt: deletedAt,
+    };
+  }
+
+  async getMembers({ groupId, requesterUserId }) {
+    await this.requireWorkspaceMember(groupId, requesterUserId);
+
+    const memberships = await this.repository.findMembershipsByGroupId(groupId);
+
+    return Promise.all(
+      memberships.map(async (membership) => {
+        const user = await this.repository.findUserByUserId(membership.userId);
+
+        return {
+          createdAt: membership.createdAt || null,
+          displayName: user?.displayName || null,
+          email: user?.email || null,
+          isCurrentUser: membership.userId === requesterUserId,
+          role: membership.role,
+          status: membership.status,
+          updatedAt: membership.updatedAt || null,
+          userId: membership.userId,
+        };
+      }),
+    );
   }
 
   async addMember({
@@ -330,6 +450,10 @@ class WorkspaceService {
 
     if (!target) {
       throw createHttpError(404, 'workspace_member_not_found');
+    }
+
+    if (target.role === 'owner' && requesterUserId !== userId) {
+      throw createHttpError(403, 'workspace_owner_self_required');
     }
 
     await this.assertNotLastOwnerChange({
@@ -444,6 +568,16 @@ class WorkspaceService {
     }
 
     const existingUser = await this.repository.findUserByEmail(normalizedEmail);
+    const existingMembership = existingUser
+      ? await this.repository.findMembership({
+          groupId,
+          userId: existingUser.userId,
+        })
+      : null;
+
+    if (existingMembership?.status === ACTIVE_STATUS) {
+      throw createHttpError(409, 'workspace_member_already_exists');
+    }
 
     const invitation = await this.repository.createInvitation({
       email: normalizedEmail,
@@ -485,7 +619,9 @@ class WorkspaceService {
     }
 
     const invitations = await this.repository.findInvitationsByGroupId(groupId);
-    return invitations.map((invitation) => sanitizeInvitation(invitation));
+    return invitations
+      .filter((invitation) => invitation.status === ACTIVE_INVITATION_STATUS)
+      .map((invitation) => sanitizeInvitation(invitation));
   }
 
   async listMyInvitations({ email, userId }) {
@@ -498,14 +634,31 @@ class WorkspaceService {
     const invitations = normalizedEmail
       ? await this.repository.findInvitationsByEmail(normalizedEmail)
       : [];
+    const activeMemberships = userId
+      ? await this.repository.findActiveMembershipsByUserId(userId)
+      : [];
+    const activeGroupIds = new Set(
+      activeMemberships.map((membership) => membership.groupId),
+    );
 
-    return invitations
-      .filter(
-        (invitation) =>
-          invitation.status === ACTIVE_INVITATION_STATUS ||
-          invitation.invitedUserId === userId,
-      )
-      .map((invitation) => sanitizeInvitation(invitation));
+    const visibleInvitations = invitations.filter(
+      (invitation) =>
+        invitation.status === ACTIVE_INVITATION_STATUS &&
+        !activeGroupIds.has(invitation.groupId),
+    );
+
+    return Promise.all(
+      visibleInvitations.map(async (invitation) => {
+        const [inviter, workspace] = await Promise.all([
+          invitation.invitedByUserId
+            ? this.repository.findUserByUserId(invitation.invitedByUserId)
+            : null,
+          this.repository.findWorkspaceByGroupId(invitation.groupId),
+        ]);
+
+        return sanitizeInvitation(invitation, { inviter, workspace });
+      }),
+    );
   }
 
   async assertInvitationCanBeAccepted(invitation) {

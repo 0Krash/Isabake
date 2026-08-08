@@ -12,50 +12,10 @@ import {
 
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import { TRANSACTIONS_PAGE_SIZE } from '../../hooks/TransactionBalance/useTransactionBalanceData';
+import AppIcon from '../icons/AppIcon';
 
 const MENU_WIDTH = 280;
 const ANIMATION_DURATION = 240;
-
-const MenuIcon = ({ color, isOpen }) => (
-  <View style={styles.icon}>
-    <View
-      style={[
-        styles.iconLine,
-        styles.iconLineTop,
-        {
-          backgroundColor: color,
-          transform: [
-            { translateY: isOpen ? 7 : 0 },
-            { rotate: isOpen ? '45deg' : '0deg' },
-          ],
-        },
-      ]}
-    />
-    <View
-      style={[
-        styles.iconLine,
-        {
-          backgroundColor: color,
-          opacity: isOpen ? 0 : 1,
-        },
-      ]}
-    />
-    <View
-      style={[
-        styles.iconLine,
-        styles.iconLineBottom,
-        {
-          backgroundColor: color,
-          transform: [
-            { translateY: isOpen ? -7 : 0 },
-            { rotate: isOpen ? '-45deg' : '0deg' },
-          ],
-        },
-      ]}
-    />
-  </View>
-);
 
 export const TransactionMenuButton = ({ isOpen, onPress }) => {
   const { colors } = useTransactionBalanceTheme();
@@ -70,48 +30,64 @@ export const TransactionMenuButton = ({ isOpen, onPress }) => {
       }}
       style={[styles.menuButton, { backgroundColor: colors.surface }]}
     >
-      <MenuIcon color={colors.textPrimary} isOpen={isOpen} />
+      <AppIcon
+        accessibilityLabel={isOpen ? 'Cerrar menu' : 'Abrir menu'}
+        color={colors.textPrimary}
+        name={isOpen ? 'close' : 'menu'}
+        size={28}
+      />
     </TouchableOpacity>
   );
 };
 
 export default function TransactionMenu({
+  canWrite = true,
   isVisible,
   onAfterClose,
   onClose,
   onDismiss,
+  onOpenAccount,
   onOpenAppOptions,
+  onOpenSync,
   onOpenStoreManager,
+  onOpenWorkspace,
 }) {
-  const { colorScheme, colors } = useTransactionBalanceTheme();
+  const { colors } = useTransactionBalanceTheme();
   const [shouldRender, setShouldRender] = useState(isVisible);
   const onAfterCloseRef = useRef(onAfterClose);
   const translateX = useRef(new Animated.Value(MENU_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const menuItems = [
     {
-      description: 'Respeta el modo claro u oscuro del telefono.',
-      label: 'Tema del telefono',
-      value: colorScheme === 'dark' ? 'Oscuro' : 'Claro',
+      description: 'Sesion, acceso y dispositivos.',
+      label: 'Cuenta',
+      onPress: onOpenAccount,
+      value: 'Abrir',
     },
     {
-      description: 'Formato usado para importes y reportes.',
-      label: 'Moneda',
-      value: 'MXN',
+      description: 'Equipo, accesos e invitaciones.',
+      label: 'Administrar negocios',
+      onPress: onOpenWorkspace,
+      value: 'Abrir',
     },
     {
-      description: 'Movimientos que se cargan al bajar la lista.',
-      label: 'Registros por carga',
-      value: `${TRANSACTIONS_PAGE_SIZE}`,
+      description: 'Estado, respaldo e historial.',
+      label: 'Respaldo y sync',
+      onPress: onOpenSync,
+      value: 'Abrir',
     },
+    ...(canWrite
+      ? [
+          {
+            description: 'Agrega o administra los puntos de venta disponibles.',
+            label: 'Tiendas',
+            onPress: onOpenStoreManager,
+            value: 'Administrar',
+          },
+        ]
+      : []),
     {
-      description: 'Agrega o administra los puntos de venta disponibles.',
-      label: 'Tiendas',
-      onPress: onOpenStoreManager,
-      value: 'Administrar',
-    },
-    {
-      description: 'Cuenta, respaldo, negocio compartido y cambios por revisar.',
+      description: 'Cambios por revisar y herramientas disponibles.',
       label: 'Opciones de la app',
       onPress: onOpenAppOptions,
       value: 'Abrir',
@@ -285,22 +261,6 @@ const styles = StyleSheet.create({
   drawerTitle: {
     fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
-  },
-  icon: {
-    height: 22,
-    justifyContent: 'center',
-    width: 24,
-  },
-  iconLine: {
-    borderRadius: 2,
-    height: 2,
-    width: 24,
-  },
-  iconLineBottom: {
-    marginTop: 5,
-  },
-  iconLineTop: {
-    marginBottom: 5,
   },
   itemsContainer: {
     gap: 12,

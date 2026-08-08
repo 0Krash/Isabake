@@ -53,9 +53,25 @@ const mergeWorkspace = (existing, next, currentWorkspace) => {
   return merged;
 };
 
+const applyCurrentWorkspaceMetadata = (workspace, currentWorkspace) => {
+  if (!currentWorkspace || !isSameWorkspaceIdentity(workspace, currentWorkspace)) {
+    return workspace;
+  }
+
+  return {
+    ...currentWorkspace,
+    ...workspace,
+    isRemote: workspace.isRemote || currentWorkspace.isRemote,
+    workspaceRole: workspace.workspaceRole || currentWorkspace.workspaceRole,
+    workspaceStatus: workspace.workspaceStatus || currentWorkspace.workspaceStatus,
+  };
+};
+
 export const dedupeWorkspaces = (workspaces = [], { currentWorkspace } = {}) => {
-  const byIdentity = new Map();
-  const orderedIds = [];
+  const localByIdentity = new Map();
+  const localOrderedIds = [];
+  const remoteByIdentity = new Map();
+  const remoteOrderedIds = [];
 
   workspaces.forEach((workspace) => {
     const id = normalizeWorkspaceId(workspace);
@@ -64,19 +80,46 @@ export const dedupeWorkspaces = (workspaces = [], { currentWorkspace } = {}) => 
       return;
     }
 
-    if (!byIdentity.has(id)) {
-      byIdentity.set(id, workspace);
-      orderedIds.push(id);
+    if (!workspace?.isRemote) {
+      if (!localByIdentity.has(id)) {
+        localByIdentity.set(id, workspace);
+        localOrderedIds.push(id);
+        return;
+      }
+
+      localByIdentity.set(
+        id,
+        mergeWorkspace(localByIdentity.get(id), workspace, currentWorkspace),
+      );
       return;
     }
 
-    byIdentity.set(
+    if (!remoteByIdentity.has(id)) {
+      remoteByIdentity.set(id, workspace);
+      remoteOrderedIds.push(id);
+      return;
+    }
+
+    remoteByIdentity.set(
       id,
-      mergeWorkspace(byIdentity.get(id), workspace, currentWorkspace),
+      mergeWorkspace(remoteByIdentity.get(id), workspace, currentWorkspace),
     );
   });
 
-  return orderedIds.map((id) => byIdentity.get(id));
+  const localWorkspaces = localOrderedIds.map((id) =>
+    applyCurrentWorkspaceMetadata(localByIdentity.get(id), currentWorkspace),
+  );
+  const remoteWorkspaces = remoteOrderedIds.map((id) =>
+    applyCurrentWorkspaceMetadata(remoteByIdentity.get(id), currentWorkspace),
+  );
+  const visibleLocalWorkspaces = localWorkspaces.filter(
+    (localWorkspace) =>
+      !remoteWorkspaces.some((workspace) =>
+        isSameWorkspaceIdentity(workspace, localWorkspace),
+      ),
+  );
+
+  return [...visibleLocalWorkspaces, ...remoteWorkspaces];
 };
 
 export default {

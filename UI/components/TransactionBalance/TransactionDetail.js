@@ -47,12 +47,18 @@ const groupByMonth = (transactions) => {
 };
 
 const TransactionDetail = ({
+  canWrite = true,
   setTransactionDetailModalIsVisible,
   setDeleteTransactionModalIsVisible,
   dataTransactionsResponse,
   hasMoreTransactions,
   isLoadingMoreTransactions,
+  isLoadingTransactions = false,
+  ListHeaderComponent,
   loadMoreTransactions,
+  onCreateTransaction,
+  onRefresh,
+  refreshing = false,
   setTransactionDetail,
   transactionType,
 }) => {
@@ -100,6 +106,7 @@ const TransactionDetail = ({
     return (
       <TransactionDetailContainer
         data={item.transaction}
+        canWrite={canWrite}
         setTransactionDetail={setTransactionDetail}
         setTransactionDetailModalIsVisible={setTransactionDetailModalIsVisible}
         setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
@@ -130,6 +137,49 @@ const TransactionDetail = ({
     return null;
   };
 
+  const renderEmpty = () => {
+    if (isLoadingTransactions) {
+      return (
+        <View style={[styles.emptyState, { borderColor: colors.border }]}>
+          <ActivityIndicator color={colors.primary} size="small" />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+            Cargando movimientos
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+            Estamos consultando la base de datos.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={[styles.emptyState, { borderColor: colors.border }]}>
+        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+          Aún no has creado movimientos
+        </Text>
+        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+          Crea tu primer movimiento para comenzar a ver el historial.
+        </Text>
+        {canWrite ? (
+          <Text
+            accessibilityLabel="Agregar primer movimiento"
+            accessibilityRole="button"
+            onPress={onCreateTransaction}
+            style={[
+              styles.emptyActionText,
+              {
+                backgroundColor: colors.primaryMuted,
+                color: colors.primaryText,
+              },
+            ]}
+          >
+            Crear movimiento
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.mainContainer}>
       <FlatList
@@ -142,10 +192,19 @@ const TransactionDetail = ({
         ]}
         contentContainerStyle={styles.transactionDetailContent}
         initialNumToRender={PAGE_SIZE}
+        ListEmptyComponent={renderEmpty}
         ListFooterComponent={renderFooter}
+        ListHeaderComponent={
+          ListHeaderComponent ? (
+            <View style={styles.headerContent}>{ListHeaderComponent}</View>
+          ) : null
+        }
+        ListHeaderComponentStyle={styles.headerFullWidth}
         maxToRenderPerBatch={PAGE_SIZE}
         onEndReached={loadMoreTransactions}
         onEndReachedThreshold={0.35}
+        onRefresh={onRefresh}
+        refreshing={refreshing}
         showsVerticalScrollIndicator={false}
         updateCellsBatchingPeriod={40}
         windowSize={9}
@@ -156,16 +215,20 @@ const TransactionDetail = ({
 
 const styles = StyleSheet.create({
   mainContainer: {
-    flex: 5,
-    marginBottom: 20,
+    flex: 1,
   },
   transactionDetailContainer: {
     flex: 1,
-    marginTop: 10,
   },
   transactionDetailContent: {
     paddingBottom: 92,
     paddingHorizontal: 15,
+  },
+  headerContent: {
+    marginBottom: 8,
+  },
+  headerFullWidth: {
+    marginHorizontal: -15,
   },
   monthHeader: {
     fontSize: typography.sizes.caption,
@@ -183,6 +246,33 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.medium,
     paddingVertical: 14,
+    textAlign: 'center',
+  },
+  emptyActionText: {
+    borderRadius: 8,
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.semibold,
+    marginTop: 14,
+    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 24,
+    padding: 18,
+  },
+  emptyText: {
+    fontSize: typography.sizes.caption,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  emptyTitle: {
+    fontSize: typography.sizes.subtitle,
+    fontWeight: typography.weights.bold,
     textAlign: 'center',
   },
 });

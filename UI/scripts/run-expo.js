@@ -82,14 +82,124 @@ if (!nodePath) {
 const expoCli = path.join(__dirname, '..', 'node_modules', 'expo', 'bin', 'cli');
 const expoArgs = process.argv.slice(2);
 const nodeBinPath = path.dirname(nodePath);
+const envPath = path.join(__dirname, '..', '.env');
+
+function parseEnvValue(value) {
+  const trimmed = value.trim();
+  const quote = trimmed[0];
+
+  if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
+    return trimmed.slice(1, -1);
+  }
+
+  return trimmed;
+}
+
+function loadDotEnv(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+
+  return fs
+    .readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .reduce((env, line) => {
+      const trimmed = line.trim();
+
+      if (!trimmed || trimmed.startsWith('#')) {
+        return env;
+      }
+
+      const equalsIndex = trimmed.indexOf('=');
+      if (equalsIndex <= 0) {
+        return env;
+      }
+
+      const key = trimmed.slice(0, equalsIndex).trim();
+      const value = trimmed.slice(equalsIndex + 1);
+      env[key] = parseEnvValue(value);
+      return env;
+    }, {});
+}
+
+function getArgValue(args, longName, shortName) {
+  const longEqualsPrefix = `${longName}=`;
+  const longEquals = args.find((arg) => arg.startsWith(longEqualsPrefix));
+  if (longEquals) {
+    return longEquals.slice(longEqualsPrefix.length);
+  }
+
+  const longIndex = args.indexOf(longName);
+  if (longIndex >= 0) {
+    return args[longIndex + 1];
+  }
+
+  if (!shortName) {
+    return null;
+  }
+
+  const shortIndex = args.indexOf(shortName);
+  return shortIndex >= 0 ? args[shortIndex + 1] : null;
+}
+
+function getHostType(args) {
+  if (args.includes('--localhost')) {
+    return 'localhost';
+  }
+
+  if (args.includes('--tunnel')) {
+    return 'tunnel';
+  }
+
+  if (args.includes('--lan')) {
+    return 'lan';
+  }
+
+  return getArgValue(args, '--host', '-m') || 'lan';
+}
+
+function getLanAddress() {
+  const interfaces = os.networkInterfaces();
+
+  for (const addresses of Object.values(interfaces)) {
+    const address = addresses.find(
+      (entry) => entry.family === 'IPv4' && !entry.internal
+    );
+
+    if (address) {
+      return address.address;
+    }
+  }
+
+  return null;
+}
+
+const childEnv = {
+  ...loadDotEnv(envPath),
+  ...process.env,
+  PATH: `${nodeBinPath}${path.delimiter}${process.env.PATH || ''}`,
+};
+
+const hostType = getHostType(expoArgs);
+const port = getArgValue(expoArgs, '--port', '-p') || '8081';
+const configuredLanAddress =
+  childEnv.EXPO_DEV_SERVER_HOST || childEnv.REACT_NATIVE_PACKAGER_HOSTNAME;
+const lanAddress =
+  hostType === 'lan' ? configuredLanAddress || getLanAddress() : null;
+
+if (lanAddress && !childEnv.EXPO_PACKAGER_PROXY_URL) {
+  childEnv.EXPO_PACKAGER_PROXY_URL = `http://${lanAddress}:${port}`;
+}
+
+if (lanAddress) {
+  childEnv.REACT_NATIVE_PACKAGER_HOSTNAME = lanAddress;
+  console.log(`Expo LAN URL: exp://${lanAddress}:${port}`);
+}
 
 const child = spawn(nodePath, [expoCli, ...expoArgs], {
   cwd: path.join(__dirname, '..'),
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    PATH: `${nodeBinPath}${path.delimiter}${process.env.PATH || ''}`,
-  },
+  env: childEnv,
 });
 
 child.on('exit', (code, signal) => {

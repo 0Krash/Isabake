@@ -15,59 +15,72 @@ export default function Dashboard({
 
   return (
     <View style={styles.mainContainer}>
-      <View style={styles.titleContainer}>
-        <Text style={[styles.title, { color: colors.textMuted }]}>
-          Balance Total
-        </Text>
-      </View>
+      <Text style={[styles.title, { color: colors.textMuted }]}>
+        Balance total
+      </Text>
       <View style={[styles.balances, { backgroundColor: colors.surface }]}>
-        {/* <View testID="dateFilters" style={styles.dateFilters}>
-          <TouchableOpacity style={styles.baseFilter}>
-            <Text style={styles.baseTextFilter}>Todos los días</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.baseFilter}>
-            <Text style={styles.baseTextFilter}>Semana</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.baseFilter}>
-            <Text style={styles.baseTextFilter}>Mes</Text>
-          </TouchableOpacity>
-        </View> */}
-        <View testID="totalValues" style={styles.totalValues}></View>
+        <View testID="totalValues" style={styles.totalValues} />
         <View testID="categoryValues" style={styles.categoryValues}>
-          {filteredTransactions.map((transaction, index) => (
-            <View key={index} style={styles.summaryGroup}>
-              {transaction.categories.map((category, idx) => (
-                <View key={idx} style={styles.summaryRow}>
-                  <View testID="categoryLabel">
-                    <Text style={[styles.summaryText, { color: colors.textPrimary }]}>
-                      {category.category || 'Ventas'}:{' '}
+          {filteredTransactions.length ? (
+            filteredTransactions.map((transaction, index) => (
+              <View key={index} style={styles.summaryGroup}>
+                {transaction.categories.map((category, idx) => (
+                  <View key={idx} style={styles.summaryRow}>
+                    <View testID="categoryLabel">
+                      <Text
+                        style={[
+                          styles.summaryText,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        {category.category || 'Ventas'}:{' '}
+                      </Text>
+                    </View>
+                    <View testID="categoryValues" style={styles.summaryValue}>
+                      <Text
+                        style={[
+                          styles.summaryText,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        {CurrencyFormatter.convertCentsToCurrency(
+                          category.totalAmount,
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                <View style={styles.summaryRow}>
+                  <View>
+                    <Text
+                      style={[
+                        styles.totalText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
+                      Total:{' '}
                     </Text>
                   </View>
-                  <View testID="categoryValues" style={styles.summaryValue}>
-                    <Text style={[styles.summaryText, { color: colors.textPrimary }]}>
+                  <View style={styles.summaryValue}>
+                    <Text
+                      style={[
+                        styles.totalText,
+                        { color: colors.textPrimary },
+                      ]}
+                    >
                       {CurrencyFormatter.convertCentsToCurrency(
-                        category.totalAmount
+                        transaction.total,
                       )}
                     </Text>
                   </View>
                 </View>
-              ))}
-              <View style={styles.summaryRow}>
-                <View>
-                  <Text style={[styles.totalText, { color: colors.textPrimary }]}>
-                    Total:{' '}
-                  </Text>
-                </View>
-                <View style={styles.summaryValue}>
-                  <Text style={[styles.totalText, { color: colors.textPrimary }]}>
-                    {CurrencyFormatter.convertCentsToCurrency(
-                      transaction.total
-                    )}
-                  </Text>
-                </View>
               </View>
-            </View>
-          ))}
+            ))
+          ) : (
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+              Sin movimientos registrados
+            </Text>
+          )}
         </View>
       </View>
     </View>
@@ -76,33 +89,22 @@ export default function Dashboard({
 
 const styles = StyleSheet.create({
   mainContainer: {
-    // borderColor: 'blue',
-    // borderWidth: 2,
-    flex: 1.5,
     marginHorizontal: 15,
-  },
-  titleContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    marginTop: 16,
   },
   title: {
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.medium,
-    position: 'absolute',
-    bottom: 5,
-    left: 2,
+    marginBottom: 8,
   },
   balances: {
-    flex: 3,
-    backgroundColor: '#FEFCFF',
-    borderRadius: 20,
-    marginBottom: 10,
+    borderRadius: 8,
+    minHeight: 86,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
   categoryValues: {
-    flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 18,
-    marginTop: 15,
   },
   summaryGroup: {
     width: '100%',
@@ -124,37 +126,13 @@ const styles = StyleSheet.create({
     fontWeight: typography.weights.regular,
   },
   totalValues: {},
-  dateFilters: {
-    height: 35,
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-  },
-  baseFilter: {
-    alignItems: 'center',
-    backgroundColor: '#E5D6FF',
-    borderRadius: 10,
-    flex: 1,
-    justifyContent: 'center',
-    margin: 5,
-    padding: 3,
-  },
-  baseTextFilter: {
-    fontSize: typography.sizes.label,
-    color: '#9777DC',
-    fontWeight: typography.weights.medium,
-  },
-  totalContainer: {
-    borderTopWidth: 1,
-    borderTopColor: '#ccc',
-    marginTop: 10,
-    paddingTop: 10,
-    alignItems: 'center',
-  },
   totalText: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
     flexShrink: 1,
+  },
+  emptyText: {
+    fontSize: typography.sizes.label,
+    lineHeight: 19,
   },
 });

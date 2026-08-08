@@ -2,8 +2,12 @@ import {
   APP_BOTTOM_NAV_CLEARANCE,
   APP_BOTTOM_NAV_HEIGHT_ANDROID,
   APP_BOTTOM_NAV_HEIGHT_IOS,
+  APP_SCREEN_TOP_PADDING,
+  MAIN_SCREEN_TOP_PADDING,
+  STATUS_BAR_SAFE_HEIGHT_ANDROID,
   getBottomNavHeight,
   getScrollContentBottomPadding,
+  getScreenContentTopPadding,
 } from './layoutMetrics';
 
 describe('layoutMetrics', () => {
@@ -19,5 +23,44 @@ describe('layoutMetrics', () => {
     expect(getScrollContentBottomPadding({ extra: 12, platform: 'ios' })).toBe(
       APP_BOTTOM_NAV_HEIGHT_IOS + APP_BOTTOM_NAV_CLEARANCE + 12,
     );
+  });
+
+  test('keeps screen content below device status bars', () => {
+    expect(getScreenContentTopPadding({ platform: 'ios', statusBarHeight: 54 })).toBe(
+      APP_SCREEN_TOP_PADDING,
+    );
+    expect(
+      getScreenContentTopPadding({ platform: 'android', statusBarHeight: 32 }),
+    ).toBe(APP_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
+    expect(
+      getScreenContentTopPadding({ platform: 'android', statusBarHeight: 52 }),
+    ).toBe(APP_SCREEN_TOP_PADDING + 52);
+    expect(
+      getScreenContentTopPadding({ platform: 'android', statusBarHeight: null }),
+    ).toBe(APP_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
+    expect(
+      getScreenContentTopPadding({
+        basePadding: 50,
+        platform: 'android',
+        statusBarHeight: 32,
+      }),
+    ).toBe(50 + STATUS_BAR_SAFE_HEIGHT_ANDROID);
+  });
+
+  test('keeps main screen workspace card close to the safe top edge', () => {
+    expect(
+      getScreenContentTopPadding({
+        basePadding: MAIN_SCREEN_TOP_PADDING,
+        platform: 'ios',
+        statusBarHeight: 54,
+      }),
+    ).toBe(MAIN_SCREEN_TOP_PADDING);
+    expect(
+      getScreenContentTopPadding({
+        basePadding: MAIN_SCREEN_TOP_PADDING,
+        platform: 'android',
+        statusBarHeight: 32,
+      }),
+    ).toBe(MAIN_SCREEN_TOP_PADDING + STATUS_BAR_SAFE_HEIGHT_ANDROID);
   });
 });
