@@ -28,8 +28,9 @@ import {
 } from 'react-native';
 
 import TransactionMenu from '../../components/TransactionBalance/TransactionMenu';
-import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
+import FilterChips from '../../components/TransactionBalance/FilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
+import SelectionPickerModal from '../../components/TransactionBalance/SelectionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
 import AppIcon from '../../components/icons/AppIcon';
@@ -1127,7 +1128,7 @@ export default function InventoryScreen({
             </Pressable>
           )}
         </View>
-        <QuickFilterChips
+        <FilterChips
           colors={colors}
           filters={inventoryFilterOptions}
           getAccessibilityLabel={(filter) =>
@@ -1140,9 +1141,7 @@ export default function InventoryScreen({
           onSelect={(filter) =>
             setSelectedInventoryCategoryFilter(filter.category)
           }
-          scrollStyle={styles.inventoryFilterScroll}
           selectedKey={selectedInventoryCategoryFilter}
-          showValues={false}
         />
         <FlatList
           contentContainerStyle={styles.inventoryList}
@@ -2946,7 +2945,6 @@ const UnitPickerModal = ({
 );
 
 const StorePickerModal = ({
-  colors,
   isLoading,
   isVisible,
   onClose,
@@ -2984,129 +2982,39 @@ const StorePickerModal = ({
   }, [isVisible]);
 
   return (
-    <CenteredPickerShell
-      colors={colors}
+    <SelectionPickerModal
+      emptyText="No hay tiendas registradas."
+      getOptionDescription={(store) =>
+        getStoreValue(store, 'Address') || 'Sin dirección registrada'
+      }
+      getOptionKey={(store) => store.storeId}
+      getOptionTitle={(store) =>
+        getStoreValue(store, 'Alias') || getStoreValue(store, 'Name')
+      }
+      isLoading={isLoading}
       isVisible={isVisible}
-      onClose={onClose}
-    >
-      <Text style={[styles.pickerTitle, { color: colors.textPrimary }]}>
-        Seleccionar proveedor
-      </Text>
-      <TextInput
-        accessibilityLabel="Buscar proveedor"
-        onChangeText={setStoreSearch}
-        placeholder="Buscar tienda..."
-        placeholderTextColor={colors.textMuted}
-        style={[
-          styles.pickerSearchInput,
-          {
-            backgroundColor: colors.fieldBackground,
-            borderColor: colors.border,
-            color: colors.textPrimary,
-          },
-        ]}
-        value={storeSearch}
-      />
-      {isLoading ? (
-        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-          Cargando tiendas...
-        </Text>
-      ) : (
-        <>
-          {stores.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              No hay tiendas registradas.
-            </Text>
-          ) : filteredStores.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-              No encontramos tiendas con ese criterio.
-            </Text>
-          ) : (
-            <ScrollView
-              contentContainerStyle={styles.storePickerList}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-              style={styles.storePickerScroll}
-            >
-              {filteredStores.map((store) => {
-                const storeAddress = getStoreValue(store, 'Address');
-                const storeName = getStoreValue(store, 'Name');
-                const storeAlias = getStoreValue(store, 'Alias');
-                const isSelected = idsMatch(store.storeId, selectedStoreId);
-
-                return (
-                  <TouchableOpacity
-                    accessibilityLabel={`Seleccionar proveedor ${storeAlias || storeName}`}
-                    accessibilityRole="button"
-                    activeOpacity={0.75}
-                    key={store.storeId || `${storeAlias}-${storeAddress}`}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setStoreSearch('');
-                      onSelect(store);
-                    }}
-                    style={[
-                      styles.storePickerOption,
-                      {
-                        backgroundColor: isSelected
-                          ? colors.primaryMuted
-                          : colors.surface,
-                        borderColor: isSelected
-                          ? colors.primary
-                          : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        styles.storePickerAlias,
-                        {
-                          color: isSelected
-                            ? colors.primaryText
-                            : colors.textPrimary,
-                        },
-                      ]}
-                    >
-                      {storeAlias || storeName}
-                    </Text>
-                    <Text
-                      numberOfLines={2}
-                      style={[
-                        styles.storePickerAddress,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {storeAddress || 'Sin dirección registrada'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-          <TouchableOpacity
-            accessibilityLabel="Abrir administrador de tiendas"
-            accessibilityRole="button"
-            activeOpacity={0.8}
-            onPress={() => {
-              Keyboard.dismiss();
-              setStoreSearch('');
-              onOpenStoreManager();
-            }}
-            style={[styles.storeManagerButton, { borderColor: colors.border }]}
-          >
-            <Text
-              style={[
-                styles.secondaryButtonText,
-                { color: colors.textPrimary },
-              ]}
-            >
-              Ir al administrador de tiendas
-            </Text>
-          </TouchableOpacity>
-        </>
-      )}
-    </CenteredPickerShell>
+      loadingText="Cargando tiendas..."
+      managerLabel="Ir al administrador de tiendas"
+      noResultsText="No encontramos tiendas con ese criterio."
+      onClose={() => {
+        setStoreSearch('');
+        onClose();
+      }}
+      onOpenManager={() => {
+        setStoreSearch('');
+        onOpenStoreManager();
+      }}
+      onSearchChange={setStoreSearch}
+      onSelect={(store) => {
+        setStoreSearch('');
+        onSelect(store);
+      }}
+      options={filteredStores}
+      searchPlaceholder="Buscar tienda..."
+      searchValue={storeSearch}
+      selectedKey={selectedStoreId}
+      title="Seleccionar proveedor"
+    />
   );
 };
 
@@ -3898,9 +3806,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
   },
-  inventoryFilterScroll: {
-    marginBottom: 1,
-  },
   inventoryQuantity: {
     flexShrink: 0,
     fontSize: typography.sizes.label,
@@ -4169,42 +4074,6 @@ const styles = StyleSheet.create({
   sheetRoot: {
     flex: 1,
     justifyContent: 'flex-end',
-  },
-  storePickerList: {
-    gap: 8,
-    paddingBottom: 2,
-  },
-  storePickerScroll: {
-    flexShrink: 1,
-    maxHeight: 470,
-    width: '100%',
-  },
-  storePickerAddress: {
-    fontSize: typography.sizes.caption,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  storePickerAlias: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.semibold,
-  },
-  storePickerOption: {
-    alignItems: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 64,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  storeManagerButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    marginTop: 12,
-    minHeight: 42,
-    paddingHorizontal: 12,
   },
   summaryPanel: {
     borderRadius: 8,

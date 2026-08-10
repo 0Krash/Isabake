@@ -31,8 +31,9 @@ import {
 } from 'react-native';
 
 import TransactionMenu from '../../components/TransactionBalance/TransactionMenu';
-import QuickFilterChips from '../../components/TransactionBalance/QuickFilterChips';
+import FilterChips from '../../components/TransactionBalance/FilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
+import SelectionPickerModal from '../../components/TransactionBalance/SelectionPickerModal';
 import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import AppIcon from '../../components/icons/AppIcon';
 import {
@@ -420,7 +421,6 @@ export default function RecipeBookScreen({
   const ingredientFeedbackAnimationId = useRef(0);
   const ingredientFeedbackOpacity = useRef(new Animated.Value(0)).current;
   const ingredientFormOffsetY = useRef(0);
-  const inventoryIngredientScrollRef = useRef(null);
   const isSavingIngredientRef = useRef(false);
   const isSavingStepRef = useRef(false);
   const keyboardIsVisibleRef = useRef(false);
@@ -491,24 +491,6 @@ export default function RecipeBookScreen({
       }),
     );
   }, [recipeType, recipeTypes, selectedRecipe?.type]);
-  const inventoryIngredientPickerMaxHeight = keyboardIsVisible
-    ? Math.min(windowHeight * 0.58, 430)
-    : Math.min(windowHeight * 0.86, 560);
-
-  useEffect(() => {
-    if (!ingredientPickerIsVisible) {
-      return undefined;
-    }
-
-    const flashIndicatorTimeout = setTimeout(() => {
-      inventoryIngredientScrollRef.current?.flashScrollIndicators?.();
-    }, 180);
-
-    return () => {
-      clearTimeout(flashIndicatorTimeout);
-    };
-  }, [ingredientPickerIsVisible, filteredInventoryIngredientOptions.length]);
-
   useEffect(() => {
     const keyboardShowListener = Keyboard.addListener('keyboardDidShow', () => {
       keyboardIsVisibleRef.current = true;
@@ -1882,7 +1864,7 @@ export default function RecipeBookScreen({
             </Pressable>
           )}
         </View>
-        <QuickFilterChips
+        <FilterChips
           colors={colors}
           filters={recipeTypeFilters}
           getAccessibilityLabel={({ count, type }) =>
@@ -1893,7 +1875,6 @@ export default function RecipeBookScreen({
           getValue={({ count }) => count}
           onSelect={({ type }) => setSelectedRecipeTypeFilter(type)}
           selectedKey={selectedRecipeTypeFilter}
-          showValues={false}
         />
         <FlatList
           columnWrapperStyle={
@@ -3384,150 +3365,43 @@ export default function RecipeBookScreen({
               </View>
             </View>
           )}
-          {ingredientPickerIsVisible && (
-            <View style={styles.unitPickerOverlay}>
-              <Pressable
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setIngredientInventorySearch('');
-                  setIngredientPickerIsVisible(false);
-                }}
-                style={[
-                  styles.unitPickerBackdrop,
-                  { backgroundColor: colors.backdrop },
-                ]}
-              />
-              <View
-                style={[
-                  styles.unitPopupCard,
-                  styles.inventoryIngredientPopupCard,
-                  { maxHeight: inventoryIngredientPickerMaxHeight },
-                  {
-                    backgroundColor: colors.screenBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.unitPopupTitle, { color: colors.textPrimary }]}
-                >
-                  Ingrediente de inventario
-                </Text>
-                <TextInput
-                  onChangeText={setIngredientInventorySearch}
-                  placeholder="Buscar ingrediente..."
-                  placeholderTextColor={colors.textMuted}
-                  style={[
-                    styles.pickerSearchInput,
-                    {
-                      backgroundColor: colors.fieldBackground,
-                      borderColor: colors.border,
-                      color: colors.textPrimary,
-                    },
-                  ]}
-                  value={ingredientInventorySearch}
-                />
-                {isLoadingInventory ? (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    Cargando inventario...
-                  </Text>
-                ) : inventoryItems.length === 0 ? (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    No hay ingredientes registrados.
-                  </Text>
-                ) : filteredInventoryIngredientOptions.length === 0 ? (
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    No encontramos ingredientes con ese criterio.
-                  </Text>
-                ) : (
-                  <ScrollView
-                    ref={inventoryIngredientScrollRef}
-                    style={styles.inventoryIngredientScroll}
-                    contentContainerStyle={styles.inventoryIngredientList}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                  >
-                    {filteredInventoryIngredientOptions.map((inventoryItem) => {
-                      const isSelected = idsMatch(
-                        selectedInventoryIngredient?.inventoryId,
-                        inventoryItem.inventoryId,
-                      );
-
-                      return (
-                        <TouchableOpacity
-                          activeOpacity={0.75}
-                          key={inventoryItem.id}
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setSelectedInventoryIngredient(inventoryItem);
-                            setIngredientName(inventoryItem.name);
-                            setIngredientInventorySearch('');
-                            setIngredientPickerIsVisible(false);
-                          }}
-                          style={[
-                            styles.inventoryIngredientOption,
-                            {
-                              backgroundColor: isSelected
-                                ? colors.primaryMuted
-                                : colors.surface,
-                              borderColor: isSelected
-                                ? colors.primary
-                                : colors.border,
-                            },
-                          ]}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.inventoryIngredientOptionName,
-                              {
-                                color: isSelected
-                                  ? colors.primaryText
-                                  : colors.textPrimary,
-                              },
-                            ]}
-                          >
-                            {inventoryItem.name}
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.inventoryIngredientOptionMeta,
-                              { color: colors.textMuted },
-                            ]}
-                          >
-                            {inventoryItem.category || 'Sin categoria'} ·{' '}
-                            {inventoryItem.lots.length} lotes
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                )}
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setIngredientInventorySearch('');
-                    handleOpenInventoryFromPicker();
-                  }}
-                  style={[
-                    styles.inventoryShortcutButton,
-                    { borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.inventoryShortcutText,
-                      { color: colors.textPrimary },
-                    ]}
-                  >
-                    Ir a inventario
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+          <SelectionPickerModal
+            emptyText="No hay ingredientes registrados."
+            getOptionDescription={(inventoryItem) =>
+              `${inventoryItem.category || 'Sin categoria'} · ${
+                (inventoryItem.lots || []).length
+              } lotes`
+            }
+            getOptionKey={(inventoryItem) =>
+              inventoryItem.inventoryId || inventoryItem.id
+            }
+            getOptionTitle={(inventoryItem) => inventoryItem.name}
+            isLoading={isLoadingInventory}
+            isVisible={ingredientPickerIsVisible}
+            loadingText="Cargando inventario..."
+            managerLabel="Ir a inventario"
+            noResultsText="No encontramos ingredientes con ese criterio."
+            onClose={() => {
+              setIngredientInventorySearch('');
+              setIngredientPickerIsVisible(false);
+            }}
+            onOpenManager={() => {
+              setIngredientInventorySearch('');
+              handleOpenInventoryFromPicker();
+            }}
+            onSearchChange={setIngredientInventorySearch}
+            onSelect={(inventoryItem) => {
+              setSelectedInventoryIngredient(inventoryItem);
+              setIngredientName(inventoryItem.name);
+              setIngredientInventorySearch('');
+              setIngredientPickerIsVisible(false);
+            }}
+            options={filteredInventoryIngredientOptions}
+            searchPlaceholder="Buscar ingrediente..."
+            searchValue={ingredientInventorySearch}
+            selectedKey={selectedInventoryIngredient?.inventoryId}
+            title="Ingrediente de inventario"
+          />
           <ManagedOptionPickerModal
             canManage={canWrite}
             colors={colors}
@@ -4516,35 +4390,8 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.caption,
     fontWeight: typography.weights.semibold,
   },
-  inventoryIngredientList: {
-    gap: 8,
-    paddingBottom: 2,
-  },
   inventoryIngredientPopupCard: {
     maxHeight: '86%',
-  },
-  inventoryIngredientScroll: {
-    flexShrink: 1,
-    maxHeight: 470,
-    width: '100%',
-  },
-  inventoryIngredientOption: {
-    alignItems: 'flex-start',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 62,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  inventoryIngredientOptionMeta: {
-    fontSize: typography.sizes.caption,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  inventoryIngredientOptionName: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.semibold,
   },
   inventoryIngredientSelect: {
     alignItems: 'flex-start',
@@ -4563,27 +4410,6 @@ const styles = StyleSheet.create({
   inventoryIngredientSelectText: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
-  },
-  inventoryShortcutButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    marginTop: 12,
-    width: '100%',
-  },
-  inventoryShortcutText: {
-    fontSize: typography.sizes.label,
-    fontWeight: typography.weights.semibold,
-  },
-  pickerSearchInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    fontSize: typography.sizes.body,
-    minHeight: 46,
-    paddingHorizontal: 12,
-    width: '100%',
   },
   recipeCard: {
     alignItems: 'flex-start',
