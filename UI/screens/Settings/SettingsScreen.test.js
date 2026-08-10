@@ -9,7 +9,7 @@ describe('SettingsScreen navigation model', () => {
         label: 'Administrar negocios',
       },
       {
-        description: 'Lugares donde surtes materiales para tus recetas.',
+        description: 'Lugares donde surtes materiales para tus productos.',
         key: 'stores',
         label: 'Tiendas',
       },

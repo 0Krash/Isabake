@@ -11,6 +11,9 @@ describe('InventoryScreen shared picker wiring', () => {
     expect(source).toContain('SelectionPickerModal');
     expect(source).toContain('Seleccionar proveedor');
     expect(source).toContain('Ir al administrador de tiendas');
+    expect(source).toContain('onOpenStores');
+    expect(source).toContain('onOpenStores?.()');
+    expect(source).not.toContain('AddStoreModal');
     expect(source).not.toContain('storePickerOption');
   });
 });

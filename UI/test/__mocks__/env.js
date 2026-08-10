@@ -6,4 +6,7 @@ module.exports = {
   URL_Transactions: 'http://localhost:3000/api/v1/transactions',
   URL_Sync: '',
   EXPO_PUBLIC_ENABLE_DEV_TOOLS: 'false',
+  EXPO_PUBLIC_DENUE_TOKEN: '',
+  EXPO_PUBLIC_PLACE_AUTOCOMPLETE_REGION: 'mx',
+  EXPO_PUBLIC_PLACE_AUTOCOMPLETE_URL: 'https://photon.komoot.io',
 };

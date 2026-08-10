@@ -34,7 +34,6 @@ import TransactionMenu from '../../components/TransactionBalance/TransactionMenu
 import FilterChips from '../../components/TransactionBalance/FilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import SelectionPickerModal from '../../components/TransactionBalance/SelectionPickerModal';
-import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import AppIcon from '../../components/icons/AppIcon';
 import {
   MAIN_SCREEN_TOP_PADDING,
@@ -299,6 +298,7 @@ export default function RecipeBookScreen({
   onOpenAccount,
   onOpenAppMenu,
   onOpenSync,
+  onOpenStores,
   onOpenWorkspace,
   onOpenInventory,
   onOpenRecipeSale,
@@ -361,7 +361,6 @@ export default function RecipeBookScreen({
     refreshRecipeTypes,
     refreshRecipes,
   ]);
-  const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalIsVisible, setModalIsVisible] = useState(false);
   const [menuIsVisible, setMenuIsVisible] = useState(false);
@@ -514,7 +513,6 @@ export default function RecipeBookScreen({
         const canClearRecipeSearch =
           searchText.trim().length > 0 &&
           !keyboardIsVisibleRef.current &&
-          !addStoreModalIsVisible &&
           !menuIsVisible &&
           !modalIsVisible &&
           !selectedRecipe;
@@ -532,7 +530,6 @@ export default function RecipeBookScreen({
       backSubscription.remove();
     };
   }, [
-    addStoreModalIsVisible,
     menuIsVisible,
     modalIsVisible,
     searchText,
@@ -944,9 +941,7 @@ export default function RecipeBookScreen({
     }
 
     setMenuIsVisible(false);
-    setTimeout(() => {
-      setAddStoreModalIsVisible(true);
-    }, 90);
+    onOpenStores?.();
   };
 
   const handleOpenAppOptions = () => {
@@ -982,7 +977,7 @@ export default function RecipeBookScreen({
 
   const handleMenuDismiss = () => {
     if (pendingMenuAction === 'stores') {
-      setAddStoreModalIsVisible(true);
+      onOpenStores?.();
     }
 
     if (pendingMenuAction === 'app-options') {
@@ -1048,10 +1043,10 @@ export default function RecipeBookScreen({
       setRecipeNameDraft(createdRecipe.name);
       setSelectedRecipeId(createdRecipe.id);
     } catch (error) {
-      console.warn('Error al crear receta:', error);
+      console.warn('Error al crear producto:', error);
       Alert.alert(
         'No se pudo guardar',
-        'No se pudo guardar la receta localmente. Intenta nuevamente.',
+        'No se pudo guardar el producto localmente. Intenta nuevamente.',
       );
     }
   };
@@ -1069,10 +1064,10 @@ export default function RecipeBookScreen({
       await deleteRecipeLocal(selectedRecipe.id);
       recipeDetailSheet.closeBottomSheet();
     } catch (error) {
-      console.warn('Error al eliminar receta:', error);
+      console.warn('Error al eliminar producto:', error);
       Alert.alert(
         'No se pudo eliminar',
-        'No se pudo eliminar la receta localmente. Intenta nuevamente.',
+        'No se pudo eliminar el producto localmente. Intenta nuevamente.',
       );
     }
   };
@@ -1088,11 +1083,11 @@ export default function RecipeBookScreen({
 
     setDeleteConfirmationText('');
     setDeleteDialog({
-      confirmLabel: 'Eliminar receta',
-      message: `Esta accion eliminara "${selectedRecipe.name}" del recetario.`,
+      confirmLabel: 'Eliminar producto',
+      message: `Esta accion eliminara "${selectedRecipe.name}" del catalogo de productos.`,
       onConfirm: deleteSelectedRecipe,
       requiredText: normalizeDeleteConfirmationText(selectedRecipe.name),
-      title: 'Eliminar receta',
+      title: 'Eliminar producto',
     });
   };
 
@@ -1207,7 +1202,7 @@ export default function RecipeBookScreen({
 
   const persistRecipe = (recipe) => {
     updateRecipeLocal(recipe.id, recipe).catch((error) => {
-      console.warn('Error al actualizar receta local:', error);
+      console.warn('Error al actualizar producto local:', error);
     });
   };
 
@@ -1555,7 +1550,7 @@ export default function RecipeBookScreen({
       requestDeleteConfirmation({
         confirmLabel: 'Si, continuar',
         destructive: false,
-        message: `La receta esta definida para ${recipeServings} porciones, pero este ingrediente tiene ${numericQuantity} pza. En cada venta de esta receta se descontaran ${numericQuantity} pza. del inventario.`,
+        message: `El producto esta definido para ${recipeServings} porciones, pero este ingrediente tiene ${numericQuantity} pza. En cada venta de este producto se descontaran ${numericQuantity} pza. del inventario.`,
         onConfirm: saveIngredient,
         question: `¿Estas seguro de usar ${diff} piezas que porciones?`,
         title: 'Validar piezas',
@@ -1624,7 +1619,7 @@ export default function RecipeBookScreen({
 
     requestDeleteConfirmation({
       confirmLabel: 'Eliminar',
-      message: `Se eliminara "${ingredient?.name || 'este ingrediente'}" de la receta.`,
+      message: `Se eliminara "${ingredient?.name || 'este ingrediente'}" del producto.`,
       onConfirm: () => {
         updateSelectedRecipe((recipe) => ({
           ...recipe,
@@ -1797,9 +1792,9 @@ export default function RecipeBookScreen({
 
   const hasRecipes = recipes.length > 0;
   const emptyRecipeMessage = recipeSearchIsActive
-    ? `No hay recetas para "${recipeSearchQuery}".`
+    ? `No hay productos para "${recipeSearchQuery}".`
     : selectedRecipeTypeFilter
-      ? `No hay recetas en ${selectedRecipeTypeFilter}.`
+      ? `No hay productos en ${selectedRecipeTypeFilter}.`
       : 'Prueba con otro nombre o limpia los filtros activos.';
 
   return (
@@ -1826,9 +1821,9 @@ export default function RecipeBookScreen({
       <View style={[styles.mainContainer, { backgroundColor: colors.screenBackground }]}>
         <View style={styles.searchContainer}>
           <TextInput
-            accessibilityLabel="Buscar receta o tipo"
+            accessibilityLabel="Buscar producto o tipo"
             onChangeText={setSearchText}
-            placeholder="Buscar receta o tipo..."
+            placeholder="Buscar producto o tipo..."
             placeholderTextColor={colors.textMuted}
             style={[
               styles.searchInput,
@@ -1868,7 +1863,7 @@ export default function RecipeBookScreen({
           colors={colors}
           filters={recipeTypeFilters}
           getAccessibilityLabel={({ count, type }) =>
-            `Filtrar por ${type || 'todas las recetas'}: ${count} recetas`
+            `Filtrar por ${type || 'todos los productos'}: ${count} productos`
           }
           getKey={({ type }) => type}
           getLabel={({ type }) => type || 'Todos'}
@@ -1997,7 +1992,7 @@ export default function RecipeBookScreen({
             <View style={styles.listFooter}>
               <ActivityIndicator color={colors.primary} />
               <Text style={[styles.listFooterText, { color: colors.textMuted }]}>
-                Cargando más recetas
+                Cargando más productos
               </Text>
             </View>
           ) : null
@@ -2009,22 +2004,22 @@ export default function RecipeBookScreen({
           <View style={[styles.emptyState, { borderColor: colors.border }]}>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
               {isLoadingRecipes
-                ? 'Cargando recetas'
+                ? 'Cargando productos'
                 : hasRecipes
-                  ? 'No encontramos recetas'
-                  : 'Crea tu primera receta'}
+                  ? 'No encontramos productos'
+                  : 'Crea tu primer producto'}
             </Text>
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               {isLoadingRecipes
-                ? 'Estamos consultando tu recetario.'
+                ? 'Estamos consultando tus productos.'
                 : hasRecipes
                   ? emptyRecipeMessage
-                  : 'Agrega una receta para calcular costos y venderla después.'}
+                  : 'Agrega un producto para calcular costos y venderlo después.'}
             </Text>
             {!isLoadingRecipes && (hasRecipes || canWrite) && (
               <TouchableOpacity
                 accessibilityLabel={
-                  hasRecipes ? 'Limpiar filtros' : 'Agregar primera receta'
+                  hasRecipes ? 'Limpiar filtros' : 'Agregar primer producto'
                 }
                 accessibilityRole="button"
                 activeOpacity={0.75}
@@ -2048,7 +2043,7 @@ export default function RecipeBookScreen({
                     { color: colors.primaryText },
                   ]}
                 >
-                  {hasRecipes ? 'Limpiar filtros' : 'Crear receta'}
+                  {hasRecipes ? 'Limpiar filtros' : 'Crear producto'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -2058,7 +2053,7 @@ export default function RecipeBookScreen({
 
       {canWrite && hasRecipes && (
         <TouchableOpacity
-          accessibilityLabel="Agregar receta"
+          accessibilityLabel="Agregar producto"
           accessibilityRole="button"
           activeOpacity={0.75}
           onPress={() => {
@@ -2084,13 +2079,6 @@ export default function RecipeBookScreen({
         onOpenStoreManager={handleOpenStoreManager}
         onOpenWorkspace={() => handleOpenMenuScreen('workspace')}
       />
-
-      {addStoreModalIsVisible && (
-        <AddStoreModal
-          AddStoreModalIsVisible={addStoreModalIsVisible}
-          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
-        />
-      )}
 
       <Modal
         animationType="none"
@@ -2160,7 +2148,7 @@ export default function RecipeBookScreen({
                 <Text
                   style={[styles.modalTitle, { color: colors.textPrimary }]}
                 >
-                  Nueva receta
+                  Nuevo producto
                 </Text>
                 <TextInput
                   ref={newRecipeNameInputRef}
@@ -2186,7 +2174,7 @@ export default function RecipeBookScreen({
                 <Text
                   style={[styles.modalFieldLabel, { color: colors.textMuted }]}
                 >
-                  Tipo de receta
+                  Tipo de producto
                 </Text>
                 <TouchableOpacity
                   activeOpacity={0.75}
@@ -2278,7 +2266,7 @@ export default function RecipeBookScreen({
             onDelete={(type) =>
               requestDeleteConfirmation({
                 confirmLabel: 'Eliminar',
-                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
+                message: `Se eliminara el tipo "${type.name}" y se quitara de los productos que lo usan.`,
                 onConfirm: () => deleteRecipeType(type),
                 title: 'Eliminar tipo',
               })
@@ -2286,7 +2274,7 @@ export default function RecipeBookScreen({
             onSelect={selectRecipeType}
             options={recipeTypeOptions}
             selectedValue={recipeType}
-            title="Tipo de receta"
+            title="Tipo de producto"
           />
         </View>
       </Modal>
@@ -2372,7 +2360,7 @@ export default function RecipeBookScreen({
                               setRecipeNameDraft(selectedRecipe.name);
                             }
                           }}
-                          placeholder="Nombre de la receta"
+                          placeholder="Nombre del producto"
                           placeholderTextColor={colors.textMuted}
                           style={[
                             styles.recipeNameEditInput,
@@ -2384,7 +2372,7 @@ export default function RecipeBookScreen({
                           recipeNameDraft &&
                           recipeNameDraft !== selectedRecipe.name && (
                             <TouchableOpacity
-                              accessibilityLabel="Guardar nombre de receta"
+                              accessibilityLabel="Guardar nombre de producto"
                               accessibilityRole="button"
                               activeOpacity={0.75}
                               onPress={() => {
@@ -2472,7 +2460,7 @@ export default function RecipeBookScreen({
                             { color: colors.textMuted },
                           ]}
                         >
-                          Tipo de receta
+                          Tipo de producto
                         </Text>
                       </View>
                       {canWrite ? (
@@ -2502,7 +2490,7 @@ export default function RecipeBookScreen({
                             { color: colors.textSecondary },
                           ]}
                         >
-                          Porciones de esta receta
+                          Porciones de este producto
                         </Text>
                         <Text
                           style={[
@@ -2591,7 +2579,7 @@ export default function RecipeBookScreen({
                         { color: colors.textPrimary },
                       ]}
                     >
-                      Receta
+                      Producto
                     </Text>
 
                     <View
@@ -3273,7 +3261,7 @@ export default function RecipeBookScreen({
                           { color: colors.danger },
                         ]}
                       >
-                        Eliminar receta
+                        Eliminar producto
                       </Text>
                     </TouchableOpacity>
                     ) : null}
@@ -3445,7 +3433,7 @@ export default function RecipeBookScreen({
             onDelete={(type) =>
               requestDeleteConfirmation({
                 confirmLabel: 'Eliminar',
-                message: `Se eliminara el tipo "${type.name}" y se quitara de las recetas que lo usan.`,
+                message: `Se eliminara el tipo "${type.name}" y se quitara de los productos que lo usan.`,
                 onConfirm: () => deleteRecipeType(type),
                 title: 'Eliminar tipo',
               })
@@ -3453,7 +3441,7 @@ export default function RecipeBookScreen({
             onSelect={selectRecipeType}
             options={recipeTypeOptions}
             selectedValue={selectedRecipe ? selectedRecipe.type : recipeType}
-            title="Tipo de receta"
+            title="Tipo de producto"
           />
         </View>
       </Modal>

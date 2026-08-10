@@ -5,6 +5,8 @@ export const STORE_COLLECTION = 'stores';
 const normalizeStore = (store = {}) => ({
   Address: store.Address || store.address || '',
   Alias: store.Alias || store.alias || '',
+  Latitude: store.Latitude ?? store.latitude ?? null,
+  Longitude: store.Longitude ?? store.longitude ?? null,
   Name: store.Name || store.name || '',
 });
 
