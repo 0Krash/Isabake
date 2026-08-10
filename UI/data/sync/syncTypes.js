@@ -26,6 +26,8 @@ export const DEFAULT_SYNC_ENDPOINTS = {
 
 export const SHARED_SYNC_COLLECTIONS = [
   'categories',
+  'clientTypes',
+  'clients',
   'inventory',
   'recipes',
   'recipeSections',

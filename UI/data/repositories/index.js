@@ -1,4 +1,6 @@
 export { default as categoryRepository } from './categoryRepository';
+export { default as clientTypeRepository } from './clientTypeRepository';
+export { default as clientRepository } from './clientRepository';
 export { default as inventoryRepository } from './inventoryRepository';
 export { default as recipeRepository } from './recipeRepository';
 export { default as recipeSectionRepository } from './recipeSectionRepository';

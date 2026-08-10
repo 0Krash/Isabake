@@ -23,6 +23,8 @@ export default function AppScreen({
   onRefresh,
   refreshing = false,
   scroll = true,
+  scrollRef,
+  stickyHeaderIndices,
   style,
 }) {
   const { colors } = useTransactionBalanceTheme();
@@ -73,6 +75,7 @@ export default function AppScreen({
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         overScrollMode="never"
+        ref={scrollRef}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -83,6 +86,7 @@ export default function AppScreen({
           ) : undefined
         }
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={stickyHeaderIndices}
       >
         {children}
       </ScrollView>
