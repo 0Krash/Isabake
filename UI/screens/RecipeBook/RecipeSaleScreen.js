@@ -3,6 +3,7 @@ import {
   Alert,
   BackHandler,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -14,9 +15,14 @@ import {
 } from 'react-native';
 
 import typography from '../../constants/TransactionBalance/Typography';
+import {
+  MAIN_SCREEN_TOP_PADDING,
+  getScreenContentTopPadding,
+} from '../../components/layout/layoutMetrics';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useInventoryData from '../../hooks/Inventory/useInventoryData';
 import { createLocalRecipeSale } from '../../data/services/recipeSaleService';
+import ClientInputComponent from '../../components/TransactionBalance/modals/addTransactionModal/ClientInputComponent';
 import {
   calculateRecipeCost,
   calculateSaleMetrics,
@@ -45,6 +51,15 @@ const number = (value) =>
       .replace(/[^0-9.,-]/g, '')
       .replace(',', '.'),
   ) || 0;
+
+const getRecipeSaleTopPadding = () =>
+  getScreenContentTopPadding({
+    basePadding: MAIN_SCREEN_TOP_PADDING + 10,
+    platform: Platform.OS,
+    statusBarHeight: StatusBar.currentHeight,
+  });
+
+const recipeSaleBottomPadding = Platform.OS === 'android' ? 34 : 18;
 
 const ingredientRoundingModes = [
   {
@@ -155,7 +170,7 @@ const scaleIngredientQuantity = (ingredient, scale, roundingMode) => {
   };
 };
 
-export default function RecipeSaleScreen({ onClose, recipe }) {
+export default function RecipeSaleScreen({ onClose, onOpenClients, recipe }) {
   const { colors } = useTransactionBalanceTheme();
   const { inventoryItems, isLoadingInventory, refreshInventory } =
     useInventoryData();
@@ -173,6 +188,9 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
   const [ingredientsHeaderHeight, setIngredientsHeaderHeight] = useState(0);
   const [saleFormY, setSaleFormY] = useState(0);
   const [selectedIngredient, setSelectedIngredient] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [clientWasSelected, setClientWasSelected] = useState(false);
+  const [saleReviewVisible, setSaleReviewVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const cost = useMemo(
     () => calculateRecipeCost(recipe, inventoryItems),
@@ -271,12 +289,13 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
     suggestedUnitPrice,
     targetMargin: normalizedTargetMargin,
   } = metrics;
-  const canSell =
+  const canOpenSaleReview =
     !isLoadingInventory &&
     !cost.missingCost &&
     productionCost > 0 &&
     amount > 0 &&
     !isSaving;
+  const canConfirmSale = canOpenSaleReview && clientWasSelected;
   const groupedIngredients = useMemo(() => {
     const groups = sortedIngredients.reduce((currentGroups, ingredient) => {
       const section = ingredient.section || 'Sin sección';
@@ -462,7 +481,7 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
   );
 
   const createSale = async () => {
-    if (!canSell) return;
+    if (!canConfirmSale) return;
     setIsSaving(true);
 
     try {
@@ -496,12 +515,14 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
         category: { description: 'Recetas', shortDescription: 'Recetas' },
         description: `Venta de ${recipe.name}`,
         financials,
+        client: selectedClient,
         recipe,
         saleQuantity,
         saleTotal: Math.round(amount * 100),
         selectedDate: new Date().toISOString(),
       });
       await refreshInventory();
+      setSaleReviewVisible(false);
       Alert.alert('Venta registrada', `${saleQuantity} × ${recipe.name}`, [
         { onPress: onClose, text: 'Aceptar' },
       ]);
@@ -521,7 +542,7 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
       <View
         style={[
           styles.header,
-          { paddingTop: (StatusBar.currentHeight || 0) + 12 },
+          { paddingTop: getRecipeSaleTopPadding() },
         ]}
       >
         <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -941,20 +962,192 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
           </Text>
         </View>
         <TouchableOpacity
-          disabled={!canSell}
-          onPress={createSale}
+          disabled={!canOpenSaleReview}
+          onPress={() => {
+            setSelectedClient(null);
+            setClientWasSelected(false);
+            setSaleReviewVisible(true);
+          }}
           style={[
             styles.bottomSellButton,
             {
-              backgroundColor: canSell ? colors.primary : colors.primaryMuted,
+              backgroundColor: canOpenSaleReview
+                ? colors.primary
+                : colors.primaryMuted,
             },
           ]}
         >
           <Text style={[styles.sellText, { color: colors.textInverse }]}>
-            {isSaving ? 'Registrando…' : 'Registrar venta'}
+            Registrar venta
           </Text>
         </TouchableOpacity>
       </View>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          if (!isSaving) {
+            setSaleReviewVisible(false);
+          }
+        }}
+        visible={saleReviewVisible}
+      >
+        <View
+          style={[
+            styles.reviewScreen,
+            { backgroundColor: colors.screenBackground },
+          ]}
+        >
+          <View
+            style={[
+              styles.reviewHeader,
+              { paddingTop: getRecipeSaleTopPadding() },
+            ]}
+          >
+            <View style={styles.reviewHeaderCopy}>
+              <Text
+                numberOfLines={1}
+                style={[styles.reviewTitle, { color: colors.textPrimary }]}
+              >
+                Confirmar venta
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={[styles.reviewSubtitle, { color: colors.textMuted }]}
+              >
+                Revisa lo que venderás antes de registrar el movimiento.
+              </Text>
+            </View>
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.reviewContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={[
+                styles.reviewCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.reviewLabel, { color: colors.textMuted }]}>
+                Producto
+              </Text>
+              <Text style={[styles.reviewValue, { color: colors.textPrimary }]}>
+                {recipe.name}
+              </Text>
+              <View
+                style={[
+                  styles.reviewHeroMetric,
+                  {
+                    backgroundColor: colors.primaryMuted,
+                    borderColor: colors.primary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.reviewMetricLabel,
+                    { color: colors.primaryText },
+                  ]}
+                >
+                  Cobro de la venta
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewHeroMetricValue,
+                    { color: colors.textPrimary },
+                  ]}
+                >
+                  {money(amount)}
+                </Text>
+                <Text
+                  style={[
+                    styles.reviewMetricDescription,
+                    { color: colors.textMuted },
+                  ]}
+                >
+                  Monto total que pagará el cliente.
+                </Text>
+              </View>
+              <View style={styles.reviewGrid}>
+                <ReviewMetric
+                  colors={colors}
+                  description="Cantidad que entregarás al cliente"
+                  label="Piezas a vender"
+                  value={`${saleQuantity || 0}`}
+                />
+                <ReviewMetric
+                  colors={colors}
+                  description="Dinero estimado que queda para ti"
+                  label="Ganancia esperada"
+                  value={money(netProfit)}
+                />
+                <ReviewMetric
+                  colors={colors}
+                  description="Ganancia por cada $100 vendidos"
+                  label="Margen de ganancia"
+                  value={`${netMargin.toFixed(1)}%`}
+                />
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.reviewCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <ClientInputComponent
+                helperText="A quién se le registrará esta venta."
+                label="Cliente"
+                onOpenClientManager={() => {
+                  setSaleReviewVisible(false);
+                  onOpenClients?.();
+                }}
+                setSelectedClient={setSelectedClient}
+                setValidationErrorClient={setClientWasSelected}
+              />
+              {!clientWasSelected ? (
+                <Text style={[styles.hint, { color: colors.textMuted }]}>
+                  Selecciona a quien se le vendio para continuar.
+                </Text>
+              ) : null}
+            </View>
+          </ScrollView>
+          <View
+            style={[
+              styles.reviewActions,
+              { backgroundColor: colors.surface, borderTopColor: colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              disabled={isSaving}
+              onPress={() => setSaleReviewVisible(false)}
+              style={[styles.reviewSecondaryButton, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.sellText, { color: colors.textPrimary }]}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={!canConfirmSale}
+              onPress={createSale}
+              style={[
+                styles.reviewPrimaryButton,
+                {
+                  backgroundColor: canConfirmSale
+                    ? colors.primary
+                    : colors.primaryMuted,
+                },
+              ]}
+            >
+              <Text style={[styles.sellText, { color: colors.textInverse }]}>
+                {isSaving ? 'Registrando...' : 'Confirmar venta'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <Modal
         animationType="fade"
         onRequestClose={() => setSelectedIngredient(null)}
@@ -1031,6 +1224,26 @@ export default function RecipeSaleScreen({ onClose, recipe }) {
   );
 }
 
+function ReviewMetric({ colors, description, label, value }) {
+  return (
+    <View style={[styles.reviewMetric, { borderColor: colors.border }]}>
+      <View style={styles.reviewMetricCopy}>
+        <Text style={[styles.reviewMetricLabel, { color: colors.textPrimary }]}>
+          {label}
+        </Text>
+        <Text
+          style={[styles.reviewMetricDescription, { color: colors.textMuted }]}
+        >
+          {description}
+        </Text>
+      </View>
+      <Text style={[styles.reviewMetricValue, { color: colors.textPrimary }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   amount: { fontSize: 32, fontWeight: typography.weights.bold, marginTop: 6 },
   backButton: { justifyContent: 'center', minHeight: 44 },
@@ -1044,7 +1257,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 16,
-    paddingBottom: 18,
+    paddingBottom: recipeSaleBottomPadding,
   },
   bottomBarAmount: {
     fontSize: typography.sizes.bodyLarge,
@@ -1202,6 +1415,114 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.bold,
     marginTop: 22,
+  },
+  reviewActions: {
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: recipeSaleBottomPadding,
+  },
+  reviewCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+    padding: 16,
+  },
+  reviewContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  reviewGrid: {
+    gap: 10,
+    marginTop: 14,
+  },
+  reviewHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    paddingBottom: 8,
+  },
+  reviewHeaderCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reviewHeroMetric: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 14,
+  },
+  reviewHeroMetricValue: {
+    fontSize: 30,
+    fontWeight: typography.weights.bold,
+    marginTop: 4,
+  },
+  reviewLabel: {
+    fontSize: typography.sizes.caption,
+    marginBottom: 4,
+  },
+  reviewMetric: {
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+  },
+  reviewMetricLabel: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
+  },
+  reviewMetricCopy: {
+    flex: 1,
+  },
+  reviewMetricDescription: {
+    fontSize: typography.sizes.caption,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  reviewMetricValue: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.bold,
+    minWidth: 74,
+    textAlign: 'right',
+  },
+  reviewPrimaryButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    flex: 1.35,
+    justifyContent: 'center',
+    minHeight: 50,
+    minWidth: 0,
+    paddingHorizontal: 12,
+  },
+  reviewScreen: {
+    flex: 1,
+  },
+  reviewSecondaryButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 0.85,
+    justifyContent: 'center',
+    minHeight: 50,
+    minWidth: 0,
+    paddingHorizontal: 10,
+  },
+  reviewSubtitle: {
+    fontSize: typography.sizes.body,
+    lineHeight: 21,
+    marginTop: 6,
+  },
+  reviewTitle: {
+    fontSize: typography.sizes.title,
+    fontWeight: typography.weights.bold,
+  },
+  reviewValue: {
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.bold,
   },
   row: {
     alignItems: 'center',

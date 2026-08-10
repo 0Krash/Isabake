@@ -93,6 +93,7 @@ const getDeductionIngredients = (recipe, saleQuantity) => {
 const buildTransactionPayload = ({
   amount,
   category,
+  client,
   description,
   financials,
   itemQuantity,
@@ -104,6 +105,7 @@ const buildTransactionPayload = ({
 }) => ({
   amount,
   category,
+  client,
   description,
   financials,
   itemQuantity,
@@ -117,6 +119,7 @@ const buildTransactionPayload = ({
 export const createLocalRecipeSale = async (
   {
     category = { description: 'Recetas', shortDescription: 'Recetas' },
+    client = null,
     description,
     financials,
     recipe,
@@ -157,6 +160,7 @@ export const createLocalRecipeSale = async (
       buildTransactionPayload({
         amount: Math.round(number(saleTotal)),
         category,
+        client,
         description: description || `Venta de ${recipe.name || localRecipe.name}`,
         financials,
         itemQuantity: `${saleQuantity}`,

@@ -69,10 +69,28 @@ const normalizeStore = (store) => {
   return { storeId: `${store}` };
 };
 
+const normalizeClient = (client) => {
+  if (!client) {
+    return null;
+  }
+
+  if (typeof client === 'object') {
+    const clientId = client.clientId ?? client.id ?? '';
+
+    return {
+      ...client,
+      clientId: clientId === '' ? '' : `${clientId}`,
+    };
+  }
+
+  return { clientId: `${client}` };
+};
+
 export const normalizeTransaction = (transaction = {}) => ({
   ...transaction,
   amount: Number(transaction.amount || 0),
   category: normalizeCategory(transaction.category),
+  client: normalizeClient(transaction.client),
   financials: transaction.financials,
   id: `${transaction.transactionId || transaction.id || transaction.localId || ''}`,
   itemQuantity: transaction.itemQuantity || '',
@@ -91,6 +109,7 @@ export const toStorageTransaction = (transaction = {}) => ({
   // CurrencyFormatter.convertCentsToCurrency.
   amount: Number(transaction.amount || 0),
   category: normalizeCategory(transaction.category),
+  client: normalizeClient(transaction.client),
   description: transaction.description || '',
   financials: transaction.financials,
   itemQuantity: transaction.itemQuantity || '',

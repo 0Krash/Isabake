@@ -5,6 +5,7 @@ export const TRANSACTION_COLLECTION = 'transactions';
 const normalizeTransaction = (transaction = {}) => ({
   amount: Number(transaction.amount || 0),
   category: transaction.category || null,
+  client: transaction.client || null,
   description: transaction.description || '',
   financials: transaction.financials || undefined,
   itemQuantity: transaction.itemQuantity || '',

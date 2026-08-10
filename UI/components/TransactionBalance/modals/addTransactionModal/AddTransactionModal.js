@@ -21,6 +21,7 @@ import QuantityInputComponent from './QuantityInputComponent';
 import AmountInputComponent from './AmountInputComponent';
 import DatePickerComponent from './DatePickerComponent';
 import StoreInputComponent from './StoreInputComponent';
+import ClientInputComponent from './ClientInputComponent';
 import UOMInputComponent from './UOMInputComponent';
 import ItemQuantityInputComponent from './ItemQuantityInputComponent';
 import InsertTransactionButton from './InsertTransactionButton';
@@ -30,6 +31,8 @@ import useKeyboardBottomInset from '../../../../hooks/useKeyboardBottomInset';
 
 export default function AddTransactionModal({
   AddTransactionModalIsVisible,
+  onOpenClients,
+  onOpenStoreManager,
   onTransactionCreated,
   setAddTransactionModalIsVisible,
 }) {
@@ -55,9 +58,11 @@ export default function AddTransactionModal({
   const [unitValue, setUnitValue] = useState('1');
   const [itemQuantity, setItemQuantity] = useState('');
   const [selected, setSelected] = useState('');
+  const [selectedClient, setSelectedClient] = useState('');
 
   const [validationErrorStore, setValidationErrorStore] = useState(false);
   const [validationErrorAmount, setValidationErrorAmount] = useState(false);
+  const [validationErrorClient, setValidationErrorClient] = useState(false);
   const [validationErrorQuantity, setValidationErrorQuantity] = useState(false);
   const [validationErrorDescription, setValidationErrorDescription] =
     useState(false);
@@ -82,6 +87,8 @@ export default function AddTransactionModal({
     setAmount('');
     setDescription('');
     setItemQuantity('');
+    setSelected('');
+    setSelectedClient('');
   };
 
   const resetSwipePosition = useCallback(() => {
@@ -185,6 +192,7 @@ export default function AddTransactionModal({
   const resetValidatioErrors = () => {
     setValidationErrorDescription(false);
     setValidationErrorAmount(false);
+    setValidationErrorClient(false);
     setValidationErrorQuantity(false);
     setValidationErrorItemQuantity(false);
     setValidationErrorStore(false);
@@ -194,6 +202,8 @@ export default function AddTransactionModal({
     setValidationErrorStore(false);
     setTransactionType(tabName);
     setShowCategoryInput(tabName === 'Gastos');
+    setSelectedClient('');
+    setValidationErrorClient(false);
     Keyboard.dismiss();
   };
 
@@ -274,6 +284,13 @@ export default function AddTransactionModal({
                 }}
               >
                 <View testID="filterArea">
+                  {!showCategoryInput ? (
+                    <ClientInputComponent
+                      onOpenClientManager={onOpenClients}
+                      setSelectedClient={setSelectedClient}
+                      setValidationErrorClient={setValidationErrorClient}
+                    />
+                  ) : null}
                   {showCategoryInput && (
                     <CategoryInputComponent
                       category={category}
@@ -283,6 +300,7 @@ export default function AddTransactionModal({
                   {showCategoryInput &&
                     (category === '1' || category === '2') && (
                       <StoreInputComponent
+                        onOpenStoreManager={onOpenStoreManager}
                         setSelected={setSelected}
                         setValidationErrorStore={setValidationErrorStore}
                         transactionType={transactionType}
@@ -360,12 +378,16 @@ export default function AddTransactionModal({
                         validationErrorStore
                       : validationErrorDescription &&
                         validationErrorQuantity &&
-                        validationErrorAmount
+                        validationErrorAmount &&
+                        validationErrorClient
                   }
                   itemQuantity={transactionType === 'Gastos' ? itemQuantity : ''}
                   unitValue={transactionType === 'Gastos' ? unitValue : ''}
                   category={transactionType === 'Gastos' ? category : ''}
                   selected={transactionType === 'Gastos' ? selected : ''} //store
+                  selectedClient={
+                    transactionType === 'Ventas' ? selectedClient : ''
+                  }
                   transactionType={transactionType}
                   selectedDate={selectedDate}
                   description={description}
