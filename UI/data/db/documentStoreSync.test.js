@@ -53,6 +53,19 @@ describe('documentStore sync outbox wiring', () => {
     );
   });
 
+  test('saveDocument retries when SQLite is temporarily locked', async () => {
+    mockRunAsync
+      .mockRejectedValueOnce(new Error('database is locked'))
+      .mockResolvedValueOnce(undefined);
+
+    await saveDocument('stores', 'store_1', { name: 'Central' }, {
+      groupId: 'group_1',
+    });
+
+    expect(mockRunAsync).toHaveBeenCalledTimes(2);
+    expect(mockAddOutboxEvent).toHaveBeenCalled();
+  });
+
   test('saveDocument does not create outbox for skipOutbox writes', async () => {
     await saveDocument('recipes', 'recipe_1', { name: 'Pan' }, {
       groupId: 'group_1',

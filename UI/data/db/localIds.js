@@ -1,4 +1,5 @@
 import { initDatabase } from './database';
+import { queueSqliteWrite } from './sqliteRetry';
 
 const DEVICE_DOCUMENT_COLLECTION = '__local_meta';
 const DEVICE_DOCUMENT_ID = 'device';
@@ -64,36 +65,38 @@ export const getLocalDeviceId = async (options = {}) => {
   const now = new Date().toISOString();
   const deviceId = createLocalId(DEVICE_ID_PREFIX);
 
-  await db.runAsync(
-    `
-      INSERT INTO documents (
-        collection,
-        id,
-        remoteId,
-        groupId,
-        data,
-        createdAt,
-        updatedAt,
-        deletedAt,
-        localVersion,
-        serverVersion,
-        syncStatus,
-        deviceId
-      )
-      VALUES (?, ?, NULL, NULL, ?, ?, ?, NULL, 1, NULL, 'local', ?)
-      ON CONFLICT(collection, id) DO UPDATE SET
-        data = excluded.data,
-        updatedAt = excluded.updatedAt,
-        deviceId = excluded.deviceId;
-    `,
-    [
-      DEVICE_DOCUMENT_COLLECTION,
-      DEVICE_DOCUMENT_ID,
-      JSON.stringify({ deviceId }),
-      now,
-      now,
-      deviceId,
-    ],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        INSERT INTO documents (
+          collection,
+          id,
+          remoteId,
+          groupId,
+          data,
+          createdAt,
+          updatedAt,
+          deletedAt,
+          localVersion,
+          serverVersion,
+          syncStatus,
+          deviceId
+        )
+        VALUES (?, ?, NULL, NULL, ?, ?, ?, NULL, 1, NULL, 'local', ?)
+        ON CONFLICT(collection, id) DO UPDATE SET
+          data = excluded.data,
+          updatedAt = excluded.updatedAt,
+          deviceId = excluded.deviceId;
+      `,
+      [
+        DEVICE_DOCUMENT_COLLECTION,
+        DEVICE_DOCUMENT_ID,
+        JSON.stringify({ deviceId }),
+        now,
+        now,
+        deviceId,
+      ],
+    ),
   );
 
   return deviceId;

@@ -1,4 +1,5 @@
 import { initDatabase } from '../db/database';
+import { queueSqliteWrite } from '../db/sqliteRetry';
 
 const nowIso = () => new Date().toISOString();
 
@@ -36,21 +37,23 @@ export const storeLastSyncCursor = async (groupId, cursor, options = {}) => {
   const db = options.db || (await initDatabase());
   const updatedAt = nowIso();
 
-  await db.runAsync(
-    `
-      INSERT INTO sync_state (
-        groupId,
-        lastSyncCursor,
-        lastSyncedAt,
-        updatedAt
-      )
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(groupId) DO UPDATE SET
-        lastSyncCursor = excluded.lastSyncCursor,
-        lastSyncedAt = excluded.lastSyncedAt,
-        updatedAt = excluded.updatedAt;
-    `,
-    [groupId, cursor || null, updatedAt, updatedAt],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        INSERT INTO sync_state (
+          groupId,
+          lastSyncCursor,
+          lastSyncedAt,
+          updatedAt
+        )
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(groupId) DO UPDATE SET
+          lastSyncCursor = excluded.lastSyncCursor,
+          lastSyncedAt = excluded.lastSyncedAt,
+          updatedAt = excluded.updatedAt;
+      `,
+      [groupId, cursor || null, updatedAt, updatedAt],
+    ),
   );
 
   return getSyncState(groupId, { db });
@@ -62,12 +65,14 @@ export const deleteSyncState = async (groupId, options = {}) => {
   }
 
   const db = options.db || (await initDatabase());
-  const result = await db.runAsync(
-    `
-      DELETE FROM sync_state
-      WHERE groupId = ?;
-    `,
-    [groupId],
+  const result = await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        DELETE FROM sync_state
+        WHERE groupId = ?;
+      `,
+      [groupId],
+    ),
   );
 
   return Number(result?.changes || 0);

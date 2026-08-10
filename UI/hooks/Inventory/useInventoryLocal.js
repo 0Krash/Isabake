@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { inventoryRepository } from '../../data/repositories';
-import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
@@ -274,7 +273,6 @@ export default function useInventoryLocal({
           ...options,
         }),
       );
-      requestLocalChangeSync();
       const visibleInventoryItems = await refreshInventory();
 
       if (
@@ -306,7 +304,6 @@ export default function useInventoryLocal({
       }
 
       const normalizedItem = normalizeInventoryItem(item);
-      requestLocalChangeSync();
       await refreshInventory();
       return normalizedItem;
     },
@@ -321,7 +318,6 @@ export default function useInventoryLocal({
         throw new Error('Ingrediente no encontrado');
       }
 
-      requestLocalChangeSync();
       await refreshInventory();
       return normalizeInventoryItem(item);
     },

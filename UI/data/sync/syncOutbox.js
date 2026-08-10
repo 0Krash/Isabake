@@ -1,5 +1,6 @@
 import { initDatabase } from '../db/database';
 import { createLocalId } from '../db/localIds';
+import { queueSqliteWrite } from '../db/sqliteRetry';
 import { notifyAutoSyncFromLocalChange } from './autoSyncNotifier';
 
 const nowIso = () => new Date().toISOString();
@@ -110,22 +111,31 @@ export const addOutboxEvent = async (
   const db = options.db || (await initDatabase());
   const id = createLocalId('outbox');
 
-  await db.runAsync(
-    `
-      INSERT INTO sync_outbox (
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        INSERT INTO sync_outbox (
+          id,
+          collection,
+          documentId,
+          operation,
+          payload,
+          createdAt,
+          attempts,
+          lastError,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 'pending');
+      `,
+      [
         id,
         collection,
         documentId,
         operation,
-        payload,
-        createdAt,
-        attempts,
-        lastError,
-        status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 'pending');
-    `,
-    [id, collection, documentId, operation, serializePayload(payload), nowIso()],
+        serializePayload(payload),
+        nowIso(),
+      ],
+    ),
   );
 
   notifyAutoSyncAfterOutboxWrite(options);
@@ -195,14 +205,16 @@ export const getConflictOutboxCountsByCollection = async (options = {}) => {
 export const markOutboxEventAsDone = async (id, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET status = 'done',
-          lastError = NULL
-      WHERE id = ?;
-    `,
-    [id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET status = 'done',
+            lastError = NULL
+        WHERE id = ?;
+      `,
+      [id],
+    ),
   );
 };
 
@@ -211,14 +223,16 @@ export const markOutboxEventSynced = markOutboxEventAsDone;
 export const markOutboxEventAsFailed = async (id, error, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET status = 'failed',
-          lastError = ?
-      WHERE id = ?;
-    `,
-    [String(error?.message || error || ''), id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET status = 'failed',
+            lastError = ?
+        WHERE id = ?;
+      `,
+      [String(error?.message || error || ''), id],
+    ),
   );
 };
 
@@ -227,14 +241,16 @@ export const markOutboxEventFailed = markOutboxEventAsFailed;
 export const requeueOutboxEvent = async (id, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET status = 'pending',
-          lastError = NULL
-      WHERE id = ?;
-    `,
-    [id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET status = 'pending',
+            lastError = NULL
+        WHERE id = ?;
+      `,
+      [id],
+    ),
   );
 };
 
@@ -244,18 +260,20 @@ export const deleteOutboxEventsByGroupId = async (groupId, options = {}) => {
   }
 
   const db = options.db || (await initDatabase());
-  const result = await db.runAsync(
-    `
-      DELETE FROM sync_outbox
-      WHERE EXISTS (
-        SELECT 1
-        FROM documents
-        WHERE documents.collection = sync_outbox.collection
-          AND documents.id = sync_outbox.documentId
-          AND documents.groupId = ?
-      );
-    `,
-    [groupId],
+  const result = await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        DELETE FROM sync_outbox
+        WHERE EXISTS (
+          SELECT 1
+          FROM documents
+          WHERE documents.collection = sync_outbox.collection
+            AND documents.id = sync_outbox.documentId
+            AND documents.groupId = ?
+        );
+      `,
+      [groupId],
+    ),
   );
 
   return Number(result?.changes || 0);
@@ -264,14 +282,16 @@ export const deleteOutboxEventsByGroupId = async (groupId, options = {}) => {
 export const markOutboxEventConflict = async (id, conflict, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET status = 'conflict',
-          lastError = ?
-      WHERE id = ?;
-    `,
-    [serializePayload(conflict), id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET status = 'conflict',
+            lastError = ?
+        WHERE id = ?;
+      `,
+      [serializePayload(conflict), id],
+    ),
   );
 };
 
@@ -282,34 +302,38 @@ export const markOutboxEventResolved = async (
 ) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET status = 'done',
-          lastError = ?
-      WHERE id = ?;
-    `,
-    [
-      serializePayload({
-        ...resolution,
-        resolvedAt: resolution.resolvedAt || nowIso(),
-      }),
-      id,
-    ],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET status = 'done',
+            lastError = ?
+        WHERE id = ?;
+      `,
+      [
+        serializePayload({
+          ...resolution,
+          resolvedAt: resolution.resolvedAt || nowIso(),
+        }),
+        id,
+      ],
+    ),
   );
 };
 
 export const incrementOutboxAttempt = async (id, error, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE sync_outbox
-      SET attempts = attempts + 1,
-          lastError = ?,
-          status = 'pending'
-      WHERE id = ?;
-    `,
-    [String(error?.message || error || ''), id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE sync_outbox
+        SET attempts = attempts + 1,
+            lastError = ?,
+            status = 'pending'
+        WHERE id = ?;
+      `,
+      [String(error?.message || error || ''), id],
+    ),
   );
 };

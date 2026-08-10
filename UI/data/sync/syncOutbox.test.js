@@ -47,6 +47,21 @@ describe('syncOutbox count helpers', () => {
     expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledTimes(1);
   });
 
+  test('adding an outbox event retries when SQLite is temporarily locked', async () => {
+    mockRunAsync
+      .mockRejectedValueOnce(new Error('Call rejected: database is locked'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      addOutboxEvent('stores', 'store_1', 'create', { name: 'Central' }, {
+        notifyAutoSyncNeeded: mockNotifyAutoSyncNeeded,
+      }),
+    ).resolves.toBe('outbox_1');
+
+    expect(mockRunAsync).toHaveBeenCalledTimes(2);
+    expect(mockNotifyAutoSyncNeeded).toHaveBeenCalledTimes(1);
+  });
+
   test('adding an outbox event notifies the registered auto-sync handler', async () => {
     setAutoSyncNotifier(mockNotifyAutoSyncNeeded);
 

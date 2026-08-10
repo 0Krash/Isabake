@@ -1,5 +1,6 @@
 import { initDatabase } from './database';
 import { getLocalDeviceId } from './localIds';
+import { queueSqliteWrite } from './sqliteRetry';
 import { addOutboxEvent } from '../sync/syncOutbox';
 import { SHARED_SYNC_COLLECTIONS } from '../sync/syncTypes';
 
@@ -72,46 +73,48 @@ export const saveDocument = async (collection, id, data, options = {}) => {
       ? options.deviceId
       : existingDocument?.deviceId || (await getLocalDeviceId({ db }));
 
-  await db.runAsync(
-    `
-      INSERT INTO documents (
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        INSERT INTO documents (
+          collection,
+          id,
+          remoteId,
+          groupId,
+          data,
+          createdAt,
+          updatedAt,
+          deletedAt,
+          localVersion,
+          serverVersion,
+          syncStatus,
+          deviceId
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
+        ON CONFLICT(collection, id) DO UPDATE SET
+          remoteId = excluded.remoteId,
+          groupId = excluded.groupId,
+          data = excluded.data,
+          updatedAt = excluded.updatedAt,
+          deletedAt = NULL,
+          localVersion = documents.localVersion + 1,
+          serverVersion = excluded.serverVersion,
+          syncStatus = excluded.syncStatus,
+          deviceId = excluded.deviceId;
+      `,
+      [
         collection,
         id,
         remoteId,
         groupId,
-        data,
+        serializeData(data),
         createdAt,
         updatedAt,
-        deletedAt,
-        localVersion,
         serverVersion,
         syncStatus,
-        deviceId
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, ?)
-      ON CONFLICT(collection, id) DO UPDATE SET
-        remoteId = excluded.remoteId,
-        groupId = excluded.groupId,
-        data = excluded.data,
-        updatedAt = excluded.updatedAt,
-        deletedAt = NULL,
-        localVersion = documents.localVersion + 1,
-        serverVersion = excluded.serverVersion,
-        syncStatus = excluded.syncStatus,
-        deviceId = excluded.deviceId;
-    `,
-    [
-      collection,
-      id,
-      remoteId,
-      groupId,
-      serializeData(data),
-      createdAt,
-      updatedAt,
-      serverVersion,
-      syncStatus,
-      deviceId,
-    ],
+        deviceId,
+      ],
+    ),
   );
 
   if (!options.skipOutbox) {
@@ -198,17 +201,19 @@ export const softDeleteDocument = async (collection, id, options = {}) => {
   const db = options.db || (await initDatabase());
   const deletedAt = options.deletedAt || nowIso();
 
-  await db.runAsync(
-    `
-      UPDATE documents
-      SET deletedAt = ?,
-          updatedAt = ?,
-          localVersion = localVersion + 1,
-          syncStatus = 'pending'
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [deletedAt, deletedAt, collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE documents
+        SET deletedAt = ?,
+            updatedAt = ?,
+            localVersion = localVersion + 1,
+            syncStatus = 'pending'
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [deletedAt, deletedAt, collection, id],
+    ),
   );
 
   if (!options.skipOutbox) {
@@ -221,13 +226,15 @@ export const softDeleteDocument = async (collection, id, options = {}) => {
 export const hardDeleteDocument = async (collection, id, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      DELETE FROM documents
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        DELETE FROM documents
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [collection, id],
+    ),
   );
 };
 
@@ -237,12 +244,14 @@ export const hardDeleteDocumentsByGroupId = async (groupId, options = {}) => {
   }
 
   const db = options.db || (await initDatabase());
-  const result = await db.runAsync(
-    `
-      DELETE FROM documents
-      WHERE groupId = ?;
-    `,
-    [groupId],
+  const result = await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        DELETE FROM documents
+        WHERE groupId = ?;
+      `,
+      [groupId],
+    ),
   );
 
   return Number(result?.changes || 0);
@@ -251,15 +260,17 @@ export const hardDeleteDocumentsByGroupId = async (groupId, options = {}) => {
 export const updateSyncStatus = async (collection, id, syncStatus, options = {}) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE documents
-      SET syncStatus = ?,
-          updatedAt = ?
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [syncStatus, nowIso(), collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE documents
+        SET syncStatus = ?,
+            updatedAt = ?
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [syncStatus, nowIso(), collection, id],
+    ),
   );
 
   return getDocument(collection, id, { db, includeDeleted: true });
@@ -273,17 +284,25 @@ export const markDocumentSynced = async (
 ) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE documents
-      SET remoteId = COALESCE(?, remoteId),
-          serverVersion = COALESCE(?, serverVersion),
-          syncStatus = 'synced',
-          updatedAt = COALESCE(?, updatedAt)
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [remoteId ?? null, serverVersion ?? null, syncedAt ?? null, collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE documents
+        SET remoteId = COALESCE(?, remoteId),
+            serverVersion = COALESCE(?, serverVersion),
+            syncStatus = 'synced',
+            updatedAt = COALESCE(?, updatedAt)
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [
+        remoteId ?? null,
+        serverVersion ?? null,
+        syncedAt ?? null,
+        collection,
+        id,
+      ],
+    ),
   );
 
   return getDocument(collection, id, { db, includeDeleted: true });
@@ -297,16 +316,18 @@ export const markDocumentConflict = async (
 ) => {
   const db = options.db || (await initDatabase());
 
-  await db.runAsync(
-    `
-      UPDATE documents
-      SET serverVersion = COALESCE(?, serverVersion),
-          syncStatus = 'conflict',
-          updatedAt = ?
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [serverVersion ?? null, nowIso(), collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE documents
+        SET serverVersion = COALESCE(?, serverVersion),
+            syncStatus = 'conflict',
+            updatedAt = ?
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [serverVersion ?? null, nowIso(), collection, id],
+    ),
   );
 
   return getDocument(collection, id, { db, includeDeleted: true });
@@ -361,45 +382,47 @@ export const saveRemoteDocument = async (
   const createdAt = existingDocument?.createdAt || updatedAt || nowIso();
   const nextUpdatedAt = updatedAt || nowIso();
 
-  await db.runAsync(
-    `
-      INSERT INTO documents (
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        INSERT INTO documents (
+          collection,
+          id,
+          remoteId,
+          groupId,
+          data,
+          createdAt,
+          updatedAt,
+          deletedAt,
+          localVersion,
+          serverVersion,
+          syncStatus,
+          deviceId
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'synced', ?)
+        ON CONFLICT(collection, id) DO UPDATE SET
+          remoteId = excluded.remoteId,
+          groupId = excluded.groupId,
+          data = excluded.data,
+          updatedAt = excluded.updatedAt,
+          deletedAt = excluded.deletedAt,
+          serverVersion = excluded.serverVersion,
+          syncStatus = excluded.syncStatus,
+          deviceId = excluded.deviceId;
+      `,
+      [
         collection,
         id,
-        remoteId,
-        groupId,
-        data,
+        remoteId || existingDocument?.remoteId || null,
+        groupId ?? existingDocument?.groupId ?? null,
+        serializeData(data),
         createdAt,
-        updatedAt,
-        deletedAt,
-        localVersion,
-        serverVersion,
-        syncStatus,
-        deviceId
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'synced', ?)
-      ON CONFLICT(collection, id) DO UPDATE SET
-        remoteId = excluded.remoteId,
-        groupId = excluded.groupId,
-        data = excluded.data,
-        updatedAt = excluded.updatedAt,
-        deletedAt = excluded.deletedAt,
-        serverVersion = excluded.serverVersion,
-        syncStatus = excluded.syncStatus,
-        deviceId = excluded.deviceId;
-    `,
-    [
-      collection,
-      id,
-      remoteId || existingDocument?.remoteId || null,
-      groupId ?? existingDocument?.groupId ?? null,
-      serializeData(data),
-      createdAt,
-      nextUpdatedAt,
-      deletedAt || null,
-      serverVersion ?? null,
-      deviceId ?? existingDocument?.deviceId ?? null,
-    ],
+        nextUpdatedAt,
+        deletedAt || null,
+        serverVersion ?? null,
+        deviceId ?? existingDocument?.deviceId ?? null,
+      ],
+    ),
   );
 
   return getDocument(collection, id, { db, includeDeleted: true });
@@ -487,17 +510,19 @@ export const assignDocumentGroupId = async (
   const db = options.db || (await initDatabase());
   const updatedAt = options.updatedAt || nowIso();
 
-  await db.runAsync(
-    `
-      UPDATE documents
-      SET groupId = ?,
-          syncStatus = 'pending',
-          updatedAt = ?,
-          localVersion = localVersion + 1
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [groupId, updatedAt, collection, id],
+  await queueSqliteWrite(() =>
+    db.runAsync(
+      `
+        UPDATE documents
+        SET groupId = ?,
+            syncStatus = 'pending',
+            updatedAt = ?,
+            localVersion = localVersion + 1
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [groupId, updatedAt, collection, id],
+    ),
   );
 
   if (!options.skipOutbox) {
