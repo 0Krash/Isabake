@@ -66,7 +66,7 @@ describe('conflictUiModel', () => {
   });
 
   test('builds readable conflict metadata', () => {
-    expect(formatConflictCollection('recipes')).toBe('Receta');
+    expect(formatConflictCollection('recipes')).toBe('Producto');
     expect(formatConflictCollection('inventory')).toBe('Inventario');
     expect(getConflictDisplayName({ localId: 'recipe_1' })).toBe(
       'Elemento con cambios',
@@ -76,7 +76,7 @@ describe('conflictUiModel', () => {
         collection: 'recipes',
         localData: { name: 'phase_15_conflict_doc' },
       }),
-    ).toBe('Receta con cambios');
+    ).toBe('Producto con cambios');
     expect(
       getConflictDisplayName({
         collection: 'inventory',

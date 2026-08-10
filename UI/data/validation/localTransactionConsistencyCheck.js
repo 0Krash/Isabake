@@ -22,6 +22,9 @@ const getStoreId = (store = {}) => {
   return normalizeId(store);
 };
 
+const isProductSaleCategory = (category = {}) =>
+  ['Productos', 'Recetas'].includes(String(category.description || '').trim());
+
 export const runLocalTransactionConsistencyCheck = async () => {
   const warnings = [];
   const [transactions, stores] = await Promise.all([
@@ -70,7 +73,7 @@ export const runLocalTransactionConsistencyCheck = async () => {
 
     if (
       transaction.transactionType === 'Ventas' &&
-      String(transaction.category?.description || '').trim() === 'Recetas' &&
+      isProductSaleCategory(transaction.category) &&
       !transaction.financials
     ) {
       warnings.push({

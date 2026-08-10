@@ -118,7 +118,7 @@ const buildTransactionPayload = ({
 
 export const createLocalRecipeSale = async (
   {
-    category = { description: 'Recetas', shortDescription: 'Recetas' },
+    category = { description: 'Productos', shortDescription: 'Productos' },
     client = null,
     description,
     financials,
@@ -135,17 +135,17 @@ export const createLocalRecipeSale = async (
     const recipeId = getEntityId(recipe, 'recipeId');
 
     if (!recipeId) {
-      throw new Error('La receta no tiene identificador local.');
+      throw new Error('El producto no tiene identificador local.');
     }
 
     const localRecipe = await recipeRepository.getById(recipeId, { db });
 
     if (!localRecipe) {
-      throw new Error('La receta no existe en el recetario local.');
+      throw new Error('El producto no existe en el catalogo local.');
     }
 
     if (!Array.isArray(localRecipe.ingredients) || !localRecipe.ingredients.length) {
-      throw new Error('La receta local no tiene ingredientes.');
+      throw new Error('El producto local no tiene ingredientes.');
     }
 
     const groupId =
@@ -153,7 +153,7 @@ export const createLocalRecipeSale = async (
     const deductionIngredients = getDeductionIngredients(localRecipe, saleQuantity);
 
     if (!deductionIngredients.length) {
-      throw new Error('La receta no tiene ingredientes para descontar.');
+      throw new Error('El producto no tiene ingredientes para descontar.');
     }
 
     const transaction = await transactionRepository.create(

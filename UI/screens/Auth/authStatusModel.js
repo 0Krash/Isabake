@@ -127,7 +127,7 @@ export const createAuthStatusDisplay = ({
 
   return {
     detail:
-      'Puedes seguir usando inventario, recetas y ventas locales sin cuenta.',
+      'Puedes seguir usando inventario, productos y ventas locales sin cuenta.',
     state,
     title: 'Modo local',
   };

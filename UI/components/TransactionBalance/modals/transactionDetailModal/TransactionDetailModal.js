@@ -254,7 +254,7 @@ export default function TransactionDetailModal({
                 <Text style={[styles.financialTitle, { color: colors.textPrimary }]}>
                   Conciliación de rentabilidad
                 </Text>
-                <DetailRow colors={colors} label="Receta" value={financials.recipeName} />
+                <DetailRow colors={colors} label="Producto" value={financials.recipeName} />
                 <DetailRow
                   colors={colors}
                   label="Porciones vendidas"

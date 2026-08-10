@@ -109,7 +109,7 @@ export default function useRecipeTypesLocal({ autoLoad = true } = {}) {
     }
 
     refreshRecipeTypes().catch((requestError) => {
-      console.warn('Error al cargar tipos de receta locales:', requestError);
+      console.warn('Error al cargar tipos de producto locales:', requestError);
     });
   }, [autoLoad, groupId, refreshRecipeTypes, waitingForWorkspace]);
 

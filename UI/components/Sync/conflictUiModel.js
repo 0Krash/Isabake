@@ -70,9 +70,9 @@ export const formatConflictCollection = (collection = '') => {
   const labels = {
     categories: 'Categoria',
     inventory: 'Inventario',
-    recipes: 'Receta',
-    recipeSections: 'Seccion de receta',
-    recipeTypes: 'Tipo de receta',
+    recipes: 'Producto',
+    recipeSections: 'Seccion de producto',
+    recipeTypes: 'Tipo de producto',
     stockMovements: 'Movimiento de inventario',
     stores: 'Tienda',
     transactions: 'Transaccion',
