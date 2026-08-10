@@ -21,7 +21,6 @@ import {
 import useAuthSession from '../../hooks/auth/useAuthSession';
 import useWorkspaces from '../../hooks/workspace/useWorkspaces';
 import {
-  AccountAccessButton,
   BusinessContextCard,
   BusinessShareTabs,
   InvitationsTab,
@@ -62,7 +61,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
   const [visitedInvitationAttentionKey, setVisitedInvitationAttentionKey] =
     useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const showActionMessages = __DEV__;
   const currentWorkspace = workspaceState.currentWorkspace;
   const currentRole = currentWorkspace?.workspaceRole || 'local';
   const canAdminWorkspace = adminRoles.has(currentRole);
@@ -175,22 +173,24 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (workspaceMenuKey) {
+          setWorkspaceMenuKey(null);
+          return true;
+        }
+
         onBack();
         return true;
       },
     );
 
     return () => subscription.remove();
-  }, [onBack]);
+  }, [onBack, workspaceMenuKey]);
 
-  const runAction = async (action, successMessage) => {
+  const runAction = async (action) => {
     setMessage(null);
 
     try {
       const result = await action();
-      if (showActionMessages) {
-        setMessage(successMessage);
-      }
       return { ok: true, result };
     } catch (error) {
       const nextMessage = formatWorkspaceError(error);
@@ -218,9 +218,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
         ]);
       }
 
-      if (showActionMessages) {
-        setMessage('Negocios actualizados.');
-      }
     } catch (error) {
       setMessage(formatWorkspaceError(error));
     } finally {
@@ -253,9 +250,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           name: formState.normalizedName,
           type: newWorkspaceType,
         }),
-      newWorkspaceType === 'private'
-        ? 'Negocio privado creado y seleccionado.'
-        : 'Negocio compartido creado y seleccionado.',
     );
 
     if (result.ok) {
@@ -286,7 +280,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           name: formState.normalizedName,
           workspace,
         }),
-      'Nombre del negocio actualizado.',
     );
 
     if (result.ok) {
@@ -314,7 +307,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           email: formState.normalizedEmail,
           role: inviteRole,
         }),
-      'Invitacion creada.',
     );
 
     if (result.ok) {
@@ -332,10 +324,7 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
         { style: 'cancel', text: 'Cancelar' },
         {
           onPress: () =>
-            runAction(
-              () => workspaceState.revokeInvitation(invitationId),
-              'Invitacion revocada.',
-            ),
+            runAction(() => workspaceState.revokeInvitation(invitationId)),
           style: 'destructive',
           text: 'Revocar',
         },
@@ -350,29 +339,19 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           leaveRemote: true,
           workspace,
         }),
-      'Saliste del negocio compartido. Ya no aparecera en tu lista.',
     );
 
   const deleteCurrentWorkspace = (workspace = currentWorkspace) =>
-    runAction(
-      () => workspaceState.deleteWorkspace(workspace),
-      'Negocio eliminado.',
-    );
+    runAction(() => workspaceState.deleteWorkspace(workspace));
 
   const removeMember = (member) => {
     const userId = member?.userId || member;
 
-    return runAction(
-      () => workspaceState.removeMember(userId),
-      'Colaborador removido.',
-    );
+    return runAction(() => workspaceState.removeMember(userId));
   };
 
   const selectWorkspace = async (workspace) => {
-    return runAction(
-      () => workspaceState.selectWorkspace(workspace),
-      'Negocio seleccionado.',
-    );
+    return runAction(() => workspaceState.selectWorkspace(workspace));
   };
 
   return (
@@ -389,14 +368,6 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
         />
       ) : null}
       <AppHeader
-        actionElement={
-          <AccountAccessButton
-            colors={colors}
-            loading={auth.loading}
-            onPress={onOpenAccount}
-            session={auth.session}
-          />
-        }
         subtitle="Organiza equipo, accesos e invitaciones."
         title="Administrar negocios"
       />
@@ -428,13 +399,11 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           onLeaveWorkspace={leaveCurrentWorkspace}
           onRemove={removeMember}
           onUpdateRole={(userId, nextRole) =>
-            runAction(
-              () =>
-                workspaceState.updateMemberRole({
-                  role: nextRole,
-                  userId,
-                }),
-              'Rol de usuario actualizado.',
+            runAction(() =>
+              workspaceState.updateMemberRole({
+                role: nextRole,
+                userId,
+              }),
             )
           }
           role={currentRole}
@@ -453,23 +422,14 @@ export default function WorkspaceScreen({ onBack, onOpenAccount }) {
           loading={workspaceState.loading}
           members={visibleMembers}
           onAccept={(invitationId) =>
-            runAction(
-              () => workspaceState.acceptInvitation(invitationId),
-              'Invitacion aceptada.',
-            )
+            runAction(() => workspaceState.acceptInvitation(invitationId))
           }
           onCreateInvitation={createInvitation}
           onDecline={(invitationId) =>
-            runAction(
-              () => workspaceState.declineInvitation(invitationId),
-              'Invitacion rechazada.',
-            )
+            runAction(() => workspaceState.declineInvitation(invitationId))
           }
           onRegenerate={(invitationId) =>
-            runAction(
-              () => workspaceState.regenerateInvitationLink(invitationId),
-              'Invitacion reenviada si el proveedor esta configurado.',
-            )
+            runAction(() => workspaceState.regenerateInvitationLink(invitationId))
           }
           onRevoke={confirmRevokeInvitation}
           onSetInviteEmail={setInviteEmail}

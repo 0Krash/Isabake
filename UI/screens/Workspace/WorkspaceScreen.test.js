@@ -808,14 +808,31 @@ describe('WorkspaceScreen model helpers', () => {
     expect(createWorkspaceSource).not.toContain('AccountRequiredDialog');
   });
 
-  test('workspace action success messages are development-only', () => {
+  test('workspace admin does not show operational success feedback', () => {
     const workspaceScreenSource = fs.readFileSync(
       path.join(__dirname, 'WorkspaceScreen.js'),
       'utf8',
     );
 
-    expect(workspaceScreenSource).toContain('const showActionMessages = __DEV__');
-    expect(workspaceScreenSource).toContain('if (showActionMessages)');
+    expect(workspaceScreenSource).not.toContain('showActionMessages');
+    expect(workspaceScreenSource).not.toContain('Negocios actualizados.');
+    expect(workspaceScreenSource).not.toContain('Negocio seleccionado.');
+    expect(workspaceScreenSource).not.toContain('Invitacion creada.');
+    expect(workspaceScreenSource).not.toContain('Colaborador removido.');
     expect(workspaceScreenSource).toContain('setMessage(nextMessage)');
+  });
+
+  test('workspace overflow menu closes before hardware back navigation', () => {
+    const workspaceScreenSource = fs.readFileSync(
+      path.join(__dirname, 'WorkspaceScreen.js'),
+      'utf8',
+    );
+
+    expect(workspaceScreenSource).toContain('if (workspaceMenuKey)');
+    expect(workspaceScreenSource).toContain('setWorkspaceMenuKey(null)');
+    expect(workspaceScreenSource).toContain('style={styles.screenDismissLayer}');
+    expect(workspaceScreenSource.indexOf('if (workspaceMenuKey)')).toBeLessThan(
+      workspaceScreenSource.indexOf('onBack();'),
+    );
   });
 });
