@@ -25,6 +25,7 @@ describe('ClientsScreen wiring', () => {
     expect(appSource).toContain('openClientsFrom');
     expect(appSource).toContain("openClientsFrom('settings')");
     expect(appSource).toContain("openClientsFrom('home')");
+    expect(appSource).toContain('onMapFullscreenChange={setHideBottomNavigation}');
     expect(settingsSource).toContain('onOpenClients?.()');
   });
 
@@ -120,6 +121,8 @@ describe('ClientsScreen wiring', () => {
 
     expect(repositoryIndexSource).toContain('clientTypeRepository');
     expect(clientRepositorySource).toContain("type: client.type || client.Type || ''");
+    expect(clientRepositorySource).toContain('latitude: client.latitude ?? client.Latitude ?? null');
+    expect(clientRepositorySource).toContain('longitude: client.longitude ?? client.Longitude ?? null');
     expect(clientsSource).toContain('useClientTypesLocal');
     expect(clientsSource).toContain('<FilterChips');
     expect(clientsSource).toContain('contentContainerStyle={styles.clientFilterChipsContent}');
@@ -230,6 +233,8 @@ describe('ClientsScreen wiring', () => {
     expect(clientsSource).toContain('Linking.openURL(`tel:${phone}`)');
     expect(clientsSource).toContain('Linking.openURL(`whatsapp://send?phone=${phone}`)');
     expect(clientsSource).toContain('www.google.com/maps/search');
+    expect(clientsSource).toContain('hasClientMapLocation');
+    expect(clientsSource).toContain('query=${latitude},${longitude}');
     expect(clientsSource).toContain('WhatsApp');
     expect(clientsSource).toContain('Abrir dirección en mapa');
     expect(clientsSource).toContain("flexDirection: 'row'");
@@ -238,6 +243,41 @@ describe('ClientsScreen wiring', () => {
     );
     expect(clientsSource).not.toContain('tokenHash');
     expect(clientsSource).not.toContain('refreshToken');
+  });
+
+  test('client form reuses store address suggestions and full screen map picker', () => {
+    const clientsSource = fs.readFileSync(
+      path.join(__dirname, 'ClientsScreen.js'),
+      'utf8',
+    );
+    const clientsHookSource = fs.readFileSync(
+      path.join(__dirname, '..', '..', 'hooks', 'Clients', 'useClientsLocal.js'),
+      'utf8',
+    );
+
+    expect(clientsSource).toContain('fetchPlaceSuggestions');
+    expect(clientsSource).toContain('fetchAddressFromCoordinates');
+    expect(clientsSource).toContain('getPlaceAutocompleteBaseUrl');
+    expect(clientsSource).toContain('function AddressSuggestions');
+    expect(clientsSource).toContain('function MapPickerScreen');
+    expect(clientsSource).toContain('styles.addressInputWrap');
+    expect(clientsSource).toContain('styles.mapPickerInlineButton');
+    expect(clientsSource).toContain('name="contact-map-pin"');
+    expect(clientsSource).toContain('Mapa');
+    expect(clientsSource).toContain('initialSearch={form.address}');
+    expect(clientsSource).toContain('initialPoint={');
+    expect(clientsSource).toContain('form.latitude != null && form.longitude != null');
+    expect(clientsSource).toContain('onSelectAddress={(suggestion) =>');
+    expect(clientsSource).toContain('latitude: suggestion.latitude ?? null');
+    expect(clientsSource).toContain('longitude: suggestion.longitude ?? null');
+    expect(clientsSource).toContain('latitude: mapSelection.latitude ?? null');
+    expect(clientsSource).toContain('longitude: mapSelection.longitude ?? null');
+    expect(clientsSource).toContain('if (mapPickerOpen)');
+    expect(clientsSource).toContain('onMapFullscreenChange?.(mapPickerOpen)');
+    expect(clientsSource).toContain('getSystemNavigationClearance');
+    expect(clientsSource).toContain('style={styles.mapScreenFooter}');
+    expect(clientsHookSource).toContain('latitude: client.latitude ?? client.Latitude ?? null');
+    expect(clientsHookSource).toContain('longitude: client.longitude ?? client.Longitude ?? null');
   });
 
   test('hardware back cancels client editing before leaving the screen', () => {

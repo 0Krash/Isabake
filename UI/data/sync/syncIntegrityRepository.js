@@ -1,4 +1,5 @@
 import { initDatabase } from '../db/database';
+import { queueSqliteWrite } from '../db/sqliteRetry';
 import { SHARED_SYNC_COLLECTIONS } from './syncTypes';
 
 const DEFAULT_STALE_OUTBOX_MS = 24 * 60 * 60 * 1000;
@@ -82,16 +83,18 @@ export const markDocumentPendingForRepair = async (
   const database = options.db || (await initDatabase());
   const updatedAt = options.updatedAt || new Date().toISOString();
 
-  await database.runAsync(
-    `
-      UPDATE documents
-      SET syncStatus = 'pending',
-          updatedAt = ?,
-          localVersion = localVersion + 1
-      WHERE collection = ?
-        AND id = ?;
-    `,
-    [updatedAt, collection, id],
+  await queueSqliteWrite(() =>
+    database.runAsync(
+      `
+        UPDATE documents
+        SET syncStatus = 'pending',
+            updatedAt = ?,
+            localVersion = localVersion + 1
+        WHERE collection = ?
+          AND id = ?;
+      `,
+      [updatedAt, collection, id],
+    ),
   );
 };
 

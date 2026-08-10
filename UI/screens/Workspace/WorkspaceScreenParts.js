@@ -1203,8 +1203,8 @@ function DeleteWorkspaceDialog({
           </Text>
           <Text style={[styles.note, { color: colors.danger }]}>
             {isPrivateProject
-              ? 'Se perdera todo lo trabajado dentro de este negocio: transacciones, recetas, ingredientes e inventario.'
-              : 'Se perdera lo trabajado dentro de este negocio compartido: transacciones, recetas, ingredientes, inventario, invitaciones y colaboradores asociados.'}
+              ? 'Se perdera todo lo trabajado dentro de este negocio: transacciones, productos, ingredientes e inventario.'
+              : 'Se perdera lo trabajado dentro de este negocio compartido: transacciones, productos, ingredientes, inventario, invitaciones y colaboradores asociados.'}
           </Text>
           <Text style={[styles.note, { color: colors.textMuted }]}>
             Escribe exactamente: {targetName}

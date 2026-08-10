@@ -31,7 +31,6 @@ import TransactionMenu from '../../components/TransactionBalance/TransactionMenu
 import FilterChips from '../../components/TransactionBalance/FilterChips';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import SelectionPickerModal from '../../components/TransactionBalance/SelectionPickerModal';
-import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import DatePickerComponent from '../../components/TransactionBalance/modals/addTransactionModal/DatePickerComponent';
 import AppIcon from '../../components/icons/AppIcon';
 import {
@@ -505,6 +504,7 @@ export default function InventoryScreen({
   onOpenAccount,
   onOpenAppMenu,
   onOpenSync,
+  onOpenStores,
   onOpenWorkspace,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
@@ -523,7 +523,6 @@ export default function InventoryScreen({
     setInventoryItems,
     updateInventoryItem: updateInventoryItemLocal,
   } = useInventoryData();
-  const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [selectedInventoryCategoryFilter, setSelectedInventoryCategoryFilter] =
     useState('');
@@ -536,7 +535,6 @@ export default function InventoryScreen({
   const [formIsVisible, setFormIsVisible] = useState(false);
   const [editingItemId, setEditingItemId] = useState(null);
   const [inventoryForm, setInventoryForm] = useState(emptyInventoryForm);
-  const [storeRefreshKey, setStoreRefreshKey] = useState(0);
   const keyboardIsVisibleRef = useRef(false);
 
   const selectedItem = useMemo(
@@ -650,7 +648,6 @@ export default function InventoryScreen({
         const canClearInventorySearch =
           searchText.trim().length > 0 &&
           !keyboardIsVisibleRef.current &&
-          !addStoreModalIsVisible &&
           !formIsVisible &&
           !menuIsVisible &&
           !selectedItemId;
@@ -668,7 +665,6 @@ export default function InventoryScreen({
       backSubscription.remove();
     };
   }, [
-    addStoreModalIsVisible,
     formIsVisible,
     menuIsVisible,
     searchText,
@@ -683,9 +679,7 @@ export default function InventoryScreen({
     }
 
     setMenuIsVisible(false);
-    setTimeout(() => {
-      setAddStoreModalIsVisible(true);
-    }, 90);
+    onOpenStores?.();
   };
 
   const handleOpenAppOptions = () => {
@@ -736,7 +730,7 @@ export default function InventoryScreen({
 
   const handleMenuDismiss = () => {
     if (pendingMenuAction === 'stores') {
-      setAddStoreModalIsVisible(true);
+      onOpenStores?.();
     }
 
     if (pendingMenuAction === 'app-options') {
@@ -1317,16 +1311,6 @@ export default function InventoryScreen({
         onOpenWorkspace={() => handleOpenMenuScreen('workspace')}
       />
 
-      {addStoreModalIsVisible && (
-        <AddStoreModal
-          AddStoreModalIsVisible={addStoreModalIsVisible}
-          onStoresChanged={() =>
-            setStoreRefreshKey((currentKey) => currentKey + 1)
-          }
-          setAddStoreModalIsVisible={setAddStoreModalIsVisible}
-        />
-      )}
-
       <InventoryDetailModal
         colors={colors}
         inventoryItems={inventoryItems}
@@ -1351,7 +1335,6 @@ export default function InventoryScreen({
         }}
         onEditItem={openEditForm}
         onOpenStoreManager={handleOpenStoreManager}
-        storeRefreshKey={storeRefreshKey}
       />
 
       <InventoryFormModal
@@ -1529,7 +1512,6 @@ const InventoryDetailModal = ({
   onDeleteLot,
   onEditItem,
   onOpenStoreManager,
-  storeRefreshKey,
 }) => {
   const { height: windowHeight } = useWindowDimensions();
   const sheetBottomInset = useKeyboardBottomInset();
@@ -1605,20 +1587,12 @@ const InventoryDetailModal = ({
   }, [refreshStores]);
 
   useEffect(() => {
-    if (!isVisible || storesHaveLoaded || storesAreLoading) {
+    if (!isVisible || storesAreLoading) {
       return;
     }
 
     loadStores();
-  }, [isVisible, loadStores, storesAreLoading, storesHaveLoaded]);
-
-  useEffect(() => {
-    if (!isVisible || storeRefreshKey === 0) {
-      return;
-    }
-
-    loadStores();
-  }, [isVisible, loadStores, storeRefreshKey]);
+  }, [isVisible, loadStores, storesAreLoading]);
 
   useEffect(() => {
     if (!storesHaveLoaded || storesAreLoading || !lotForm.supplierId) {

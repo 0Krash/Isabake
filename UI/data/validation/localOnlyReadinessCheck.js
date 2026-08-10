@@ -23,12 +23,15 @@ const getEntityId = (entity, idField) => {
 const collectWarnings = (...results) =>
   results.flatMap((result) => (Array.isArray(result?.warnings) ? result.warnings : []));
 
+const isProductSaleCategory = (category = {}) =>
+  ['Productos', 'Recetas'].includes(String(category.description || '').trim());
+
 const getRecipeSaleConsistency = async ({ stockMovements, transactions }) => {
   const warnings = [];
   const recipeSaleTransactions = transactions.filter(
     (transaction) =>
       transaction.transactionType === 'Ventas' &&
-      String(transaction.category?.description || '').trim() === 'Recetas',
+      isProductSaleCategory(transaction.category),
   );
 
   recipeSaleTransactions.forEach((transaction) => {

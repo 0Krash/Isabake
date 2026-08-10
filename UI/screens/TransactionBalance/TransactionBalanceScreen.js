@@ -9,7 +9,6 @@ import TransactionMenu from '../../components/TransactionBalance/TransactionMenu
 import AddTransactionModal from '../../components/TransactionBalance/modals/addTransactionModal/AddTransactionModal';
 import TransactionDetailModal from '../../components/TransactionBalance/modals/transactionDetailModal/TransactionDetailModal';
 import DeleteTransactionModal from '../../components/TransactionBalance/modals/DeleteTransactionModal';
-import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import {
   MAIN_SCREEN_TOP_PADDING,
   getScreenContentTopPadding,
@@ -26,9 +25,9 @@ const TransactionBalanceScreen = ({
   onOpenAppMenu,
   onOpenClients,
   onOpenSync,
+  onOpenStores,
   onOpenWorkspace,
 } = {}) => {
-  const [addStoreModalIsVisible, setAddStoreModalIsVisible] = useState(false);
   const [addTransactionModalIsVisible, setAddTransactionModalIsVisible] =
     useState(false);
   const [deleteTransactionModalIsVisible, setDeleteTransactionModalIsVisible] =
@@ -91,9 +90,7 @@ const TransactionBalanceScreen = ({
     }
 
     setTransactionMenuIsVisible(false);
-    setTimeout(() => {
-      setAddStoreModalIsVisible(true);
-    }, 90);
+    onOpenStores?.();
   };
 
   const handleOpenAppOptions = () => {
@@ -129,7 +126,7 @@ const TransactionBalanceScreen = ({
 
   const handleMenuDismiss = () => {
     if (pendingMenuAction === 'stores') {
-      setAddStoreModalIsVisible(true);
+      onOpenStores?.();
     }
 
     if (pendingMenuAction === 'app-options') {
@@ -220,9 +217,7 @@ const TransactionBalanceScreen = ({
             }}
             onOpenStoreManager={() => {
               setAddTransactionModalIsVisible(false);
-              setTimeout(() => {
-                setAddStoreModalIsVisible(true);
-              }, 90);
+              onOpenStores?.();
             }}
             onTransactionCreated={refreshTransactions}
             setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
@@ -241,12 +236,6 @@ const TransactionBalanceScreen = ({
             DeleteTransactionModalIsVisible={deleteTransactionModalIsVisible}
             onTransactionDeleted={refreshTransactions}
             setDeleteTransactionModalIsVisible={setDeleteTransactionModalIsVisible}
-          />
-        )}
-        {addStoreModalIsVisible && (
-          <AddStoreModal
-            AddStoreModalIsVisible={addStoreModalIsVisible}
-            setAddStoreModalIsVisible={setAddStoreModalIsVisible}
           />
         )}
       </View>

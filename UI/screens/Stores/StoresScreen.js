@@ -27,13 +27,10 @@ import {
   APP_HORIZONTAL_PADDING,
   getSystemNavigationClearance,
 } from '../../components/layout/layoutMetrics';
-import FilterChips from '../../components/TransactionBalance/FilterChips';
 import DeleteConfirmationModal from '../../components/TransactionBalance/DeleteConfirmationModal';
-import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
-import useClientTypesLocal from '../../hooks/Clients/useClientTypesLocal';
-import useClientsLocal from '../../hooks/Clients/useClientsLocal';
+import useStoresLocal from '../../hooks/Stores/useStoresLocal';
 import useBottomSheet from '../../hooks/useBottomSheet';
 import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
 import {
@@ -44,23 +41,40 @@ import {
 import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const emptyForm = {
-  address: '',
-  email: '',
-  latitude: null,
-  longitude: null,
-  name: '',
-  notes: '',
-  phone: '',
-  type: '',
+  Address: '',
+  Alias: '',
+  Latitude: null,
+  Longitude: null,
+  Name: '',
 };
 
-const getClientId = (client) => client?.clientId || client?.id || '';
+const getStoreId = (store) => store?.storeId || store?.id || '';
 
-const getClientPhoneDigits = (client) =>
-  String(client?.phone || '').replace(/[^\d+]/g, '');
+const getStoreValue = (store, key) =>
+  store?.[key] || store?.[key.toLowerCase()] || '';
 
-const getClientCoordinate = (client, key) => {
-  const value = client?.[key] ?? client?.[key[0].toUpperCase() + key.slice(1)];
+const getInitialForm = (store) =>
+  store
+    ? {
+        Address: getStoreValue(store, 'Address'),
+        Alias: getStoreValue(store, 'Alias'),
+        Latitude: getStoreValue(store, 'Latitude') || null,
+        Longitude: getStoreValue(store, 'Longitude') || null,
+        Name: getStoreValue(store, 'Name'),
+      }
+    : emptyForm;
+
+const getStoreTitle = (store) =>
+  getStoreValue(store, 'Alias') || getStoreValue(store, 'Name') || 'Tienda';
+
+const hasRealStoreAddress = (store) => {
+  const address = getStoreValue(store, 'Address').trim();
+
+  return Boolean(address && address.toLowerCase() !== 'sin dirección');
+};
+
+const getStoreCoordinate = (store, key) => {
+  const value = store?.[key] ?? store?.[key.toLowerCase()];
 
   if (value === null || value === undefined || value === '') {
     return null;
@@ -71,44 +85,11 @@ const getClientCoordinate = (client, key) => {
   return Number.isFinite(coordinate) ? coordinate : null;
 };
 
-const hasClientMapLocation = (client) =>
-  Boolean(
-    client?.address?.trim() &&
-      getClientCoordinate(client, 'latitude') !== null &&
-      getClientCoordinate(client, 'longitude') !== null,
-  );
+const getStoreSubtitle = (store) =>
+  getStoreValue(store, 'Name') || 'Sin nombre registrado';
 
-const formatClientDate = (value = null) => {
-  if (!value) {
-    return 'Sin fecha registrada';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Sin fecha registrada';
-  }
-
-  return date.toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-};
-
-const getInitialForm = (client) =>
-  client
-    ? {
-        address: client.address || '',
-        email: client.email || '',
-        latitude: getClientCoordinate(client, 'latitude'),
-        longitude: getClientCoordinate(client, 'longitude'),
-        name: client.name || '',
-        notes: client.notes || '',
-        phone: client.phone || '',
-        type: client.type || '',
-      }
-    : emptyForm;
+const getStoreDescription = (store) =>
+  getStoreValue(store, 'Address') || 'Sin dirección registrada';
 
 const DEFAULT_MAP_CENTER = {
   latitude: 20.6767,
@@ -174,108 +155,52 @@ const buildMapPickerHtml = ({ latitude, longitude }) => `
 </html>
 `;
 
-export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
+export default function StoresScreen({ onBack, onMapFullscreenChange } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const {
-    clients,
-    createClient,
-    deleteClient,
+    createStore,
+    deleteStore,
     loading,
-    refreshClients,
-    updateClient,
-  } = useClientsLocal();
-  const {
-    clientTypes,
-    createClientType,
-    deleteClientType,
-    isLoadingClientTypes,
-    refreshClientTypes,
-    setClientTypes,
-  } = useClientTypesLocal();
-  const [clientToDelete, setClientToDelete] = useState(null);
-  const [activeClientMenuId, setActiveClientMenuId] = useState(null);
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [editingClient, setEditingClient] = useState(null);
+    refreshStores,
+    stores,
+    updateStore,
+  } = useStoresLocal();
+  const [activeStoreMenuId, setActiveStoreMenuId] = useState(null);
+  const [editingStore, setEditingStore] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [mapSelection, setMapSelection] = useState(null);
   const [mapSelectionLoading, setMapSelectionLoading] = useState(false);
   const [mapSelectionMessage, setMapSelectionMessage] = useState('');
-  const [clientTypePickerIsVisible, setClientTypePickerIsVisible] =
-    useState(false);
   const [message, setMessage] = useState('');
-  const [newClientType, setNewClientType] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedClientTypeFilter, setSelectedClientTypeFilter] = useState('');
-  const clientCardPositions = useRef({});
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [storeToDelete, setStoreToDelete] = useState(null);
   const scrollRef = useRef(null);
-  const clientsMatchingSearch = useMemo(() => {
+  const storeCardPositions = useRef({});
+  const filteredStores = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
     if (!normalizedSearch) {
-      return clients;
+      return stores;
     }
 
-    return clients.filter((client) =>
-      [client.name, client.phone, client.email, client.address, client.type]
+    return stores.filter((store) =>
+      [
+        getStoreValue(store, 'Alias'),
+        getStoreValue(store, 'Name'),
+        getStoreValue(store, 'Address'),
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch),
     );
-  }, [clients, search]);
-  const filteredClients = useMemo(() => {
-    const normalizedTypeFilter = selectedClientTypeFilter.trim();
-
-    return clientsMatchingSearch.filter((client) => {
-      if (!normalizedTypeFilter) {
-        return true;
-      }
-
-      return (client.type || '') === normalizedTypeFilter;
-    });
-  }, [clientsMatchingSearch, selectedClientTypeFilter]);
-  const clientTypeFilters = useMemo(() => {
-    const types = new Set(['']);
-    const countsByType = {
-      '': clientsMatchingSearch.length,
-    };
-
-    clients.forEach((client) => {
-      if (client.type) {
-        types.add(client.type);
-      }
-    });
-
-    clientsMatchingSearch.forEach((client) => {
-      if (client.type) {
-        countsByType[client.type] = (countsByType[client.type] || 0) + 1;
-      }
-    });
-
-    clientTypes.forEach((type) => {
-      if (type.name) {
-        types.add(type.name);
-      }
-    });
-
-    return [...types]
-      .sort((typeA, typeB) => {
-        if (!typeA) return -1;
-        if (!typeB) return 1;
-
-        return typeA.localeCompare(typeB, 'es', {
-          sensitivity: 'base',
-        });
-      })
-      .map((type) => ({
-        count: countsByType[type] || 0,
-        type,
-      }));
-  }, [clientTypes, clients, clientsMatchingSearch]);
-  const formIsValid = form.name.trim().length > 0;
+  }, [search, stores]);
+  const formIsValid =
+    form.Name.trim().length > 0 && form.Alias.trim().length > 0;
 
   const scrollToPosition = (position) => {
     requestAnimationFrame(() => {
@@ -286,40 +211,35 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
     });
   };
 
-  const scrollToClient = (client) => {
-    const position = clientCardPositions.current[getClientId(client)];
+  const scrollToStore = (store) => {
+    const position = storeCardPositions.current[getStoreId(store)];
 
     if (typeof position === 'number') {
       scrollToPosition(position);
     }
   };
 
-  const refreshClientsScreen = async () => {
-    await Promise.all([refreshClients(), refreshClientTypes()]);
-  };
-
   const resetForm = () => {
-    setEditingClient(null);
+    setEditingStore(null);
     setForm(emptyForm);
     setFormModalOpen(false);
   };
 
   const openCreateModal = () => {
-    setMessage('');
-    setEditingClient(null);
+    setActiveStoreMenuId(null);
+    setEditingStore(null);
     setForm(emptyForm);
-    setNewClientType('');
-    setClientTypePickerIsVisible(false);
+    setMessage('');
     setFormModalOpen(true);
   };
 
   const cancelEdit = () => {
-    const clientBeingEdited = editingClient;
+    const storeBeingEdited = editingStore;
 
     resetForm();
 
-    if (clientBeingEdited) {
-      scrollToClient(clientBeingEdited);
+    if (storeBeingEdited) {
+      scrollToStore(storeBeingEdited);
     }
   };
 
@@ -328,36 +248,34 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
     setForm((currentForm) => ({
       ...currentForm,
       [field]:
-        field === 'name' || field === 'address'
+        field === 'Name' || field === 'Address'
           ? capitalizeUserEntry(value)
           : value,
-      ...(field === 'address'
+      ...(field === 'Address'
         ? {
-            latitude: null,
-            longitude: null,
+            Latitude: null,
+            Longitude: null,
           }
         : {}),
     }));
   };
 
-  const startEdit = (client) => {
+  const startEdit = (store) => {
+    setActiveStoreMenuId(null);
+    setEditingStore(store);
+    setForm(getInitialForm(store));
     setMessage('');
-    setActiveClientMenuId(null);
-    setEditingClient(client);
-    setForm(getInitialForm(client));
-    setNewClientType('');
-    setClientTypePickerIsVisible(false);
     setFormModalOpen(true);
   };
 
   const openMapPicker = () => {
     Keyboard.dismiss();
     setMapSelection(
-      form.address && form.latitude != null && form.longitude != null
+      form.Address && form.Latitude != null && form.Longitude != null
         ? {
-            address: form.address,
-            latitude: Number(form.latitude),
-            longitude: Number(form.longitude),
+            address: form.Address,
+            latitude: Number(form.Latitude),
+            longitude: Number(form.Longitude),
           }
         : null,
     );
@@ -378,9 +296,9 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
 
     setForm((currentForm) => ({
       ...currentForm,
-      address: capitalizeUserEntry(mapSelection.address),
-      latitude: mapSelection.latitude ?? null,
-      longitude: mapSelection.longitude ?? null,
+      Address: capitalizeUserEntry(mapSelection.address),
+      Latitude: mapSelection.latitude ?? null,
+      Longitude: mapSelection.longitude ?? null,
     }));
     setMessage('');
     setMapPickerOpen(false);
@@ -438,13 +356,8 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
           return true;
         }
 
-        if (activeClientMenuId) {
-          setActiveClientMenuId(null);
-          return true;
-        }
-
-        if (clientTypePickerIsVisible) {
-          setClientTypePickerIsVisible(false);
+        if (activeStoreMenuId) {
+          setActiveStoreMenuId(null);
           return true;
         }
 
@@ -453,8 +366,8 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
           return true;
         }
 
-        if (selectedClient) {
-          setSelectedClient(null);
+        if (selectedStore) {
+          setSelectedStore(null);
           return true;
         }
 
@@ -472,73 +385,17 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
       subscription.remove();
     };
   }, [
-    activeClientMenuId,
-    clientTypePickerIsVisible,
-    editingClient,
+    activeStoreMenuId,
     formModalOpen,
     mapPickerOpen,
     onBack,
     search,
-    selectedClient,
+    selectedStore,
   ]);
 
-  const selectClientType = (typeName) => {
-    setField('type', typeName);
-    setClientTypePickerIsVisible(false);
-  };
-
-  const addClientType = async () => {
-    const type = capitalizeUserEntry(newClientType);
-
-    if (!type) {
-      return;
-    }
-
-    try {
-      const createdType = await createClientType({ name: type });
-
-      setClientTypes((currentTypes) => {
-        const nextTypes = currentTypes.filter(
-          (currentType) =>
-            currentType.normalizedName !== createdType.normalizedName,
-        );
-
-        return [...nextTypes, createdType].sort((typeA, typeB) =>
-          typeA.name.localeCompare(typeB.name, 'es', {
-            sensitivity: 'base',
-          }),
-        );
-      });
-      selectClientType(createdType.name);
-      setNewClientType('');
-    } catch (error) {
-      console.error('Error al guardar tipo de cliente:', error);
-      setMessage('No se pudo guardar el tipo de cliente.');
-    }
-  };
-
-  const removeClientType = async (typeToDelete) => {
-    if (!typeToDelete?.clientTypeId) {
-      return;
-    }
-
-    try {
-      await deleteClientType(typeToDelete.clientTypeId);
-      if (form.type === typeToDelete.name) {
-        setField('type', '');
-      }
-      setSelectedClientTypeFilter((currentType) =>
-        currentType === typeToDelete.name ? '' : currentType,
-      );
-    } catch (error) {
-      console.error('Error al eliminar tipo de cliente:', error);
-      setMessage('No se pudo eliminar el tipo de cliente.');
-    }
-  };
-
-  const saveClient = async () => {
+  const saveStore = async () => {
     if (!formIsValid || saving) {
-      setMessage('Agrega el nombre del cliente.');
+      setMessage('Agrega nombre y alias de la tienda.');
       return;
     }
 
@@ -546,46 +403,41 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
     setMessage('');
 
     try {
-      const clientBeingEdited = editingClient;
-
+      const storeBeingEdited = editingStore;
       const payload = {
-        ...form,
-        address: form.address.trim(),
-        email: form.email.trim(),
-        latitude: form.latitude ?? null,
-        longitude: form.longitude ?? null,
-        name: form.name.trim(),
-        notes: form.notes.trim(),
-        phone: form.phone.trim(),
-        type: form.type,
+        Address: form.Address.trim() || 'Sin dirección',
+        Alias: form.Alias.trim(),
+        Latitude: form.Latitude ?? null,
+        Longitude: form.Longitude ?? null,
+        Name: form.Name.trim(),
       };
 
-      if (editingClient) {
-        await updateClient(getClientId(editingClient), payload);
+      if (editingStore) {
+        await updateStore(getStoreId(editingStore), payload);
       } else {
-        await createClient(payload);
+        await createStore(payload);
       }
 
       resetForm();
-      if (clientBeingEdited) {
-        scrollToClient(clientBeingEdited);
+      if (storeBeingEdited) {
+        scrollToStore(storeBeingEdited);
       }
     } catch (error) {
-      console.error('Error al guardar cliente:', error);
-      setMessage('No se pudo guardar el cliente.');
+      console.error('Error al guardar tienda:', error);
+      setMessage('No se pudo guardar la tienda.');
     } finally {
       setSaving(false);
     }
   };
 
-  const requestRemoveClient = (client) => {
+  const requestRemoveStore = (store) => {
+    setActiveStoreMenuId(null);
     setMessage('');
-    setActiveClientMenuId(null);
-    setClientToDelete(client);
+    setStoreToDelete(store);
   };
 
-  const removeClient = async () => {
-    if (!clientToDelete) {
+  const removeStore = async () => {
+    if (!storeToDelete) {
       return;
     }
 
@@ -593,14 +445,14 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
     setMessage('');
 
     try {
-      await deleteClient(getClientId(clientToDelete));
-      if (getClientId(editingClient) === getClientId(clientToDelete)) {
+      await deleteStore(getStoreId(storeToDelete));
+      if (getStoreId(editingStore) === getStoreId(storeToDelete)) {
         resetForm();
       }
-      setClientToDelete(null);
+      setStoreToDelete(null);
     } catch (error) {
-      console.error('Error al eliminar cliente:', error);
-      setMessage('No se pudo eliminar el cliente.');
+      console.error('Error al eliminar tienda:', error);
+      setMessage('No se pudo eliminar la tienda.');
     } finally {
       setSaving(false);
     }
@@ -613,14 +465,14 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
         isLoading={mapSelectionLoading}
         message={mapSelectionMessage}
         initialPoint={
-          form.latitude != null && form.longitude != null
+          form.Latitude != null && form.Longitude != null
             ? {
-                latitude: Number(form.latitude),
-                longitude: Number(form.longitude),
+                latitude: Number(form.Latitude),
+                longitude: Number(form.Longitude),
               }
             : null
         }
-        initialSearch={form.address}
+        initialSearch={form.Address}
         onBack={closeMapPicker}
         onConfirm={selectMapAddress}
         onPointSelected={handleMapPointSelected}
@@ -633,8 +485,8 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
     <AppScreen contentContainerStyle={styles.screenContent} scroll={false}>
       <View
         onStartShouldSetResponderCapture={() => {
-          if (activeClientMenuId) {
-            setActiveClientMenuId(null);
+          if (activeStoreMenuId) {
+            setActiveStoreMenuId(null);
           }
 
           return false;
@@ -646,20 +498,17 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
       >
         <AppHeader
           actionLabel="+ Crear"
-          onAction={() => {
-            setActiveClientMenuId(null);
-            openCreateModal();
-          }}
-          subtitle="Para ventas más claras."
-          title="Clientes registrados"
+          onAction={openCreateModal}
+          subtitle="Para surtir tus materiales."
+          title="Tiendas registradas"
         />
         <TextInput
           onChangeText={(value) => {
-            setActiveClientMenuId(null);
+            setActiveStoreMenuId(null);
             setSearch(value);
           }}
-          onFocus={() => setActiveClientMenuId(null)}
-          placeholder="Buscar cliente..."
+          onFocus={() => setActiveStoreMenuId(null)}
+          placeholder="Buscar tienda..."
           placeholderTextColor={colors.textMuted}
           style={[
             styles.searchInput,
@@ -671,20 +520,6 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
           ]}
           value={search}
         />
-        <FilterChips
-          colors={colors}
-          contentContainerStyle={styles.clientFilterChipsContent}
-          filters={clientTypeFilters}
-          getAccessibilityLabel={({ count, type }) =>
-            `Filtrar clientes por ${type || 'todos'}: ${count} clientes`
-          }
-          getKey={({ type }) => type}
-          getLabel={({ type }) => type || 'Todos'}
-          getValue={({ count }) => count}
-          inactiveTextColor={colors.textMuted}
-          onSelect={({ type }) => setSelectedClientTypeFilter(type)}
-          selectedKey={selectedClientTypeFilter}
-        />
       </View>
 
       {message ? (
@@ -694,151 +529,121 @@ export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
       ) : null}
 
       <ScrollView
-        contentContainerStyle={styles.clientsListContent}
+        contentContainerStyle={styles.storesListContent}
         keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => setActiveClientMenuId(null)}
+        onScrollBeginDrag={() => setActiveStoreMenuId(null)}
         ref={scrollRef}
         refreshControl={
           <RefreshControl
-            onRefresh={refreshClientsScreen}
-            refreshing={Boolean(loading || isLoadingClientTypes)}
+            onRefresh={refreshStores}
+            refreshing={Boolean(loading)}
             tintColor={colors.primary}
           />
         }
         showsVerticalScrollIndicator={false}
-        style={styles.clientsList}
+        style={styles.storesList}
       >
         {loading ? (
           <ActivityIndicator color={colors.primary} />
-        ) : filteredClients.length === 0 ? (
+        ) : filteredStores.length === 0 ? (
           <AppCard>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              Sin clientes
+              Sin tiendas
             </Text>
             <Text style={[styles.helper, { color: colors.textMuted }]}>
-              Agrega un cliente para poder seleccionarlo en tus ventas.
+              Agrega una tienda para seleccionarla al registrar compras o lotes.
             </Text>
           </AppCard>
         ) : (
-          filteredClients.map((client, index) => (
-            <ClientCard
-              client={client}
+          filteredStores.map((store, index) => (
+            <StoreCard
               colors={colors}
-              isEditing={getClientId(editingClient) === getClientId(client)}
-              key={getClientId(client)}
-              menuActive={Boolean(activeClientMenuId)}
-              menuOpen={activeClientMenuId === getClientId(client)}
+              isEditing={getStoreId(editingStore) === getStoreId(store)}
+              key={getStoreId(store)}
+              menuActive={Boolean(activeStoreMenuId)}
+              menuOpen={activeStoreMenuId === getStoreId(store)}
               menuOpensUpward={
-                filteredClients.length > 1 &&
-                index === filteredClients.length - 1
+                filteredStores.length > 1 && index === filteredStores.length - 1
               }
+              onDelete={() => requestRemoveStore(store)}
+              onDismissMenu={() => setActiveStoreMenuId(null)}
+              onEdit={() => startEdit(store)}
               onLayout={(event) => {
-                clientCardPositions.current[getClientId(client)] =
+                storeCardPositions.current[getStoreId(store)] =
                   event.nativeEvent.layout.y;
               }}
-              onCloseMenu={() => setActiveClientMenuId(null)}
-              onDelete={() => requestRemoveClient(client)}
-              onDismissMenu={() => setActiveClientMenuId(null)}
-              onEdit={() => startEdit(client)}
-              onOpenMenu={() => setActiveClientMenuId(getClientId(client))}
-              onSelect={() => setSelectedClient(client)}
+              onOpenMenu={() => setActiveStoreMenuId(getStoreId(store))}
+              onSelect={() => setSelectedStore(store)}
               saving={saving}
+              store={store}
             />
           ))
         )}
-        {activeClientMenuId ? (
+        {activeStoreMenuId ? (
           <Pressable
-            accessibilityLabel="Cerrar menu de cliente"
-            onPress={() => setActiveClientMenuId(null)}
-            style={styles.clientListDismissSpacer}
+            accessibilityLabel="Cerrar menu de tienda"
+            onPress={() => setActiveStoreMenuId(null)}
+            style={styles.storeListDismissSpacer}
           />
         ) : null}
       </ScrollView>
-      <ClientPresentationModal
-        client={selectedClient}
+      <StorePresentationModal
         colors={colors}
-        onClose={() => setSelectedClient(null)}
+        onClose={() => setSelectedStore(null)}
+        store={selectedStore}
       />
-      <ClientFormModal
+      <StoreFormModal
         colors={colors}
-        editingClient={editingClient}
+        editingStore={editingStore}
         form={form}
         formIsValid={formIsValid}
         message={message}
         onCancel={cancelEdit}
-        onOpenClientTypePicker={() => setClientTypePickerIsVisible(true)}
-        onSelectAddress={(suggestion) => {
-          setForm((currentForm) => ({
-            ...currentForm,
-            address: capitalizeUserEntry(suggestion.description),
-            latitude: suggestion.latitude ?? null,
-            longitude: suggestion.longitude ?? null,
-          }));
-          setMessage('');
-        }}
+        onSave={saveStore}
         onSelectMap={openMapPicker}
-        onSave={saveClient}
         saving={saving}
         setField={setField}
         visible={formModalOpen}
       />
-      <ManagedOptionPickerModal
-        canManage
-        colors={colors}
-        deleteAccessibilityLabel={(type) => `Eliminar tipo ${type.name}`}
-        emptyLabel="Sin tipo"
-        isVisible={clientTypePickerIsVisible}
-        newValue={newClientType}
-        newValuePlaceholder="Nuevo tipo de cliente"
-        onAdd={addClientType}
-        onChangeNewValue={setNewClientType}
-        onClose={() => setClientTypePickerIsVisible(false)}
-        onDelete={removeClientType}
-        onSelect={selectClientType}
-        options={clientTypes}
-        selectedValue={form.type}
-        title="Tipo de cliente"
-      />
       <DeleteConfirmationModal
         confirmLabel="Eliminar"
         isProcessing={saving}
-        message={`Se eliminará ${clientToDelete?.name || 'este cliente'} de tus clientes registrados.`}
-        onCancel={() => setClientToDelete(null)}
-        onConfirm={removeClient}
-        title="Eliminar cliente"
-        visible={Boolean(clientToDelete)}
+        message={`Se eliminará ${getStoreTitle(storeToDelete || {})} de tus tiendas registradas.`}
+        onCancel={() => setStoreToDelete(null)}
+        onConfirm={removeStore}
+        title="Eliminar tienda"
+        visible={Boolean(storeToDelete)}
       />
     </AppScreen>
   );
 }
 
-function ClientPresentationModal({ client, colors, onClose }) {
-  const phone = getClientPhoneDigits(client);
-  const hasPhone = Boolean(phone);
-  const hasMapLocation = hasClientMapLocation(client);
-  const latitude = getClientCoordinate(client, 'latitude');
-  const longitude = getClientCoordinate(client, 'longitude');
+function StorePresentationModal({ colors, onClose, store }) {
+  const hasAddress = hasRealStoreAddress(store);
+  const latitude = getStoreCoordinate(store, 'Latitude');
+  const longitude = getStoreCoordinate(store, 'Longitude');
+  const hasCoordinates = latitude !== null && longitude !== null;
+  const hasMapLocation = hasCoordinates || hasAddress;
 
-  if (!client) {
+  if (!store) {
     return null;
   }
 
-  const openCall = () => {
-    if (hasPhone) {
-      Linking.openURL(`tel:${phone}`);
-    }
-  };
-
-  const openWhatsApp = () => {
-    if (hasPhone) {
-      Linking.openURL(`whatsapp://send?phone=${phone}`);
-    }
-  };
-
   const openMap = () => {
-    if (hasMapLocation) {
+    const address = getStoreValue(store, 'Address');
+
+    if (hasCoordinates) {
       Linking.openURL(
         `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+      );
+      return;
+    }
+
+    if (address) {
+      Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          address,
+        )}`,
       );
     }
   };
@@ -848,7 +653,7 @@ function ClientPresentationModal({ client, colors, onClose }) {
       animationType="fade"
       onRequestClose={onClose}
       transparent
-      visible={Boolean(client)}
+      visible={Boolean(store)}
     >
       <View style={styles.presentationModalRoot}>
         <View
@@ -859,7 +664,7 @@ function ClientPresentationModal({ client, colors, onClose }) {
         <View pointerEvents="box-none" style={styles.presentationCardWrap}>
           <View
             style={[
-              styles.clientPresentationSheet,
+              styles.storePresentationSheet,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
@@ -869,19 +674,15 @@ function ClientPresentationModal({ client, colors, onClose }) {
             <View
               style={[styles.presentationHero, { borderColor: colors.border }]}
             >
-              <View style={styles.clientPresentationHeader}>
-                <View style={styles.clientPresentationCopy}>
-                  <Text
-                    numberOfLines={2}
-                    style={[
-                      styles.presentationTitle,
-                      { color: colors.textPrimary },
-                    ]}
-                  >
-                    {client.name || 'Cliente sin nombre'}
-                  </Text>
-                </View>
-              </View>
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.presentationTitle,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {getStoreTitle(store)}
+              </Text>
             </View>
 
             <Text
@@ -890,87 +691,30 @@ function ClientPresentationModal({ client, colors, onClose }) {
                 { color: colors.textPrimary },
               ]}
             >
-              Información de contacto
+              Información de Tienda
             </Text>
             <View style={styles.presentationDetails}>
-              <ClientInfoLine
+              <StoreInfoLine
                 colors={colors}
-                label="Tipo"
-                value={client.type || 'Sin tipo'}
+                label="Nombre"
+                value={getStoreValue(store, 'Name') || 'Sin nombre'}
               />
-              <ClientInfoLine
+              <StoreInfoLine
                 colors={colors}
-                label="Teléfono"
-                value={client.phone || 'Sin teléfono'}
+                label="Alias"
+                value={getStoreValue(store, 'Alias') || 'Sin alias'}
               />
-              <ClientInfoLine
-                colors={colors}
-                label="Email"
-                value={client.email || 'Sin email'}
-              />
-              <ClientInfoLine
+              <StoreInfoLine
                 colors={colors}
                 label="Dirección"
-                value={client.address || 'Sin dirección'}
-              />
-              <ClientInfoLine
-                colors={colors}
-                label="Creación"
-                value={formatClientDate(client.createdAt)}
-              />
-              <ClientInfoLine
-                colors={colors}
-                label="Notas"
-                lineStyle={styles.clientNotesLine}
-                value={client.notes || 'Sin notas'}
+                lineStyle={styles.storeAddressLine}
+                value={getStoreValue(store, 'Address') || 'Sin dirección'}
               />
             </View>
 
             <View style={styles.presentationActions}>
               <Pressable
-                accessibilityLabel="Enviar WhatsApp al cliente"
-                accessibilityRole="button"
-                disabled={!hasPhone}
-                onPress={openWhatsApp}
-                style={[
-                  styles.presentationActionButton,
-                  {
-                    backgroundColor: colors.primaryMuted,
-                    borderColor: colors.primaryMuted,
-                  },
-                  !hasPhone ? styles.disabledAction : null,
-                ]}
-              >
-                <AppIcon
-                  color={hasPhone ? colors.primaryText : colors.inactiveText}
-                  decorative
-                  name="contact-whatsapp"
-                  size={22}
-                />
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Llamar al cliente"
-                accessibilityRole="button"
-                disabled={!hasPhone}
-                onPress={openCall}
-                style={[
-                  styles.presentationActionButton,
-                  {
-                    backgroundColor: colors.primaryMuted,
-                    borderColor: colors.primaryMuted,
-                  },
-                  !hasPhone ? styles.disabledAction : null,
-                ]}
-              >
-                <AppIcon
-                  color={hasPhone ? colors.primaryText : colors.inactiveText}
-                  decorative
-                  name="contact-phone"
-                  size={21}
-                />
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Abrir dirección en mapa"
+                accessibilityLabel="Abrir dirección de tienda en mapa"
                 accessibilityRole="button"
                 disabled={!hasMapLocation}
                 onPress={openMap}
@@ -991,6 +735,18 @@ function ClientPresentationModal({ client, colors, onClose }) {
                   name="contact-map-pin"
                   size={21}
                 />
+                <Text
+                  style={[
+                    styles.presentationActionText,
+                    {
+                      color: hasMapLocation
+                        ? colors.primaryText
+                        : colors.inactiveText,
+                    },
+                  ]}
+                >
+                  Abrir en mapa
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -1000,30 +756,28 @@ function ClientPresentationModal({ client, colors, onClose }) {
   );
 }
 
-function ClientInfoLine({ colors, label, lineStyle, value }) {
+function StoreInfoLine({ colors, label, lineStyle, value }) {
   return (
-    <View style={[styles.clientInfoLine, lineStyle]}>
+    <View style={[styles.storeInfoLine, lineStyle]}>
       <Text style={[styles.presentationInfoLabel, { color: colors.textMuted }]}>
         {label}
       </Text>
-      <Text style={[styles.clientInfoValue, { color: colors.textPrimary }]}>
+      <Text style={[styles.storeInfoValue, { color: colors.textPrimary }]}>
         {value}
       </Text>
     </View>
   );
 }
 
-function ClientFormModal({
+function StoreFormModal({
   colors,
-  editingClient,
+  editingStore,
   form,
   formIsValid,
   message,
   onCancel,
-  onOpenClientTypePicker,
-  onSelectAddress,
-  onSelectMap,
   onSave,
+  onSelectMap,
   saving,
   setField,
   visible,
@@ -1046,7 +800,7 @@ function ClientFormModal({
     __DEV__ && addressFocused && !canSearchAddresses;
 
   useEffect(() => {
-    if (!visible || !addressFocused || form.address.trim().length < 3) {
+    if (!visible || !addressFocused || form.Address.trim().length < 3) {
       addressRequestId.current += 1;
       setAddressSuggestions([]);
       setAddressSuggestionsLoading(false);
@@ -1058,7 +812,7 @@ function ClientFormModal({
     setAddressSuggestionsLoading(true);
 
     const searchTimer = setTimeout(() => {
-      fetchPlaceSuggestions(form.address)
+      fetchPlaceSuggestions(form.Address)
         .then((suggestions) => {
           if (addressRequestId.current === requestId) {
             setAddressSuggestions(suggestions.slice(0, 5));
@@ -1080,7 +834,7 @@ function ClientFormModal({
     return () => {
       clearTimeout(searchTimer);
     };
-  }, [addressFocused, canSearchAddresses, form.address, visible]);
+  }, [addressFocused, canSearchAddresses, form.Address, visible]);
 
   if (!visible) {
     return null;
@@ -1153,9 +907,9 @@ function ClientFormModal({
                 <Text
                   style={[styles.sectionTitle, { color: colors.textPrimary }]}
                 >
-                  {editingClient ? 'Editar cliente' : 'Nuevo cliente'}
+                  {editingStore ? 'Editar tienda' : 'Nueva tienda'}
                 </Text>
-                {editingClient ? (
+                {editingStore ? (
                   <View
                     style={[
                       styles.editingBadge,
@@ -1173,75 +927,24 @@ function ClientFormModal({
                   </View>
                 ) : null}
               </View>
-              <ClientField
+              <StoreField
                 colors={colors}
                 label="Nombre"
-                onChangeText={(value) => setField('name', value)}
-                placeholder="Nombre del cliente"
-                value={form.name}
+                onChangeText={(value) => setField('Name', value)}
+                placeholder="Nombre completo de la tienda"
+                value={form.Name}
+              />
+              <StoreField
+                autoCapitalize="characters"
+                colors={colors}
+                label="Alias"
+                onChangeText={(value) => setField('Alias', value)}
+                placeholder="Nombre corto para listas"
+                value={form.Alias}
               />
               <View style={styles.field}>
                 <Text style={[styles.label, { color: colors.textMuted }]}>
-                  Tipo de cliente
-                </Text>
-                <Pressable
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    onOpenClientTypePicker();
-                  }}
-                  style={[
-                    styles.selectField,
-                    {
-                      backgroundColor: colors.fieldBackground,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.selectFieldText,
-                      {
-                        color: form.type
-                          ? colors.textPrimary
-                          : colors.textMuted,
-                      },
-                    ]}
-                  >
-                    {form.type || 'Seleccionar tipo de cliente'}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.selectFieldAction,
-                      { color: colors.primaryText },
-                    ]}
-                  >
-                    Cambiar
-                  </Text>
-                </Pressable>
-              </View>
-              <View style={styles.twoColumns}>
-                <ClientField
-                  colors={colors}
-                  keyboardType="phone-pad"
-                  label="Telefono"
-                  onChangeText={(value) => setField('phone', value)}
-                  placeholder="Telefono"
-                  value={form.phone}
-                />
-                <ClientField
-                  autoCapitalize="none"
-                  colors={colors}
-                  keyboardType="email-address"
-                  label="Email"
-                  onChangeText={(value) => setField('email', value)}
-                  placeholder="correo@cliente.com"
-                  value={form.email}
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>
-                  Direccion
+                  Dirección
                 </Text>
                 <View
                   style={[
@@ -1257,7 +960,7 @@ function ClientFormModal({
                     onBlur={() => {
                       setTimeout(() => setAddressFocused(false), 120);
                     }}
-                    onChangeText={(value) => setField('address', value)}
+                    onChangeText={(value) => setField('Address', value)}
                     onFocus={() => {
                       setAddressFocused(true);
                       setTimeout(() => {
@@ -1266,13 +969,13 @@ function ClientFormModal({
                         });
                       }, 160);
                     }}
-                    placeholder="Direccion de entrega o referencia"
+                    placeholder="Dirección o referencia"
                     placeholderTextColor={colors.textMuted}
                     style={[
                       styles.addressInput,
                       { color: colors.textPrimary },
                     ]}
-                    value={form.address}
+                    value={form.Address}
                   />
                   <Pressable
                     accessibilityLabel="Elegir dirección en el mapa"
@@ -1309,7 +1012,13 @@ function ClientFormModal({
                 colors={colors}
                 isLoading={addressSuggestionsLoading}
                 onSelect={(suggestion) => {
-                  onSelectAddress(suggestion);
+                  setForm((currentForm) => ({
+                    ...currentForm,
+                    Address: capitalizeUserEntry(suggestion.description),
+                    Latitude: suggestion.latitude ?? null,
+                    Longitude: suggestion.longitude ?? null,
+                  }));
+                  setMessage('');
                   setAddressFocused(false);
                   setAddressSuggestions([]);
                   Keyboard.dismiss();
@@ -1328,14 +1037,6 @@ function ClientFormModal({
                   No se pudo cargar el buscador de direcciones.
                 </Text>
               ) : null}
-              <ClientField
-                colors={colors}
-                label="Notas"
-                multiline
-                onChangeText={(value) => setField('notes', value)}
-                placeholder="Preferencias, horarios o detalles utiles"
-                value={form.notes}
-              />
               {message ? (
                 <Text style={[styles.message, { color: colors.textSecondary }]}>
                   {message}
@@ -1359,7 +1060,7 @@ function ClientFormModal({
                       { color: colors.textPrimary },
                     ]}
                   >
-                    {editingClient ? 'Cancelar edición' : 'Cancelar'}
+                    {editingStore ? 'Cancelar edición' : 'Cancelar'}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -1402,12 +1103,10 @@ function ClientFormModal({
   );
 }
 
-function ClientField({
+function StoreField({
   autoCapitalize = 'sentences',
   colors,
-  keyboardType = 'default',
   label,
-  multiline = false,
   onBlur,
   onChangeText,
   onFocus,
@@ -1419,8 +1118,6 @@ function ClientField({
       <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text>
       <TextInput
         autoCapitalize={autoCapitalize}
-        keyboardType={keyboardType}
-        multiline={multiline}
         onBlur={onBlur}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -1428,14 +1125,12 @@ function ClientField({
         placeholderTextColor={colors.textMuted}
         style={[
           styles.input,
-          multiline ? styles.multilineInput : null,
           {
             backgroundColor: colors.fieldBackground,
             borderColor: colors.border,
             color: colors.textPrimary,
           },
         ]}
-        textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
     </View>
@@ -1573,7 +1268,7 @@ function MapPickerScreen({
   return (
     <AppScreen contentContainerStyle={styles.mapScreenContent} scroll={false}>
       <AppHeader
-        subtitle="Busca una ubicación real o toca el mapa."
+        subtitle="Busca una tienda real o toca el mapa."
         title="Elegir ubicación"
       />
       <View style={styles.mapSearchBlock}>
@@ -1708,14 +1403,12 @@ function MapPickerScreen({
   );
 }
 
-function ClientCard({
-  client,
+function StoreCard({
   colors,
   isEditing,
   menuActive,
   menuOpen,
   menuOpensUpward,
-  onCloseMenu,
   onDelete,
   onDismissMenu,
   onEdit,
@@ -1723,10 +1416,12 @@ function ClientCard({
   onOpenMenu,
   onSelect,
   saving,
+  store,
 }) {
   const [editingBadgeVisible, setEditingBadgeVisible] = useState(isEditing);
-  const editingBadgeOpacity = useRef(new Animated.Value(isEditing ? 1 : 0))
-    .current;
+  const editingBadgeOpacity = useRef(
+    new Animated.Value(isEditing ? 1 : 0),
+  ).current;
 
   useEffect(() => {
     let isMounted = true;
@@ -1762,87 +1457,89 @@ function ClientCard({
 
   return (
     <View
-      style={[
-        styles.clientCardWrap,
-        menuOpen ? styles.clientCardMenuOpen : null,
-      ]}
       onLayout={onLayout}
+      style={[styles.storeCardWrap, menuOpen ? styles.storeCardMenuOpen : null]}
     >
-      <AppCard
+      <Pressable
+        accessibilityLabel={`Ver tienda ${getStoreTitle(store)}`}
+        accessibilityRole="button"
+        onPress={() => {
+          if (menuActive) {
+            onDismissMenu();
+            return;
+          }
+
+          onSelect();
+        }}
         style={[
-          styles.clientCard,
+          styles.storeCard,
           {
+            backgroundColor: colors.surface,
             borderColor: isEditing ? colors.primary : colors.border,
           },
-          isEditing && { backgroundColor: colors.surface },
         ]}
       >
-        <Pressable
-          onPress={() => {
-            if (menuActive) {
-              onDismissMenu();
-              return;
-            }
-
-            onSelect();
-          }}
-          style={styles.clientCardButton}
-        >
-          <View style={styles.clientCopy}>
-            <Text style={[styles.clientName, { color: colors.textPrimary }]}>
-              {client.name}
-            </Text>
+        <View style={styles.storeCardCopy}>
+          <Text
+            numberOfLines={1}
+            style={[styles.storeName, { color: colors.textPrimary }]}
+          >
+            {getStoreTitle(store)}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.storeAddress, { color: colors.textMuted }]}
+          >
+            {getStoreDescription(store)}
+          </Text>
+        </View>
+        {editingBadgeVisible ? (
+          <Animated.View
+            style={[
+              styles.editingBadge,
+              {
+                backgroundColor: colors.primaryMuted,
+                opacity: editingBadgeOpacity,
+              },
+            ]}
+          >
             <Text
-              numberOfLines={1}
-              style={[styles.clientDetail, { color: colors.textMuted }]}
+              style={[styles.editingBadgeText, { color: colors.primaryText }]}
             >
-              {client.phone || 'Sin teléfono registrado'}
+              En edición
             </Text>
-          </View>
-          <View style={styles.clientCardActions}>
-            {editingBadgeVisible ? (
-              <Animated.View
-                style={[
-                  styles.editingBadge,
-                  { backgroundColor: colors.primaryMuted },
-                  { opacity: editingBadgeOpacity },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.editingBadgeText,
-                    { color: colors.primaryText },
-                  ]}
-                >
-                  En edición
-                </Text>
-              </Animated.View>
-            ) : null}
-            {showMenu ? (
-              <Pressable
-                disabled={saving}
-                onPress={(event) => {
-                  event.stopPropagation();
-                  menuOpen ? onCloseMenu() : onOpenMenu();
-                }}
-                style={styles.overflowButton}
-              >
-                <AppIcon
-                  accessibilityLabel="Acciones del cliente"
-                  color={colors.textPrimary}
-                  name="dots-vertical"
-                  size={20}
-                />
-              </Pressable>
-            ) : null}
-          </View>
-        </Pressable>
-      </AppCard>
-      {showMenu && menuOpen ? (
+          </Animated.View>
+        ) : null}
+        {showMenu ? (
+          <Pressable
+            accessibilityLabel={`Abrir acciones de ${getStoreTitle(store)}`}
+            accessibilityRole="button"
+            disabled={saving}
+            hitSlop={12}
+            onPress={(event) => {
+              event.stopPropagation();
+              if (menuOpen) {
+                onDismissMenu();
+                return;
+              }
+              onOpenMenu();
+            }}
+            style={styles.storeMenuButton}
+          >
+            <AppIcon
+              accessibilityLabel="Acciones de la tienda"
+              color={colors.textPrimary}
+              name="dots-vertical"
+              size={20}
+            />
+          </Pressable>
+        ) : null}
+      </Pressable>
+      {menuOpen ? (
         <View
           style={[
-            styles.clientOverflowMenu,
-            menuOpensUpward ? styles.clientOverflowMenuUpward : null,
+            styles.storeOverflowMenu,
+            menuOpensUpward ? styles.storeOverflowMenuUpward : null,
             {
               backgroundColor: colors.screenBackground || colors.surface,
               borderColor: colors.border,
@@ -1850,26 +1547,31 @@ function ClientCard({
           ]}
         >
           <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              onCloseMenu();
+            onPress={() => {
+              onDismissMenu();
               onEdit();
             }}
-            style={styles.clientMenuAction}
+            style={styles.storeOverflowAction}
           >
-            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.storeOverflowActionText,
+                { color: colors.textPrimary },
+              ]}
+            >
               Editar
             </Text>
           </Pressable>
           <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              onCloseMenu();
+            onPress={() => {
+              onDismissMenu();
               onDelete();
             }}
-            style={styles.clientMenuAction}
+            style={styles.storeOverflowAction}
           >
-            <Text style={[styles.secondaryText, { color: colors.danger }]}>
+            <Text
+              style={[styles.storeOverflowActionText, { color: colors.danger }]}
+            >
               Eliminar
             </Text>
           </Pressable>
@@ -1921,66 +1623,10 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
+    marginTop: 16,
   },
-  clientCardButton: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  clientCard: {
-    borderWidth: 1,
-    position: 'relative',
-  },
-  clientCardActions: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  clientCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  clientDetail: {
-    fontSize: typography.sizes.label,
-    marginTop: 4,
-  },
-  clientName: {
-    fontSize: typography.sizes.body,
-    fontWeight: typography.weights.semibold,
-  },
-  clientCardMenuOpen: {
-    zIndex: 50,
-  },
-  clientCardWrap: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  clientInfoLine: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  clientInfoValue: {
-    flex: 1,
-    fontSize: typography.sizes.label,
-    lineHeight: 20,
-  },
-  clientListDismissSpacer: {
-    minHeight: 160,
-  },
-  clientNotesLine: {
-    minHeight: 48,
-  },
-  clientFilterChipsContent: {
-    paddingHorizontal: 0,
-  },
-  clientsList: {
-    flex: 1,
-  },
-  clientsListContent: {
-    gap: 10,
-    paddingBottom: 14,
-    paddingTop: 0,
+  disabledAction: {
+    opacity: 0.45,
   },
   dragHandle: {
     alignSelf: 'center',
@@ -1991,27 +1637,24 @@ const styles = StyleSheet.create({
   dragHandleArea: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 32,
+    minHeight: 30,
     paddingBottom: 8,
-    paddingTop: 8,
+  },
+  editingBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  editingBadgeText: {
+    fontSize: typography.sizes.caption,
+    fontWeight: typography.weights.semibold,
   },
   emptyTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
-  },
-  editingBadge: {
-    alignItems: 'center',
-    borderRadius: 8,
-    justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 10,
-  },
-  editingBadgeText: {
-    fontSize: typography.sizes.label,
-    fontWeight: typography.weights.semibold,
+    marginBottom: 6,
   },
   field: {
-    flex: 1,
     gap: 6,
   },
   formHeader: {
@@ -2021,17 +1664,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   formSheet: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     borderWidth: 1,
-    maxHeight: '78%',
-    padding: 18,
-    paddingTop: 0,
+    overflow: 'hidden',
     width: '100%',
   },
   formSheetContent: {
-    gap: 14,
-    paddingBottom: 26,
+    gap: 12,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
+    paddingTop: 4,
   },
   formSheetContentWithSuggestions: {
     paddingBottom: 84,
@@ -2039,7 +1682,6 @@ const styles = StyleSheet.create({
   helper: {
     fontSize: typography.sizes.bodySmall,
     lineHeight: 20,
-    marginTop: 6,
   },
   input: {
     borderRadius: 8,
@@ -2054,40 +1696,14 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: typography.sizes.bodySmall,
-    marginTop: 2,
+    lineHeight: 20,
+    marginHorizontal: 2,
   },
   mapBottomPanel: {
     borderRadius: 8,
     borderWidth: 1,
     gap: 10,
     padding: 12,
-  },
-  mapPickerInlineButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    flexDirection: 'row',
-    gap: 4,
-    justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: 10,
-  },
-  mapPickerInlineText: {
-    fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.semibold,
-  },
-  mapResultBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-  },
-  mapResultText: {
-    fontSize: typography.sizes.bodySmall,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  mapScreenActions: {
-    flexDirection: 'row',
-    gap: 10,
   },
   mapScreenContent: {
     flex: 1,
@@ -2097,6 +1713,10 @@ const styles = StyleSheet.create({
         getSystemNavigationClearance({ platform: Platform.OS }) - 34,
         24,
       ) + 66,
+  },
+  mapScreenActions: {
+    flexDirection: 'row',
+    gap: 10,
   },
   mapScreenFooter: {
     bottom: Math.max(
@@ -2141,6 +1761,29 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingRight: 8,
   },
+  mapPickerInlineButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 10,
+  },
+  mapPickerInlineText: {
+    fontSize: typography.sizes.bodySmall,
+    fontWeight: typography.weights.semibold,
+  },
+  mapResultBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  mapResultText: {
+    fontSize: typography.sizes.bodySmall,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
   mapWebView: {
     flex: 1,
   },
@@ -2157,122 +1800,38 @@ const styles = StyleSheet.create({
   },
   modalRoot: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
-  clientMenuAction: {
-    minWidth: 120,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  clientOverflowMenu: {
-    borderRadius: 8,
-    borderWidth: 1,
-    elevation: 6,
-    position: 'absolute',
-    right: 0,
-    top: 46,
-    zIndex: 60,
-  },
-  clientOverflowMenuUpward: {
-    bottom: 46,
-    top: undefined,
-  },
-  clientPresentationCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  clientPresentationHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  clientPresentationSheet: {
-    borderCurve: 'continuous',
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-    maxWidth: 420,
-    overflow: 'hidden',
-    padding: 18,
-    paddingTop: 20,
-    width: '100%',
-  },
-  multilineInput: {
-    minHeight: 82,
-    paddingTop: 12,
-  },
-  primaryButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  primaryText: {
-    fontSize: typography.sizes.bodySmall,
-    fontWeight: typography.weights.semibold,
-  },
-  disabledAction: {
-    opacity: 0.55,
-  },
-  overflowButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    height: 34,
-    justifyContent: 'center',
-    marginRight: -6,
-    width: 26,
-  },
-  searchInput: {
-    borderRadius: 8,
-    borderWidth: 1,
-    fontSize: typography.sizes.bodySmall,
-    minHeight: 46,
-    paddingHorizontal: 12,
-  },
-  selectField: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    minHeight: 46,
-    paddingHorizontal: 12,
-  },
-  selectFieldAction: {
-    fontSize: typography.sizes.label,
-    fontWeight: typography.weights.semibold,
-  },
-  selectFieldText: {
-    flex: 1,
-    fontSize: typography.sizes.bodySmall,
-    minWidth: 0,
-  },
-  presentationActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 6,
   },
   presentationActionButton: {
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
     flex: 1,
+    gap: 8,
+    height: 52,
     justifyContent: 'center',
-    minHeight: 48,
+  },
+  presentationActionText: {
+    fontSize: typography.sizes.bodySmall,
+    fontWeight: typography.weights.bold,
+  },
+  presentationActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
   },
   presentationCardWrap: {
-    paddingHorizontal: 22,
-    width: '100%',
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
   },
   presentationDetails: {
-    gap: 10,
+    gap: 14,
+    marginTop: 14,
   },
   presentationHero: {
     borderBottomWidth: 1,
-    marginHorizontal: -2,
-    paddingBottom: 14,
-    paddingHorizontal: 2,
+    paddingBottom: 18,
   },
   presentationInfoLabel: {
     fontSize: typography.sizes.label,
@@ -2282,52 +1841,151 @@ const styles = StyleSheet.create({
     width: 92,
   },
   presentationModalRoot: {
-    alignItems: 'center',
     flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 24,
   },
   presentationSectionTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
     lineHeight: 22,
-    marginBottom: 4,
-    marginTop: 0,
+    marginTop: 20,
   },
   presentationTitle: {
     fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
     lineHeight: 24,
   },
+  primaryButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    flex: 1,
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  primaryText: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
+  },
   screenContent: {
     flex: 1,
-    gap: 0,
-    paddingBottom: 4,
-    position: 'relative',
-  },
-  stickySearchHeader: {
-    gap: 12,
+    gap: 14,
     paddingBottom: 0,
-    paddingTop: 0,
+  },
+  searchInput: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: typography.sizes.bodySmall,
+    minHeight: 46,
+    paddingHorizontal: 12,
   },
   secondaryButton: {
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
     flex: 1,
+    minHeight: 52,
     justifyContent: 'center',
-    minHeight: 48,
   },
   secondaryText: {
-    fontSize: typography.sizes.label,
+    fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
   },
   sectionTitle: {
-    fontSize: typography.sizes.title,
-    fontWeight: typography.weights.bold,
+    fontSize: typography.sizes.bodyLarge,
+    fontWeight: typography.weights.semibold,
   },
-  twoColumns: {
+  stickySearchHeader: {
+    gap: 12,
+    paddingTop: 0,
+    zIndex: 4,
+  },
+  storeAddress: {
+    fontSize: typography.sizes.bodySmall,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  storeAddressLine: {
+    minHeight: 70,
+  },
+  storeCard: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: 10,
+    minHeight: 76,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  storeCardCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  storeCardMenuOpen: {
+    zIndex: 10,
+  },
+  storeCardWrap: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  storeInfoLine: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  storeInfoValue: {
+    flex: 1,
+    fontSize: typography.sizes.label,
+    lineHeight: 20,
+  },
+  storeListDismissSpacer: {
+    height: 76,
+    marginTop: -76,
+  },
+  storeMenuButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 34,
+    justifyContent: 'center',
+    marginRight: -6,
+    width: 26,
+  },
+  storeName: {
+    fontSize: typography.sizes.body,
+    fontWeight: typography.weights.semibold,
+  },
+  storeOverflowAction: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  storeOverflowActionText: {
+    fontSize: typography.sizes.bodySmall,
+    fontWeight: typography.weights.semibold,
+  },
+  storeOverflowMenu: {
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 132,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: 8,
+    top: 58,
+    zIndex: 20,
+  },
+  storeOverflowMenuUpward: {
+    bottom: 58,
+    top: 'auto',
+  },
+  storePresentationSheet: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 22,
+  },
+  storesList: {
+    flex: 1,
+    marginTop: -2,
+  },
+  storesListContent: {
+    gap: 10,
+    paddingBottom: 120,
   },
 });

@@ -162,7 +162,7 @@ export const runRecipeSaleServiceSmokeTest = async () => {
     });
     const outboxBeforeSuccess = await countOutboxEventsForRunId(runId);
     const saleResult = await createLocalRecipeSale({
-      category: { description: 'Recetas', shortDescription: 'Recetas' },
+      category: { description: 'Productos', shortDescription: 'Productos' },
       description: `recipe_sale_smoke_success_${runId}`,
       financials: {
         ingredients: [

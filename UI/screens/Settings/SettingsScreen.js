@@ -5,7 +5,6 @@ import AppCard from '../../components/layout/AppCard';
 import AppHeader from '../../components/layout/AppHeader';
 import AppScreen from '../../components/layout/AppScreen';
 import AppIcon from '../../components/icons/AppIcon';
-import AddStoreModal from '../../components/TransactionBalance/modals/addStoreModal/AddStoreModal';
 import typography from '../../constants/TransactionBalance/Typography';
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 import useAuthSession from '../../hooks/auth/useAuthSession';
@@ -23,11 +22,11 @@ export default function SettingsScreen({
   onOpenAccount,
   onOpenClients,
   onOpenDevTools,
+  onOpenStores,
   onOpenWorkspace,
 } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const auth = useAuthSession();
-  const [storeManagerIsVisible, setStoreManagerIsVisible] = useState(false);
   const [message, setMessage] = useState(null);
   const accountTitle = getAccountTitle(auth.session);
   const accountDetail = getAccountDetail(auth.session);
@@ -36,11 +35,6 @@ export default function SettingsScreen({
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
-        if (storeManagerIsVisible) {
-          setStoreManagerIsVisible(false);
-          return true;
-        }
-
         if (onBack) {
           onBack();
           return true;
@@ -53,7 +47,7 @@ export default function SettingsScreen({
     return () => {
       subscription.remove();
     };
-  }, [onBack, storeManagerIsVisible]);
+  }, [onBack]);
 
   const openComingSoon = (key) => {
     if (key === 'clients') {
@@ -75,7 +69,7 @@ export default function SettingsScreen({
     }
 
     if (key === 'stores') {
-      setStoreManagerIsVisible(true);
+      onOpenStores?.();
       return;
     }
 
@@ -173,12 +167,6 @@ export default function SettingsScreen({
         </AppCard>
       ) : null}
 
-      {storeManagerIsVisible ? (
-        <AddStoreModal
-          AddStoreModalIsVisible={storeManagerIsVisible}
-          setAddStoreModalIsVisible={setStoreManagerIsVisible}
-        />
-      ) : null}
     </AppScreen>
   );
 }

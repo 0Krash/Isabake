@@ -57,7 +57,7 @@ describe('BackupStatusIndicator integration', () => {
     expect(transactionsSource).toContain('transactions.length > 0');
     expect(transactionListSource).toContain('Crear movimiento');
     expect(recipesSource).toContain('hasRecipes &&');
-    expect(recipesSource).toContain('Crear receta');
+    expect(recipesSource).toContain('Crear producto');
     expect(inventorySource).toContain('hasInventoryItems &&');
     expect(inventorySource).toContain('Crear ingrediente');
   });
@@ -92,11 +92,11 @@ describe('BackupStatusIndicator integration', () => {
     const inventorySource = read('screens/Inventory/InventoryScreen.js');
 
     expect(transactionsSource).not.toContain('title="Transacciones"');
-    expect(recipesSource).not.toContain('title="Recetario"');
+    expect(recipesSource).not.toContain('title="Productorio"');
     expect(inventorySource).not.toContain('title="Inventario"');
     expect(recipesSource).not.toContain('title="Filtros"');
     expect(inventorySource).not.toContain('title="Filtros"');
-    expect(recipesSource).not.toContain(' de ${recipes.length} recetas');
+    expect(recipesSource).not.toContain(' de ${recipes.length} productos');
     expect(inventorySource).not.toContain(
       ' de ${inventoryItems.length} ingredientes',
     );

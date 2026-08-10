@@ -5,9 +5,12 @@ import {
   APP_SCREEN_TOP_PADDING,
   MAIN_SCREEN_TOP_PADDING,
   STATUS_BAR_SAFE_HEIGHT_ANDROID,
+  SYSTEM_NAVIGATION_CLEARANCE_ANDROID,
+  SYSTEM_NAVIGATION_CLEARANCE_IOS,
   getBottomNavHeight,
   getScrollContentBottomPadding,
   getScreenContentTopPadding,
+  getSystemNavigationClearance,
 } from './layoutMetrics';
 
 describe('layoutMetrics', () => {
@@ -22,6 +25,15 @@ describe('layoutMetrics', () => {
     );
     expect(getScrollContentBottomPadding({ extra: 12, platform: 'ios' })).toBe(
       APP_BOTTOM_NAV_HEIGHT_IOS + APP_BOTTOM_NAV_CLEARANCE + 12,
+    );
+  });
+
+  test('keeps fullscreen actions clear of the system navigation area', () => {
+    expect(getSystemNavigationClearance({ platform: 'android' })).toBe(
+      SYSTEM_NAVIGATION_CLEARANCE_ANDROID,
+    );
+    expect(getSystemNavigationClearance({ platform: 'ios' })).toBe(
+      SYSTEM_NAVIGATION_CLEARANCE_IOS,
     );
   });
 

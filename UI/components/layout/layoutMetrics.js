@@ -5,6 +5,8 @@ export const STATUS_BAR_SAFE_HEIGHT_ANDROID = 44;
 export const APP_BOTTOM_NAV_HEIGHT_ANDROID = 112;
 export const APP_BOTTOM_NAV_HEIGHT_IOS = 64;
 export const APP_BOTTOM_NAV_CLEARANCE = 28;
+export const SYSTEM_NAVIGATION_CLEARANCE_ANDROID = 78;
+export const SYSTEM_NAVIGATION_CLEARANCE_IOS = 12;
 export const DEFAULT_PLATFORM = 'ios';
 
 export const getBottomNavHeight = (platform = DEFAULT_PLATFORM) =>
@@ -16,6 +18,13 @@ export const getScrollContentBottomPadding = ({
   extra = 0,
   platform = DEFAULT_PLATFORM,
 } = {}) => getBottomNavHeight(platform) + APP_BOTTOM_NAV_CLEARANCE + extra;
+
+export const getSystemNavigationClearance = ({
+  platform = DEFAULT_PLATFORM,
+} = {}) =>
+  platform === 'android'
+    ? SYSTEM_NAVIGATION_CLEARANCE_ANDROID
+    : SYSTEM_NAVIGATION_CLEARANCE_IOS;
 
 export const getScreenContentTopPadding = ({
   basePadding = APP_SCREEN_TOP_PADDING,
@@ -34,9 +43,12 @@ export default {
   APP_HORIZONTAL_PADDING,
   APP_SCREEN_TOP_PADDING,
   STATUS_BAR_SAFE_HEIGHT_ANDROID,
+  SYSTEM_NAVIGATION_CLEARANCE_ANDROID,
+  SYSTEM_NAVIGATION_CLEARANCE_IOS,
   MAIN_SCREEN_TOP_PADDING,
   DEFAULT_PLATFORM,
   getBottomNavHeight,
   getScrollContentBottomPadding,
   getScreenContentTopPadding,
+  getSystemNavigationClearance,
 };

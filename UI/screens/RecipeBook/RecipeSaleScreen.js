@@ -512,7 +512,7 @@ export default function RecipeSaleScreen({ onClose, onOpenClients, recipe }) {
       };
 
       await createLocalRecipeSale({
-        category: { description: 'Recetas', shortDescription: 'Recetas' },
+        category: { description: 'Productos', shortDescription: 'Productos' },
         description: `Venta de ${recipe.name}`,
         financials,
         client: selectedClient,
@@ -527,7 +527,7 @@ export default function RecipeSaleScreen({ onClose, onOpenClients, recipe }) {
         { onPress: onClose, text: 'Aceptar' },
       ]);
     } catch (error) {
-      console.warn('Error al registrar venta de receta:', error);
+      console.warn('Error al registrar venta de producto:', error);
       Alert.alert(
         'No se pudo registrar',
         error?.message || 'No se pudo registrar la venta localmente.',

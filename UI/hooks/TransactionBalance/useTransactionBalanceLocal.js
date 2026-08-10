@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { transactionRepository } from '../../data/repositories';
-import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
@@ -362,7 +361,6 @@ export default function useTransactionBalanceLocal(
           ...options,
         }),
       );
-      requestLocalChangeSync();
       await refreshTransactions();
       return transaction;
     },
@@ -382,7 +380,6 @@ export default function useTransactionBalanceLocal(
       }
 
       const normalizedTransaction = normalizeTransaction(transaction);
-      requestLocalChangeSync();
       await refreshTransactions();
       return normalizedTransaction;
     },
@@ -400,7 +397,6 @@ export default function useTransactionBalanceLocal(
         throw new Error('Transacción no encontrada');
       }
 
-      requestLocalChangeSync();
       await refreshTransactions();
       return normalizeTransaction(transaction);
     },

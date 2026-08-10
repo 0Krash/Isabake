@@ -4,7 +4,7 @@ describe('AppBottomNavigation model', () => {
   test('primary navigation has exactly three business tabs', () => {
     expect(getPrimaryNavigationTabs()).toEqual([
       { key: 'home', label: 'Transacciones' },
-      { key: 'recipes', label: 'Recetas' },
+      { key: 'recipes', label: 'Productos' },
       { key: 'inventory', label: 'Inventario' },
     ]);
   });

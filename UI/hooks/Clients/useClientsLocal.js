@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { clientRepository } from '../../data/repositories';
-import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
 const normalizeClientPayload = (client = {}) => ({
   address: client.address || '',
   email: client.email || '',
+  latitude: client.latitude ?? client.Latitude ?? null,
+  longitude: client.longitude ?? client.Longitude ?? null,
   name: client.name || '',
   notes: client.notes || '',
   phone: client.phone || '',
@@ -60,7 +61,6 @@ export default function useClientsLocal({ autoLoad = true } = {}) {
       const client = await clientRepository.create(normalizeClientPayload(data), {
         groupId: effectiveGroupId,
       });
-      requestLocalChangeSync();
       await refreshClients();
       return client;
     },
@@ -78,7 +78,6 @@ export default function useClientsLocal({ autoLoad = true } = {}) {
         throw new Error('Cliente no encontrado');
       }
 
-      requestLocalChangeSync();
       await refreshClients();
       return client;
     },
@@ -93,7 +92,6 @@ export default function useClientsLocal({ autoLoad = true } = {}) {
         throw new Error('Cliente no encontrado');
       }
 
-      requestLocalChangeSync();
       await refreshClients();
       return client;
     },

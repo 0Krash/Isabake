@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { recipeRepository } from '../../data/repositories';
-import { requestLocalChangeSync } from '../../data/sync/localChangeSync';
 import { getCurrentGroupId } from '../../data/workspace/currentWorkspace';
 import useCurrentWorkspaceScope from '../workspace/useCurrentWorkspaceScope';
 
@@ -207,7 +206,6 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
           ...options,
         }),
       );
-      requestLocalChangeSync();
       const visibleRecipes = await refreshRecipes();
 
       if (
@@ -232,11 +230,10 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
       );
 
       if (!recipe) {
-        throw new Error('Receta no encontrada');
+        throw new Error('Producto no encontrado');
       }
 
       const normalizedRecipe = normalizeRecipe(recipe);
-      requestLocalChangeSync();
       await refreshRecipes();
       return normalizedRecipe;
     },
@@ -248,10 +245,9 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
       const recipe = await recipeRepository.softDelete(String(id), options);
 
       if (!recipe) {
-        throw new Error('Receta no encontrada');
+        throw new Error('Producto no encontrado');
       }
 
-      requestLocalChangeSync();
       await refreshRecipes();
       return normalizeRecipe(recipe);
     },
@@ -273,7 +269,7 @@ export default function useRecipeBookLocal({ autoLoad = true } = {}) {
     }
 
     refreshRecipes().catch((requestError) => {
-      console.warn('Error al cargar recetas locales:', requestError);
+      console.warn('Error al cargar productos locales:', requestError);
     });
   }, [autoLoad, groupId, refreshRecipes, waitingForWorkspace]);
 

@@ -114,7 +114,7 @@ export default function useRecipeSectionsLocal({ autoLoad = true } = {}) {
     }
 
     refreshRecipeSections().catch((requestError) => {
-      console.warn('Error al cargar secciones de receta locales:', requestError);
+      console.warn('Error al cargar secciones de producto locales:', requestError);
     });
   }, [autoLoad, groupId, refreshRecipeSections, waitingForWorkspace]);
 

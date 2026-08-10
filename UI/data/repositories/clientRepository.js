@@ -5,6 +5,8 @@ export const CLIENT_COLLECTION = 'clients';
 const normalizeClient = (client = {}) => ({
   address: client.address || client.Address || '',
   email: client.email || client.Email || '',
+  latitude: client.latitude ?? client.Latitude ?? null,
+  longitude: client.longitude ?? client.Longitude ?? null,
   name: client.name || client.Name || '',
   notes: client.notes || client.Notes || '',
   phone: client.phone || client.Phone || '',

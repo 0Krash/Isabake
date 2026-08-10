@@ -1,6 +1,6 @@
 export const primaryNavigationTabs = [
   { key: 'home', label: 'Transacciones' },
-  { key: 'recipes', label: 'Recetas' },
+  { key: 'recipes', label: 'Productos' },
   { key: 'inventory', label: 'Inventario' },
 ];
 
@@ -47,7 +47,7 @@ export const createSettingsMenuItems = ({ devToolsEnabled = false } = {}) => [
     label: 'Administrar negocios',
   },
   {
-    description: 'Lugares donde surtes materiales para tus recetas.',
+    description: 'Lugares donde surtes materiales para tus productos.',
     key: 'stores',
     label: 'Tiendas',
   },

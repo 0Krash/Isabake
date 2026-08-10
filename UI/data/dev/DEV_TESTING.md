@@ -384,7 +384,7 @@ documenting it as runnable.
 Phase 28.1 recenters the app around three primary tabs:
 
 - `Transacciones`
-- `Recetas`
+- `Productos`
 - `Inventario`
 
 Technical/support screens are secondary and reachable from `Opciones`:
@@ -450,7 +450,7 @@ manual conflict handling before retrying sync.
 
 ## Backup Status Indicators
 
-Phase 31 adds compact backup indicators to `Transacciones`, `Recetas`,
+Phase 31 adds compact backup indicators to `Transacciones`, `Productos`,
 `Inventario`, and the Sync Center status card.
 
 Friendly labels:

@@ -22,6 +22,7 @@ import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import SettingsScreen from './screens/Settings/SettingsScreen';
 import ClientsScreen from './screens/Clients/ClientsScreen';
+import StoresScreen from './screens/Stores/StoresScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
 import {
@@ -53,7 +54,9 @@ export default function App() {
   const [saleRecipe, setSaleRecipe] = useState(null);
   const [accountStatus, setAccountStatus] = useState('checking');
   const [clientsBackTab, setClientsBackTab] = useState('home');
+  const [hideBottomNavigation, setHideBottomNavigation] = useState(false);
   const [settingsBackTab, setSettingsBackTab] = useState('home');
+  const [storesBackTab, setStoresBackTab] = useState('home');
   const [workspaceBackTab, setWorkspaceBackTab] = useState('home');
   const [mountedPrimaryTabs, setMountedPrimaryTabs] = useState(
     () => new Set(['home']),
@@ -179,6 +182,11 @@ export default function App() {
     setActiveTab('clients');
   };
 
+  const openStoresFrom = (tabKey) => {
+    setStoresBackTab(tabKey || activeTab || 'home');
+    setActiveTab('stores');
+  };
+
   const renderScreen = () => {
     if (saleRecipe) {
       return (
@@ -201,6 +209,7 @@ export default function App() {
           onOpenInventory={() => setActiveTab('inventory')}
           onOpenAppMenu={() => openSettingsFrom('recipes')}
           onOpenSync={() => setActiveTab('sync')}
+          onOpenStores={() => openStoresFrom('recipes')}
           onOpenWorkspace={() => openWorkspaceFrom('recipes')}
           onOpenRecipeSale={setSaleRecipe}
         />
@@ -214,6 +223,7 @@ export default function App() {
           onOpenAccount={() => setActiveTab('account')}
           onOpenAppMenu={() => openSettingsFrom('inventory')}
           onOpenSync={() => setActiveTab('sync')}
+          onOpenStores={() => openStoresFrom('inventory')}
           onOpenWorkspace={() => openWorkspaceFrom('inventory')}
         />
       );
@@ -248,13 +258,28 @@ export default function App() {
           onOpenAccount={() => setActiveTab('account')}
           onOpenClients={() => openClientsFrom('settings')}
           onOpenDevTools={() => setActiveTab('dev-sync')}
+          onOpenStores={() => openStoresFrom('settings')}
           onOpenWorkspace={() => openWorkspaceFrom('settings')}
         />
       );
     }
 
+    if (activeTab === 'stores') {
+      return (
+        <StoresScreen
+          onBack={() => setActiveTab(storesBackTab || 'home')}
+          onMapFullscreenChange={setHideBottomNavigation}
+        />
+      );
+    }
+
     if (activeTab === 'clients') {
-      return <ClientsScreen onBack={() => setActiveTab(clientsBackTab || 'home')} />;
+      return (
+        <ClientsScreen
+          onBack={() => setActiveTab(clientsBackTab || 'home')}
+          onMapFullscreenChange={setHideBottomNavigation}
+        />
+      );
     }
 
     if (activeTab === 'workspace') {
@@ -287,6 +312,7 @@ export default function App() {
           onOpenAppMenu={() => openSettingsFrom('home')}
           onOpenClients={() => openClientsFrom('home')}
           onOpenSync={() => setActiveTab('sync')}
+          onOpenStores={() => openStoresFrom('home')}
           onOpenWorkspace={() => openWorkspaceFrom('home')}
         />
     );
@@ -307,6 +333,7 @@ export default function App() {
             onOpenAppMenu={() => openSettingsFrom('home')}
             onOpenClients={() => openClientsFrom('home')}
             onOpenSync={() => setActiveTab('sync')}
+            onOpenStores={() => openStoresFrom('home')}
             onOpenWorkspace={() => openWorkspaceFrom('home')}
           />
         </View>
@@ -326,6 +353,7 @@ export default function App() {
             onOpenInventory={() => setActiveTab('inventory')}
             onOpenAppMenu={() => openSettingsFrom('recipes')}
             onOpenSync={() => setActiveTab('sync')}
+            onOpenStores={() => openStoresFrom('recipes')}
             onOpenWorkspace={() => openWorkspaceFrom('recipes')}
             onOpenRecipeSale={setSaleRecipe}
           />
@@ -345,6 +373,7 @@ export default function App() {
             onOpenAccount={() => setActiveTab('account')}
             onOpenAppMenu={() => openSettingsFrom('inventory')}
             onOpenSync={() => setActiveTab('sync')}
+            onOpenStores={() => openStoresFrom('inventory')}
             onOpenWorkspace={() => openWorkspaceFrom('inventory')}
           />
         </View>
@@ -400,7 +429,7 @@ export default function App() {
             ? renderPrimaryScreens()
             : renderScreen()}
         </View>
-        {!saleRecipe && (
+        {!saleRecipe && !hideBottomNavigation && (
           <AppBottomNavigation
             activeTab={activeTab}
             onTabPress={setActiveTab}
