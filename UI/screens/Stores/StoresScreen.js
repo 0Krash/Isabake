@@ -1834,9 +1834,11 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
   },
   presentationInfoLabel: {
-    fontSize: typography.sizes.caption,
-    fontWeight: typography.weights.semibold,
+    fontSize: typography.sizes.label,
+    fontWeight: typography.weights.medium,
+    lineHeight: 20,
     textTransform: 'uppercase',
+    width: 92,
   },
   presentationModalRoot: {
     flex: 1,
@@ -1844,11 +1846,13 @@ const styles = StyleSheet.create({
   presentationSectionTitle: {
     fontSize: typography.sizes.body,
     fontWeight: typography.weights.semibold,
+    lineHeight: 22,
     marginTop: 20,
   },
   presentationTitle: {
-    fontSize: typography.sizes.title,
+    fontSize: typography.sizes.bodyLarge,
     fontWeight: typography.weights.bold,
+    lineHeight: 24,
   },
   primaryButton: {
     alignItems: 'center',
@@ -1924,11 +1928,14 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   storeInfoLine: {
-    gap: 4,
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 12,
   },
   storeInfoValue: {
-    fontSize: typography.sizes.body,
-    lineHeight: 22,
+    flex: 1,
+    fontSize: typography.sizes.label,
+    lineHeight: 20,
   },
   storeListDismissSpacer: {
     height: 76,
