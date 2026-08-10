@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,11 +17,16 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 import AppIcon from '../../components/icons/AppIcon';
 import AppCard from '../../components/layout/AppCard';
 import AppHeader from '../../components/layout/AppHeader';
 import AppScreen from '../../components/layout/AppScreen';
+import {
+  APP_HORIZONTAL_PADDING,
+  getSystemNavigationClearance,
+} from '../../components/layout/layoutMetrics';
 import FilterChips from '../../components/TransactionBalance/FilterChips';
 import DeleteConfirmationModal from '../../components/TransactionBalance/DeleteConfirmationModal';
 import ManagedOptionPickerModal from '../../components/TransactionBalance/ManagedOptionPickerModal';
@@ -30,11 +36,18 @@ import useClientTypesLocal from '../../hooks/Clients/useClientTypesLocal';
 import useClientsLocal from '../../hooks/Clients/useClientsLocal';
 import useBottomSheet from '../../hooks/useBottomSheet';
 import useKeyboardBottomInset from '../../hooks/useKeyboardBottomInset';
+import {
+  fetchAddressFromCoordinates,
+  fetchPlaceSuggestions,
+  getPlaceAutocompleteBaseUrl,
+} from '../../services/places/placeAutocompleteService';
 import { capitalizeUserEntry } from '../../utils/textEntryFormat';
 
 const emptyForm = {
   address: '',
   email: '',
+  latitude: null,
+  longitude: null,
   name: '',
   notes: '',
   phone: '',
@@ -45,6 +58,25 @@ const getClientId = (client) => client?.clientId || client?.id || '';
 
 const getClientPhoneDigits = (client) =>
   String(client?.phone || '').replace(/[^\d+]/g, '');
+
+const getClientCoordinate = (client, key) => {
+  const value = client?.[key] ?? client?.[key[0].toUpperCase() + key.slice(1)];
+
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const coordinate = Number(value);
+
+  return Number.isFinite(coordinate) ? coordinate : null;
+};
+
+const hasClientMapLocation = (client) =>
+  Boolean(
+    client?.address?.trim() &&
+      getClientCoordinate(client, 'latitude') !== null &&
+      getClientCoordinate(client, 'longitude') !== null,
+  );
 
 const formatClientDate = (value = null) => {
   if (!value) {
@@ -69,6 +101,8 @@ const getInitialForm = (client) =>
     ? {
         address: client.address || '',
         email: client.email || '',
+        latitude: getClientCoordinate(client, 'latitude'),
+        longitude: getClientCoordinate(client, 'longitude'),
         name: client.name || '',
         notes: client.notes || '',
         phone: client.phone || '',
@@ -76,7 +110,71 @@ const getInitialForm = (client) =>
       }
     : emptyForm;
 
-export default function ClientsScreen({ onBack } = {}) {
+const DEFAULT_MAP_CENTER = {
+  latitude: 20.6767,
+  longitude: -103.3475,
+};
+
+const buildMapPickerHtml = ({ latitude, longitude }) => `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1, maximum-scale=1, user-scalable=no, width=device-width"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      html, body, #map {
+        height: 100%;
+        margin: 0;
+        width: 100%;
+      }
+      .leaflet-control-attribution {
+        font-size: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const center = [${latitude}, ${longitude}];
+      const map = L.map('map', { zoomControl: true }).setView(center, 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+      let marker = L.marker(center).addTo(map);
+
+      function sendPoint(latlng) {
+        marker.setLatLng(latlng);
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'pointSelected',
+          latitude: latlng.lat,
+          longitude: latlng.lng
+        }));
+      }
+
+      window.setSelectedPoint = function(latitude, longitude) {
+        const latlng = L.latLng(latitude, longitude);
+        marker.setLatLng(latlng);
+        map.setView(latlng, 17);
+      };
+
+      map.on('click', function(event) {
+        sendPoint(event.latlng);
+      });
+    </script>
+  </body>
+</html>
+`;
+
+export default function ClientsScreen({ onBack, onMapFullscreenChange } = {}) {
   const { colors } = useTransactionBalanceTheme();
   const {
     clients,
@@ -100,6 +198,10 @@ export default function ClientsScreen({ onBack } = {}) {
   const [editingClient, setEditingClient] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formModalOpen, setFormModalOpen] = useState(false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const [mapSelection, setMapSelection] = useState(null);
+  const [mapSelectionLoading, setMapSelectionLoading] = useState(false);
+  const [mapSelectionMessage, setMapSelectionMessage] = useState('');
   const [clientTypePickerIsVisible, setClientTypePickerIsVisible] =
     useState(false);
   const [message, setMessage] = useState('');
@@ -229,6 +331,12 @@ export default function ClientsScreen({ onBack } = {}) {
         field === 'name' || field === 'address'
           ? capitalizeUserEntry(value)
           : value,
+      ...(field === 'address'
+        ? {
+            latitude: null,
+            longitude: null,
+          }
+        : {}),
     }));
   };
 
@@ -242,10 +350,94 @@ export default function ClientsScreen({ onBack } = {}) {
     setFormModalOpen(true);
   };
 
+  const openMapPicker = () => {
+    Keyboard.dismiss();
+    setMapSelection(
+      form.address && form.latitude != null && form.longitude != null
+        ? {
+            address: form.address,
+            latitude: Number(form.latitude),
+            longitude: Number(form.longitude),
+          }
+        : null,
+    );
+    setMapSelectionLoading(false);
+    setMapSelectionMessage('');
+    setMapPickerOpen(true);
+  };
+
+  const closeMapPicker = () => {
+    setMapSelectionLoading(false);
+    setMapPickerOpen(false);
+  };
+
+  const selectMapAddress = () => {
+    if (!mapSelection?.address) {
+      return;
+    }
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      address: capitalizeUserEntry(mapSelection.address),
+      latitude: mapSelection.latitude ?? null,
+      longitude: mapSelection.longitude ?? null,
+    }));
+    setMessage('');
+    setMapPickerOpen(false);
+  };
+
+  const handleMapPointSelected = async (point) => {
+    if (point.address) {
+      setMapSelection(point);
+      setMapSelectionMessage('');
+      return;
+    }
+
+    setMapSelectionLoading(true);
+    setMapSelectionMessage('Buscando dirección...');
+
+    try {
+      const address = await fetchAddressFromCoordinates(point);
+      const fallbackAddress = `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`;
+
+      setMapSelection({
+        ...point,
+        address: address || fallbackAddress,
+      });
+      setMapSelectionMessage(
+        address ? '' : 'No se encontró dirección. Se usarán las coordenadas.',
+      );
+    } catch (error) {
+      console.warn('Error al obtener dirección del mapa:', error);
+      setMapSelection({
+        ...point,
+        address: `${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`,
+      });
+      setMapSelectionMessage(
+        'No se pudo obtener la dirección. Se usarán las coordenadas.',
+      );
+    } finally {
+      setMapSelectionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    onMapFullscreenChange?.(mapPickerOpen);
+
+    return () => {
+      onMapFullscreenChange?.(false);
+    };
+  }, [mapPickerOpen, onMapFullscreenChange]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (mapPickerOpen) {
+          closeMapPicker();
+          return true;
+        }
+
         if (activeClientMenuId) {
           setActiveClientMenuId(null);
           return true;
@@ -284,6 +476,7 @@ export default function ClientsScreen({ onBack } = {}) {
     clientTypePickerIsVisible,
     editingClient,
     formModalOpen,
+    mapPickerOpen,
     onBack,
     search,
     selectedClient,
@@ -355,10 +548,22 @@ export default function ClientsScreen({ onBack } = {}) {
     try {
       const clientBeingEdited = editingClient;
 
+      const payload = {
+        ...form,
+        address: form.address.trim(),
+        email: form.email.trim(),
+        latitude: form.latitude ?? null,
+        longitude: form.longitude ?? null,
+        name: form.name.trim(),
+        notes: form.notes.trim(),
+        phone: form.phone.trim(),
+        type: form.type,
+      };
+
       if (editingClient) {
-        await updateClient(getClientId(editingClient), form);
+        await updateClient(getClientId(editingClient), payload);
       } else {
-        await createClient(form);
+        await createClient(payload);
       }
 
       resetForm();
@@ -400,6 +605,29 @@ export default function ClientsScreen({ onBack } = {}) {
       setSaving(false);
     }
   };
+
+  if (mapPickerOpen) {
+    return (
+      <MapPickerScreen
+        colors={colors}
+        isLoading={mapSelectionLoading}
+        message={mapSelectionMessage}
+        initialPoint={
+          form.latitude != null && form.longitude != null
+            ? {
+                latitude: Number(form.latitude),
+                longitude: Number(form.longitude),
+              }
+            : null
+        }
+        initialSearch={form.address}
+        onBack={closeMapPicker}
+        onConfirm={selectMapAddress}
+        onPointSelected={handleMapPointSelected}
+        selectedAddress={mapSelection?.address || ''}
+      />
+    );
+  }
 
   return (
     <AppScreen contentContainerStyle={styles.screenContent} scroll={false}>
@@ -539,6 +767,16 @@ export default function ClientsScreen({ onBack } = {}) {
         message={message}
         onCancel={cancelEdit}
         onOpenClientTypePicker={() => setClientTypePickerIsVisible(true)}
+        onSelectAddress={(suggestion) => {
+          setForm((currentForm) => ({
+            ...currentForm,
+            address: capitalizeUserEntry(suggestion.description),
+            latitude: suggestion.latitude ?? null,
+            longitude: suggestion.longitude ?? null,
+          }));
+          setMessage('');
+        }}
+        onSelectMap={openMapPicker}
         onSave={saveClient}
         saving={saving}
         setField={setField}
@@ -577,7 +815,9 @@ export default function ClientsScreen({ onBack } = {}) {
 function ClientPresentationModal({ client, colors, onClose }) {
   const phone = getClientPhoneDigits(client);
   const hasPhone = Boolean(phone);
-  const hasAddress = Boolean(client?.address?.trim());
+  const hasMapLocation = hasClientMapLocation(client);
+  const latitude = getClientCoordinate(client, 'latitude');
+  const longitude = getClientCoordinate(client, 'longitude');
 
   if (!client) {
     return null;
@@ -596,11 +836,9 @@ function ClientPresentationModal({ client, colors, onClose }) {
   };
 
   const openMap = () => {
-    if (hasAddress) {
+    if (hasMapLocation) {
       Linking.openURL(
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          client.address,
-        )}`,
+        `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
       );
     }
   };
@@ -734,7 +972,7 @@ function ClientPresentationModal({ client, colors, onClose }) {
               <Pressable
                 accessibilityLabel="Abrir dirección en mapa"
                 accessibilityRole="button"
-                disabled={!hasAddress}
+                disabled={!hasMapLocation}
                 onPress={openMap}
                 style={[
                   styles.presentationActionButton,
@@ -742,11 +980,13 @@ function ClientPresentationModal({ client, colors, onClose }) {
                     backgroundColor: colors.primaryMuted,
                     borderColor: colors.primaryMuted,
                   },
-                  !hasAddress ? styles.disabledAction : null,
+                  !hasMapLocation ? styles.disabledAction : null,
                 ]}
               >
                 <AppIcon
-                  color={hasAddress ? colors.primaryText : colors.inactiveText}
+                  color={
+                    hasMapLocation ? colors.primaryText : colors.inactiveText
+                  }
                   decorative
                   name="contact-map-pin"
                   size={21}
@@ -781,6 +1021,8 @@ function ClientFormModal({
   message,
   onCancel,
   onOpenClientTypePicker,
+  onSelectAddress,
+  onSelectMap,
   onSave,
   saving,
   setField,
@@ -789,6 +1031,56 @@ function ClientFormModal({
   const { height: windowHeight } = useWindowDimensions();
   const formSheet = useBottomSheet(visible, onCancel);
   const sheetBottomInset = useKeyboardBottomInset();
+  const formScrollRef = useRef(null);
+  const [addressFocused, setAddressFocused] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [addressSuggestionsLoading, setAddressSuggestionsLoading] =
+    useState(false);
+  const addressRequestId = useRef(0);
+  const canSearchAddresses = Boolean(getPlaceAutocompleteBaseUrl());
+  const addressSuggestionsVisible =
+    addressFocused &&
+    canSearchAddresses &&
+    (addressSuggestionsLoading || addressSuggestions.length > 0);
+  const showAddressConfigHint =
+    __DEV__ && addressFocused && !canSearchAddresses;
+
+  useEffect(() => {
+    if (!visible || !addressFocused || form.address.trim().length < 3) {
+      addressRequestId.current += 1;
+      setAddressSuggestions([]);
+      setAddressSuggestionsLoading(false);
+      return undefined;
+    }
+
+    const requestId = addressRequestId.current + 1;
+    addressRequestId.current = requestId;
+    setAddressSuggestionsLoading(true);
+
+    const searchTimer = setTimeout(() => {
+      fetchPlaceSuggestions(form.address)
+        .then((suggestions) => {
+          if (addressRequestId.current === requestId) {
+            setAddressSuggestions(suggestions.slice(0, 5));
+          }
+        })
+        .catch((error) => {
+          if (addressRequestId.current === requestId) {
+            setAddressSuggestions([]);
+          }
+          console.warn('Error al buscar sugerencias de dirección:', error);
+        })
+        .finally(() => {
+          if (addressRequestId.current === requestId) {
+            setAddressSuggestionsLoading(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      clearTimeout(searchTimer);
+    };
+  }, [addressFocused, canSearchAddresses, form.address, visible]);
 
   if (!visible) {
     return null;
@@ -829,7 +1121,7 @@ function ClientFormModal({
               styles.formSheet,
               {
                 backgroundColor: colors.screenBackground,
-                borderColor: editingClient ? colors.primary : colors.border,
+                borderColor: colors.border,
                 maxHeight: windowHeight - sheetBottomInset - 24,
               },
               formSheet.sheetStyle,
@@ -845,9 +1137,15 @@ function ClientFormModal({
               />
             </View>
             <ScrollView
-              contentContainerStyle={styles.formSheetContent}
+              contentContainerStyle={[
+                styles.formSheetContent,
+                addressSuggestionsVisible
+                  ? styles.formSheetContentWithSuggestions
+                  : null,
+              ]}
               keyboardShouldPersistTaps="handled"
               onScroll={formSheet.onScroll}
+              ref={formScrollRef}
               scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
             >
@@ -941,13 +1239,95 @@ function ClientFormModal({
                   value={form.email}
                 />
               </View>
-              <ClientField
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  Direccion
+                </Text>
+                <View
+                  style={[
+                    styles.addressInputWrap,
+                    {
+                      backgroundColor: colors.fieldBackground,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    autoCapitalize="sentences"
+                    onBlur={() => {
+                      setTimeout(() => setAddressFocused(false), 120);
+                    }}
+                    onChangeText={(value) => setField('address', value)}
+                    onFocus={() => {
+                      setAddressFocused(true);
+                      setTimeout(() => {
+                        formScrollRef.current?.scrollToEnd?.({
+                          animated: true,
+                        });
+                      }, 160);
+                    }}
+                    placeholder="Direccion de entrega o referencia"
+                    placeholderTextColor={colors.textMuted}
+                    style={[
+                      styles.addressInput,
+                      { color: colors.textPrimary },
+                    ]}
+                    value={form.address}
+                  />
+                  <Pressable
+                    accessibilityLabel="Elegir dirección en el mapa"
+                    accessibilityRole="button"
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setAddressFocused(false);
+                      setAddressSuggestions([]);
+                      onSelectMap();
+                    }}
+                    style={[
+                      styles.mapPickerInlineButton,
+                      { backgroundColor: colors.primaryMuted },
+                    ]}
+                  >
+                    <AppIcon
+                      color={colors.primaryText}
+                      decorative
+                      name="contact-map-pin"
+                      size={17}
+                    />
+                    <Text
+                      style={[
+                        styles.mapPickerInlineText,
+                        { color: colors.primaryText },
+                      ]}
+                    >
+                      Mapa
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+              <AddressSuggestions
                 colors={colors}
-                label="Direccion"
-                onChangeText={(value) => setField('address', value)}
-                placeholder="Direccion de entrega o referencia"
-                value={form.address}
+                isLoading={addressSuggestionsLoading}
+                onSelect={(suggestion) => {
+                  onSelectAddress(suggestion);
+                  setAddressFocused(false);
+                  setAddressSuggestions([]);
+                  Keyboard.dismiss();
+                }}
+                suggestions={
+                  addressFocused && canSearchAddresses ? addressSuggestions : []
+                }
               />
+              {showAddressConfigHint ? (
+                <Text
+                  style={[
+                    styles.addressSuggestionHelper,
+                    { color: colors.textMuted },
+                  ]}
+                >
+                  No se pudo cargar el buscador de direcciones.
+                </Text>
+              ) : null}
               <ClientField
                 colors={colors}
                 label="Notas"
@@ -1028,7 +1408,9 @@ function ClientField({
   keyboardType = 'default',
   label,
   multiline = false,
+  onBlur,
   onChangeText,
+  onFocus,
   placeholder,
   value,
 }) {
@@ -1039,7 +1421,9 @@ function ClientField({
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         multiline={multiline}
+        onBlur={onBlur}
         onChangeText={onChangeText}
+        onFocus={onFocus}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         style={[
@@ -1055,6 +1439,272 @@ function ClientField({
         value={value}
       />
     </View>
+  );
+}
+
+function AddressSuggestions({ colors, isLoading, onSelect, suggestions }) {
+  if (!isLoading && suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <View
+      style={[
+        styles.addressSuggestions,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
+      {isLoading ? (
+        <Text
+          style={[styles.addressSuggestionHelper, { color: colors.textMuted }]}
+        >
+          Buscando direcciones...
+        </Text>
+      ) : (
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          style={styles.addressSuggestionList}
+        >
+          {suggestions.map((suggestion, index) => (
+            <Pressable
+              accessibilityLabel={`Seleccionar dirección ${suggestion.description}`}
+              accessibilityRole="button"
+              key={`${suggestion.id}-${suggestion.description}-${index}`}
+              onPress={() => onSelect(suggestion)}
+              style={styles.addressSuggestionRow}
+            >
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.addressSuggestionText,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {suggestion.description}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+function MapPickerScreen({
+  colors,
+  initialPoint,
+  initialSearch = '',
+  isLoading,
+  message,
+  onBack,
+  onConfirm,
+  onPointSelected,
+  selectedAddress,
+}) {
+  const mapRef = useRef(null);
+  const searchRequestId = useRef(0);
+  const [search, setSearch] = useState(initialSearch);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const mapHtml = useMemo(
+    () => buildMapPickerHtml(initialPoint || DEFAULT_MAP_CENTER),
+    [initialPoint],
+  );
+
+  useEffect(() => {
+    const normalizedSearch = search.trim();
+
+    if (normalizedSearch.length < 3) {
+      searchRequestId.current += 1;
+      setSuggestions([]);
+      setSuggestionsLoading(false);
+      return undefined;
+    }
+
+    const requestId = searchRequestId.current + 1;
+    searchRequestId.current = requestId;
+    setSuggestionsLoading(true);
+
+    const searchTimer = setTimeout(() => {
+      fetchPlaceSuggestions(normalizedSearch, { limit: 6 })
+        .then((nextSuggestions) => {
+          if (searchRequestId.current === requestId) {
+            setSuggestions(nextSuggestions);
+          }
+        })
+        .catch((error) => {
+          if (searchRequestId.current === requestId) {
+            setSuggestions([]);
+          }
+          console.warn('Error al buscar negocios en el mapa:', error);
+        })
+        .finally(() => {
+          if (searchRequestId.current === requestId) {
+            setSuggestionsLoading(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      clearTimeout(searchTimer);
+    };
+  }, [search]);
+
+  const selectSuggestion = (suggestion) => {
+    if (suggestion.latitude == null || suggestion.longitude == null) {
+      return;
+    }
+
+    Keyboard.dismiss();
+    setSearch(suggestion.description);
+    setSuggestions([]);
+    mapRef.current?.injectJavaScript?.(`
+      window.setSelectedPoint(${suggestion.latitude}, ${suggestion.longitude});
+      true;
+    `);
+    onPointSelected({
+      address: suggestion.description,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    });
+  };
+
+  return (
+    <AppScreen contentContainerStyle={styles.mapScreenContent} scroll={false}>
+      <AppHeader
+        subtitle="Busca una ubicación real o toca el mapa."
+        title="Elegir ubicación"
+      />
+      <View style={styles.mapSearchBlock}>
+        <View
+          style={[
+            styles.mapSearchInputWrap,
+            {
+              backgroundColor: colors.fieldBackground,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <TextInput
+            onChangeText={setSearch}
+            placeholder="Buscar negocio o dirección"
+            placeholderTextColor={colors.textMuted}
+            style={[styles.mapSearchInput, { color: colors.textPrimary }]}
+            value={search}
+          />
+          {search.trim() ? (
+            <Pressable
+              accessibilityLabel="Limpiar búsqueda de ubicación"
+              accessibilityRole="button"
+              hitSlop={10}
+              onPress={() => {
+                setSearch('');
+                setSuggestions([]);
+                setSuggestionsLoading(false);
+              }}
+              style={styles.mapSearchClearButton}
+            >
+              <AppIcon
+                color={colors.textMuted}
+                decorative
+                name="close"
+                size={18}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+        <AddressSuggestions
+          colors={colors}
+          isLoading={suggestionsLoading}
+          onSelect={selectSuggestion}
+          suggestions={suggestions}
+        />
+      </View>
+      <View style={[styles.mapScreenFrame, { borderColor: colors.border }]}>
+        <WebView
+          javaScriptEnabled
+          onMessage={(event) => {
+            try {
+              const payload = JSON.parse(event.nativeEvent.data || '{}');
+
+              if (payload.type === 'pointSelected') {
+                onPointSelected({
+                  latitude: Number(payload.latitude),
+                  longitude: Number(payload.longitude),
+                });
+              }
+            } catch (error) {
+              console.warn('No se pudo leer la ubicación del mapa:', error);
+            }
+          }}
+          originWhitelist={['*']}
+          ref={mapRef}
+          source={{ html: mapHtml }}
+          style={styles.mapWebView}
+        />
+      </View>
+      <View style={styles.mapScreenFooter}>
+        {isLoading || selectedAddress || message ? (
+          <View
+            style={[
+              styles.mapBottomPanel,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            {isLoading || selectedAddress ? (
+              <View style={styles.mapResultBox}>
+                {isLoading ? (
+                  <ActivityIndicator color={colors.primary} size="small" />
+                ) : (
+                  <Text
+                    numberOfLines={2}
+                    style={[
+                      styles.mapResultText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {selectedAddress}
+                  </Text>
+                )}
+              </View>
+            ) : null}
+            {message ? (
+              <Text style={[styles.message, { color: colors.textMuted }]}>
+                {message}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        <View style={styles.mapScreenActions}>
+          <Pressable
+            onPress={onBack}
+            style={[styles.secondaryButton, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textPrimary }]}>
+              Cancelar
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={!selectedAddress || isLoading}
+            onPress={onConfirm}
+            style={[
+              styles.primaryButton,
+              {
+                backgroundColor:
+                  selectedAddress && !isLoading
+                    ? colors.primary
+                    : colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.primaryText, { color: colors.textInverse }]}>
+              Usar dirección
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </AppScreen>
   );
 }
 
@@ -1230,6 +1880,44 @@ function ClientCard({
 }
 
 const styles = StyleSheet.create({
+  addressSuggestionHelper: {
+    fontSize: typography.sizes.bodySmall,
+    lineHeight: 20,
+    padding: 12,
+  },
+  addressSuggestionList: {
+    maxHeight: 176,
+  },
+  addressSuggestionRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  addressSuggestionText: {
+    fontSize: typography.sizes.bodySmall,
+    lineHeight: 20,
+  },
+  addressSuggestions: {
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: -6,
+    overflow: 'hidden',
+  },
+  addressInput: {
+    flex: 1,
+    fontSize: typography.sizes.bodySmall,
+    minHeight: 46,
+    minWidth: 0,
+    paddingLeft: 12,
+    paddingRight: 8,
+  },
+  addressInputWrap: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 46,
+    paddingRight: 8,
+  },
   actions: {
     flexDirection: 'row',
     gap: 10,
@@ -1345,6 +2033,9 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 26,
   },
+  formSheetContentWithSuggestions: {
+    paddingBottom: 84,
+  },
   helper: {
     fontSize: typography.sizes.bodySmall,
     lineHeight: 20,
@@ -1364,6 +2055,94 @@ const styles = StyleSheet.create({
   message: {
     fontSize: typography.sizes.bodySmall,
     marginTop: 2,
+  },
+  mapBottomPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  mapPickerInlineButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: 10,
+  },
+  mapPickerInlineText: {
+    fontSize: typography.sizes.bodySmall,
+    fontWeight: typography.weights.semibold,
+  },
+  mapResultBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  mapResultText: {
+    fontSize: typography.sizes.bodySmall,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  mapScreenActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  mapScreenContent: {
+    flex: 1,
+    gap: 12,
+    paddingBottom:
+      Math.max(
+        getSystemNavigationClearance({ platform: Platform.OS }) - 34,
+        24,
+      ) + 66,
+  },
+  mapScreenFooter: {
+    bottom: Math.max(
+      getSystemNavigationClearance({ platform: Platform.OS }) - 34,
+      24,
+    ),
+    gap: 10,
+    left: APP_HORIZONTAL_PADDING,
+    position: 'absolute',
+    right: APP_HORIZONTAL_PADDING,
+  },
+  mapScreenFrame: {
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  mapSearchBlock: {
+    gap: 8,
+    zIndex: 2,
+  },
+  mapSearchClearButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  mapSearchInput: {
+    flex: 1,
+    fontSize: typography.sizes.body,
+    minHeight: 52,
+    paddingLeft: 12,
+    paddingRight: 4,
+  },
+  mapSearchInputWrap: {
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    minHeight: 52,
+    paddingRight: 8,
+  },
+  mapWebView: {
+    flex: 1,
   },
   modalBackdrop: {
     bottom: 0,
