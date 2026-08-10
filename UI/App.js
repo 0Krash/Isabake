@@ -21,6 +21,7 @@ import AuthStatusScreen from './screens/Auth/AuthStatusScreen';
 import InvitationAcceptScreen from './screens/Workspace/InvitationAcceptScreen';
 import WorkspaceScreen from './screens/Workspace/WorkspaceScreen';
 import SettingsScreen from './screens/Settings/SettingsScreen';
+import ClientsScreen from './screens/Clients/ClientsScreen';
 import { isSyncDiagnosticsEnabled } from './data/dev/syncDiagnosticsModel';
 import { createInvitationNavigationState } from './data/workspace/invitationNavigation';
 import {
@@ -51,6 +52,7 @@ export default function App() {
   const [inviteToken, setInviteToken] = useState(null);
   const [saleRecipe, setSaleRecipe] = useState(null);
   const [accountStatus, setAccountStatus] = useState('checking');
+  const [clientsBackTab, setClientsBackTab] = useState('home');
   const [settingsBackTab, setSettingsBackTab] = useState('home');
   const [workspaceBackTab, setWorkspaceBackTab] = useState('home');
   const [mountedPrimaryTabs, setMountedPrimaryTabs] = useState(
@@ -172,11 +174,20 @@ export default function App() {
     setActiveTab('settings');
   };
 
+  const openClientsFrom = (tabKey) => {
+    setClientsBackTab(tabKey || activeTab || 'home');
+    setActiveTab('clients');
+  };
+
   const renderScreen = () => {
     if (saleRecipe) {
       return (
         <RecipeSaleScreen
           onClose={() => setSaleRecipe(null)}
+          onOpenClients={() => {
+            setSaleRecipe(null);
+            openClientsFrom('recipes');
+          }}
           recipe={saleRecipe}
         />
       );
@@ -235,10 +246,15 @@ export default function App() {
           devToolsEnabled={devSyncDiagnosticsEnabled}
           onBack={() => setActiveTab(settingsBackTab || 'home')}
           onOpenAccount={() => setActiveTab('account')}
+          onOpenClients={() => openClientsFrom('settings')}
           onOpenDevTools={() => setActiveTab('dev-sync')}
           onOpenWorkspace={() => openWorkspaceFrom('settings')}
         />
       );
+    }
+
+    if (activeTab === 'clients') {
+      return <ClientsScreen onBack={() => setActiveTab(clientsBackTab || 'home')} />;
     }
 
     if (activeTab === 'workspace') {
@@ -265,13 +281,14 @@ export default function App() {
     }
 
     return (
-      <TransactionBalanceScreen
-        accountStatus={accountStatus}
-        onOpenAccount={() => setActiveTab('account')}
-        onOpenAppMenu={() => openSettingsFrom('home')}
-        onOpenSync={() => setActiveTab('sync')}
-        onOpenWorkspace={() => openWorkspaceFrom('home')}
-      />
+        <TransactionBalanceScreen
+          accountStatus={accountStatus}
+          onOpenAccount={() => setActiveTab('account')}
+          onOpenAppMenu={() => openSettingsFrom('home')}
+          onOpenClients={() => openClientsFrom('home')}
+          onOpenSync={() => setActiveTab('sync')}
+          onOpenWorkspace={() => openWorkspaceFrom('home')}
+        />
     );
   };
 
@@ -288,6 +305,7 @@ export default function App() {
             accountStatus={accountStatus}
             onOpenAccount={() => setActiveTab('account')}
             onOpenAppMenu={() => openSettingsFrom('home')}
+            onOpenClients={() => openClientsFrom('home')}
             onOpenSync={() => setActiveTab('sync')}
             onOpenWorkspace={() => openWorkspaceFrom('home')}
           />

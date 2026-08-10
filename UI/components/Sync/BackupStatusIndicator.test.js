@@ -127,10 +127,10 @@ describe('BackupStatusIndicator integration', () => {
     const recipesSource = read('screens/RecipeBook/RecipeBookScreen.js');
     const inventorySource = read('screens/Inventory/InventoryScreen.js');
 
-    expect(recipesSource.indexOf('<QuickFilterChips')).toBeLessThan(
+    expect(recipesSource.indexOf('<FilterChips')).toBeLessThan(
       recipesSource.indexOf('<FlatList'),
     );
-    expect(inventorySource.indexOf('<QuickFilterChips')).toBeLessThan(
+    expect(inventorySource.indexOf('<FilterChips')).toBeLessThan(
       inventorySource.indexOf('<FlatList'),
     );
   });

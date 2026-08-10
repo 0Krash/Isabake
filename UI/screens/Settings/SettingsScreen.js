@@ -21,6 +21,7 @@ export default function SettingsScreen({
   devToolsEnabled = false,
   onBack,
   onOpenAccount,
+  onOpenClients,
   onOpenDevTools,
   onOpenWorkspace,
 } = {}) {
@@ -75,6 +76,11 @@ export default function SettingsScreen({
 
     if (key === 'stores') {
       setStoreManagerIsVisible(true);
+      return;
+    }
+
+    if (key === 'clients') {
+      onOpenClients?.();
       return;
     }
 

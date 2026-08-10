@@ -3,11 +3,11 @@ import { StyleSheet, View } from 'react-native';
 
 import { useTransactionBalanceTheme } from '../../context/TransactionBalanceThemeContext';
 
-export default function AppCard({ children, style }) {
+export default function AppCard({ children, style, ...props }) {
   const { colors } = useTransactionBalanceTheme();
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }, style]}>
+    <View {...props} style={[styles.card, { backgroundColor: colors.surface }, style]}>
       {children}
     </View>
   );

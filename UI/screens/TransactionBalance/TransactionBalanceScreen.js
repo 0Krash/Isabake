@@ -24,6 +24,7 @@ import useCurrentWorkspaceScope from '../../hooks/workspace/useCurrentWorkspaceS
 const TransactionBalanceScreen = ({
   onOpenAccount,
   onOpenAppMenu,
+  onOpenClients,
   onOpenSync,
   onOpenWorkspace,
 } = {}) => {
@@ -213,6 +214,16 @@ const TransactionBalanceScreen = ({
         {addTransactionModalIsVisible && (
           <AddTransactionModal
             AddTransactionModalIsVisible={addTransactionModalIsVisible}
+            onOpenClients={() => {
+              setAddTransactionModalIsVisible(false);
+              onOpenClients?.();
+            }}
+            onOpenStoreManager={() => {
+              setAddTransactionModalIsVisible(false);
+              setTimeout(() => {
+                setAddStoreModalIsVisible(true);
+              }, 90);
+            }}
             onTransactionCreated={refreshTransactions}
             setAddTransactionModalIsVisible={setAddTransactionModalIsVisible}
           />

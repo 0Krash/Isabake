@@ -37,6 +37,39 @@ export const iconManifest: IconManifestEntry[] = [
     "style": "outline"
   },
   {
+    "addedAt": "2026-08-09",
+    "category": "actions",
+    "id": "contact-map-pin",
+    "license": "CC0 License",
+    "name": "contact-map-pin",
+    "originalName": "Map Pin",
+    "path": "assets/icons/actions/contact-map-pin.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/491659/map-pin",
+    "style": "outline"
+  },
+  {
+    "addedAt": "2026-08-09",
+    "category": "actions",
+    "id": "contact-phone",
+    "license": "CC0 License",
+    "name": "contact-phone",
+    "originalName": "Phone",
+    "path": "assets/icons/actions/contact-phone.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/506269/phone",
+    "style": "outline"
+  },
+  {
+    "addedAt": "2026-08-09",
+    "category": "actions",
+    "id": "contact-whatsapp",
+    "license": "CC0 License",
+    "name": "contact-whatsapp",
+    "originalName": "Whatsapp",
+    "path": "assets/icons/actions/contact-whatsapp.svg",
+    "sourceUrl": "https://www.svgrepo.com/svg/106976/whatsapp",
+    "style": "outline"
+  },
+  {
     "addedAt": "2026-07-15",
     "category": "navigation",
     "id": "dots-vertical",

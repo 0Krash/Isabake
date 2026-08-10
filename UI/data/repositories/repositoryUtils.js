@@ -19,6 +19,7 @@ export const documentToEntity = (document) => {
 
   return {
     ...document.data,
+    createdAt: document.createdAt,
     deletedAt: document.deletedAt,
     deviceId: document.deviceId,
     groupId: document.groupId,
@@ -28,6 +29,7 @@ export const documentToEntity = (document) => {
     remoteId: document.remoteId,
     serverVersion: document.serverVersion,
     syncStatus: document.syncStatus,
+    updatedAt: document.updatedAt,
   };
 };
 
@@ -35,6 +37,7 @@ export const documentsToEntities = (documents) =>
   documents.map(documentToEntity);
 
 const stripDocumentMetadata = ({
+  createdAt,
   deletedAt,
   deviceId,
   groupId,
@@ -43,6 +46,7 @@ const stripDocumentMetadata = ({
   remoteId,
   serverVersion,
   syncStatus,
+  updatedAt,
   ...entity
 }) => entity;
 

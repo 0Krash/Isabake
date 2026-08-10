@@ -31,6 +31,7 @@ export default function InsertTransactionButton(props) {
     unitValue,
     description,
     itemQuantity,
+    selectedClient,
     selectedDate,
     transactionType,
     onTransactionCreated,
@@ -39,6 +40,7 @@ export default function InsertTransactionButton(props) {
   const createLocalTransaction = async () => {
     const data = {
       amount: CurrencyFormatter.convertCurrencyToCents(amount),
+      client: selectedClient || null,
       store: { storeId: selected },
       category: {
         categoryId: category,

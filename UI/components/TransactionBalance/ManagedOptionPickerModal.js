@@ -20,6 +20,7 @@ const ManagedOptionPickerModal = ({
   addLabel = 'Agregar',
   canManage = true,
   colors,
+  canDeleteOption = () => true,
   deleteAccessibilityLabel,
   emptyLabel,
   isVisible,
@@ -123,7 +124,7 @@ const ManagedOptionPickerModal = ({
                   >
                     {label}
                   </Text>
-                  {canManage && !!option.name && onDelete && (
+                  {canManage && !!option.name && onDelete && canDeleteOption(option) && (
                     <TouchableOpacity
                       accessibilityLabel={
                         deleteAccessibilityLabel
